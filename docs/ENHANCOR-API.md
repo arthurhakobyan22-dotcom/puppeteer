@@ -1,6 +1,6 @@
 # Enhancor / Seedance 2.5 integration
 
-This is an integration guide for the request/response shapes used by this workflow, derived from the working implementation. It is not a copy of a complete vendor specification. Confirm current account support and limits in the [Enhancor API dashboard](https://app.enhancor.ai/api-dashboard). The public dashboard requires browser access; its full 2.5 schema was not independently retrievable during packaging. Live requests verified the required webhook field, queue acceptance and the model/reference mode used here.
+This is the request/response reference for Puppeteer's `providers/enhancor.py` adapter, derived from the working implementation. The fal adapter is documented in `docs/PROVIDERS.md`. It is not a copy of a complete vendor specification. Confirm current account support and limits in the [Enhancor API dashboard](https://app.enhancor.ai/api-dashboard). The public dashboard requires browser access; its full 2.5 schema was not independently retrievable during packaging. Live requests verified the required webhook field, queue acceptance and the model/reference mode used here.
 
 Base URL: `https://apireq.enhancor.ai/api/seedance2.5/v1`
 Authentication: `x-api-key: YOUR_KEY` (server-side only).
@@ -18,7 +18,7 @@ Authentication: `x-api-key: YOUR_KEY` (server-side only).
   "videos": ["https://YOUR_HOST/prepared.mp4"],
   "images": ["https://YOUR_HOST/character.png"],
   "audios": [],
-  "prompt": "Replace the complete subject with @Image1. Match @Video1 timing and embedded audio exactly.",
+  "prompt": "@Image1 defines the character's identity only ... Pose, motion, timing and lip-sync come from @Video1. ...",
   "webhook_url": "https://YOUR_RECEIVER/callback"
 }
 ```
@@ -40,11 +40,11 @@ Live testing confirmed that webhook_url is required: an empty value returns HTTP
 {"draft_id":"ACCEPTED_DRAFT_REQUEST_ID","webhook_url":""}
 ```
 
-Do not send a new creative prompt or input files with draft completion. The provider reuses the draft settings (1080p requested initially). This is a separate billed operation and requires approval. Save the new request ID in `hd/response.json`, poll it, then restore the full original soundtrack. Never overwrite the draft preview.
+Do not send a new creative prompt or input files with draft completion. The provider reuses the draft settings (1080p requested initially). This is a separate billed operation and requires approval. Save the new request ID in `hd/response.json`, poll it, then restore the full original soundtrack. Never overwrite the draft preview. Media for Enhancor is hosted through `media_host.upload` (tmpfiles by default; catbox only on explicit opt-in, see `docs/MEDIA-HOSTING.md`).
 
 ## Local routes
 
-- `POST /jobs`: multipart `video`, `prompt` (segmentation subject), `provider`.
+- `POST /jobs`: multipart `video`, `mode` (`depth`, `face_mesh`, `depth_mesh`), `prompt` (segmentation subject), `provider` (depth provider), `clean_dialogue`.
 - `GET /jobs/{id}`: local progress.
 - `GET /jobs/{id}/mask-review`: artifact fingerprint and approval.
 - `POST /jobs/{id}/mask-review`: `approved`, `fingerprint`, `note`.
@@ -52,6 +52,7 @@ Do not send a new creative prompt or input files with draft completion. The prov
 - `GET /providers`: capabilities and `configured` flag per provider plus the `default`; see `docs/PROVIDERS.md`.
 - `POST /jobs/{id}/hd`, `GET /jobs/{id}/hd`: approved upgrade and progress.
 - `POST /jobs/{id}/finish`: manually upload returned `video` and restore original audio.
+- `GET /health`: `{"status":"ok","service":"Puppeteer"}`.
 - `/docs`: FastAPI-generated local endpoint documentation.
 
 No paid POST is automatically retried after an ambiguous timeout. Check the provider dashboard before deliberately creating another request. Public media may expire while queued; use a longer-lived host if necessary.

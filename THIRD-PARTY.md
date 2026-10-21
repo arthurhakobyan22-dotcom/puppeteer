@@ -1,7 +1,17 @@
 # Third-party notices
 
-Python dependencies retain their respective licenses. Hosted Demucs, depth, SAM and Seedance models are not redistributed in this package and remain subject to their providers' terms.
+Puppeteer is a fork of **Genjutsu Open Source Workflow** by Sirio Berati (MIT, https://github.com/sirioberati/Genjustsu-Open-Source-Workflow). The original MIT license file is retained unchanged as `LICENSE` and continues to cover the inherited code and documentation; Puppeteer's changes are released under the same MIT terms.
 
-TEIN branding and companion illustrations are included from the existing user-authorized UI. Those assets are excluded from the MIT license covering this project’s code and documentation; this package grants no new rights to them. Google Fonts are requested by CSS, not vendored here. Two user-selected videos are included under `examples/`; see its README for media rights and usage notes. No license to third-party footage, music or likenesses is granted by this package.
+Python dependencies listed in `requirements.txt` retain their respective licenses.
 
-Cloudflared is an optional external executable distributed by Cloudflare. Quick Tunnels are a development service; this package does not redistribute the binary.
+Hosted models are **not redistributed** in this repository and remain subject to their providers' terms and your own account access:
+
+- Demucs (`htdemucs`) via Replicate, used only when clean dialogue is enabled
+- Depth Anything (video) via Replicate or Hugging Face
+- SAM 3 (video segmentation) via Replicate
+- MediaPipe Face Landmarker (Google), downloaded by the optional face-mesh worker on first use
+- Seedance 2.5 (ByteDance) via fal or Enhancor
+
+cloudflared is an optional external executable distributed by Cloudflare; this repository does not bundle it. Google Fonts are requested by CSS at runtime, not vendored here.
+
+No example media, branding assets, logos or third-party footage are included in this repository. No license to any third-party footage, music or likeness is granted by this package; use only video you own or have licensed.

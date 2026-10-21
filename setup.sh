@@ -10,4 +10,4 @@ if [ ! -d .venv ]; then "$PYTHON" -m venv .venv; fi
 .venv/bin/python -m pip install -r requirements.txt
 if [ ! -f .env ]; then cp .env.example .env; chmod 600 .env; fi
 .venv/bin/python doctor.py
-printf '\nNext: fill .env with your own keys, run bash start.command, then .venv/bin/python doctor.py --require-keys in another terminal\n'
+printf '\nPuppeteer setup complete. Next: fill .env with your own keys (FAL_KEY and/or ENHANCOR_API_KEY, plus REPLICATE_API_TOKEN), run bash start.command, then .venv/bin/python doctor.py --require-keys in another terminal\n'

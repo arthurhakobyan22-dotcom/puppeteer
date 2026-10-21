@@ -1,35 +1,28 @@
-# Independent video workflow
+# Puppeteer — agent contract
 
-For installation/onboarding requests, follow `docs/SETUP-AGENT.md` first. Do not run paid inference during setup. Distinguish a running UI from a generation-ready configuration.
+For installation requests, follow `docs/SETUP-AGENT.md` first. Do not run paid inference during setup. Distinguish a running UI from a generation-ready configuration (`doctor.py --require-keys`).
 
-Carry authorized jobs through preparation, quality review, generation and delivery without stopping after each processing stage. Ask only for missing creative choices or submission approval not already given. Never automatically purchase an HD upgrade: the user approves that step.
+Carry authorized jobs through preparation, review, generation and delivery without stopping after each processing stage. Ask only for missing creative choices or for a submission approval not already given. Never finalize automatically: the user approves that step.
 
-1. Preserve the source file and complete original audio.
-2. Embed the entire original audio in the prepared composite (packet-for-packet remux). Only when `clean_dialogue` is enabled, isolate vocals with Demucs and embed them instead. Do not attach separate audio to Seedance.
-3. Generate depth with lucataco/depth-anything-video and retain its exact colors.
-4. Obtain raw SAM 3 masks. If depth segmentation misses the subject or includes background, retry using original RGB detail and composite the original colored depth through those masks. Record this fallback.
-5. Mandatory visual mask QA before EVERY generation: review the full clip, including all cuts, subject extremities, hair, hands, clothing, background spill, holes, alignment and flicker. Automated checks and sampled contact sheets alone do not establish full visual approval. Repair failures independently within the authorized task, then review again. Never approve a known-bad mask. Use mask_review to bind approval to current artifacts. User approval of the current mask may be recorded as such, without falsely claiming agent full-clip review.
-6. Match the references and prompt to the actual subjects. A single Sirio replacement uses only Sirio's reference; never carry over the previous two-person mapping.
-7. Show the exact creative prompt before submission. Existing explicit authorization to submit is sufficient; do not ask again unnecessarily. Submit through Enhancor as Seedance Edit draft by default.
-8. Retrieve results and restore the entire untouched original source audio, discarding generated audio. Preserve draft artifacts. Report failures honestly; never claim submission or completion without an actual result.
-9. On explicit approval, complete the draft at 1080p using draft_id and webhook_url, then restore original audio again.
-10. Show the final preview and download. Keep status persisted and UI preview selection stable. Never expose credentials.
+1. Preserve the source file (`upload.mp4`) and its complete original audio.
+2. Embed the entire original audio in the prepared clip (packet-for-packet remux). Only when `clean_dialogue` is enabled, isolate vocals with Demucs and embed them instead. Do not attach separate audio to Seedance.
+3. Depth mode: generate depth with Depth Anything and retain its exact colors. Obtain raw SAM 3 masks; if depth segmentation misses the subject or includes background, retry on the original RGB (`workflow.py repair-rgb`) and composite the colored depth through those masks. Record the fallback in `manifest.json`.
+4. Mandatory full-clip review before EVERY generation: inspect the whole clip, including cuts, extremities, hair, hands, clothing, background spill, holes, alignment and flicker (mesh modes: face tracking, eyes, mouth, alignment). Automated checks and sampled contact sheets do not establish approval. Repair failures within the authorized scope, then review again. Never approve a known-bad input. `mask_review` binds approval to the artifact fingerprint; any change clears it. User approval may be recorded as user approval, never as a review you did not perform.
+5. References are identity only. `char1` (required) is an image or an identity video; `char2` (optional) is an image. `@Image1`/`@Image2` define face, hair, outfit and proportions; pose, motion, timing and lip-sync come from `@Video1`. Match the references to the actual subjects in this job; never carry over a previous job's mapping.
+6. Show the exact creative prompt before submission, including the adapter-appended text in `seedance-request.json`. Existing explicit authorization to submit is sufficient; do not ask again unnecessarily.
+7. Submit the draft through the selected provider (`fal` or `enhancor`; see `docs/PROVIDERS.md`). Persist `seedance-response.json` and `generation.json`. Resume saved requests (`workflow.py resume`) instead of ever duplicating a paid request.
+8. Retrieve the result and restore the entire untouched original audio, discarding generated audio. Preserve draft artifacts. Report failures honestly with the local job and request IDs; never claim a submission or completion without an actual result.
+9. On explicit approval only, finalize the accepted draft (`workflow.py hd` or the UI button): fal completes the same `draft_id` at 1080p; Enhancor completes via `draft_id`. Then restore the original audio again under `hd/`.
+10. Show the final preview and download. Keep status persisted and the UI preview selection stable. Never expose credentials: keys live only in `.env` and never appear in logs, run folders, URLs or the UI.
 
 ## Reference-mode routing (required)
-Enhancor Edit accepts exactly one video: the prepared source. If the replacement identity reference is a video, use multi_reference (Omni), with prepared source @Video1 and identity reference @Video2. Use the identity clip for appearance only unless the user explicitly asks to use its voice or performance. Do not convert that reference to pictures without permission. For image references, default to Edit. Show the actual mode in the UI and saved generation metadata. Omni requires duration and aspect ratio; use the source framing and nearest supported duration. Preserve the full source audio in the final export and disclose any necessary short last-frame hold.
 
+An image `char1` uses the provider's edit path: one video (`@Video1`, the prepared clip) plus `@Image1` and optional `@Image2`. A video `char1` is an identity reference: fal adds it to `video_urls` as `@Video2`; Enhancor switches to `multi_reference` with `videos: [prepared, identity]`, a supported aspect ratio and whole-second duration. Use the identity clip for appearance only unless the user explicitly asks for its voice or performance, and do not convert it to stills without permission. Show the actual mode in the UI and in `generation.json`. Preserve the full source audio in the final export and disclose any short last-frame hold.
 
-## Fast alternative: face mesh
+## Modes
 
-Choose **Fast · Face mesh** in the UI, or use `workflow.py prepare VIDEO --mode face_mesh`. Install the optional worker once with `bash setup-face-mesh.sh` (Python 3.12 required; isolated `.venv-face`). The model downloads from Google's official storage on first use.
+- **Advanced · Depth + SAM** (`depth`): Replicate depth and SAM 3; full mask review required.
+- **Fast · Face mesh** (`face_mesh`): MediaPipe landmarks drawn on the original frames; no depth or SAM calls; needs `bash setup-face-mesh.sh` (Python 3.12, isolated `.venv-face`, model downloaded on first use). One centered speaker. Review face tracking, not a mask.
+- **Advanced + Face mesh** (`depth_mesh`): depth pipeline plus the mesh over the depth composite; landmarks in `face-landmarks.json`. Review both mask coverage and tracking.
 
-This path keeps the original video, tracks and saves facial landmarks, draws the mesh and embeds the original audio (or isolated vocals with clean dialogue). It makes **no depth or SAM calls**. It is currently designed for a single centered speaker; inspect all frames and stop on tracking gaps or incorrect face alignment. Do not claim mask review in this mode: review facial tracking and audio instead. Saved artifact hashes gate submission.
-
-Use the same character references, draft-first submission, collection, original-audio restoration and explicitly approved HD upgrade. In the prompt, explain that mesh lines are motion guidance and must disappear, replace the complete original identity including hair, and preserve all dialogue and timing. Image reference uses Edit; video identity uses Omni. Keep advanced depth mode available. Do not submit automatically during setup.
-
-
-### Combined depth + face mesh
-
-Select **Advanced + Face mesh** in the UI or use `workflow.py prepare VIDEO --mode depth_mesh`. This runs the original depth/SAM pipeline, preserves its depth composite, then tracks the face from the original frames and overlays the mesh onto that composite. Landmarks are saved in `face-landmarks.json`. Review BOTH mask coverage and face tracking before approval. All artifacts, including depth, mask, mesh and embedded audio, are bound to review approval. Follow the same draft → approved HD → original-audio restoration flow.
-
-For setup with all three preparation modes, also install Python 3.12 and run `bash setup-face-mesh.sh`. This creates an isolated mesh environment; the main app can retain its existing Python version. A Google Face Landmarker model is downloaded at first use. No SAM/depth inference is used by fast mode. Mesh modes are experimental and currently optimized for one centered speaker.
+In mesh modes, the prompt must say the mesh lines are motion guidance that must disappear, that the whole identity including hair is replaced, and that all dialogue and timing are preserved. Keep advanced depth mode available. Never submit automatically during setup.

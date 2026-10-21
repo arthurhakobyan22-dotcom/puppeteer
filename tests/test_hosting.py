@@ -17,6 +17,25 @@ class HostingTests(unittest.TestCase):
     self.assertEqual(get.call_args.args[0],url)
 
 class FallbackTests(unittest.TestCase):
+ def test_default_config_never_uses_catbox(self):
+  # No MEDIA_HOST / MEDIA_HOST_FALLBACKS set: only tmpfiles is tried, catbox is never attempted.
+  with patch('media_host.setting',side_effect=lambda k,d='':d),patch('media_host.time.sleep'),patch('media_host._upload_once',side_effect=ValueError('bad')) as send:
+   with self.assertRaises(RuntimeError):upload('test.mp4')
+   self.assertEqual([c.args[1] for c in send.call_args_list],['tmpfiles','tmpfiles'])
+   self.assertNotIn('catbox',[c.args[1] for c in send.call_args_list])
+ def test_catbox_warns_once_when_explicitly_selected(self):
+  import media_host,warnings
+  media_host._catbox_warned=False
+  posted=Mock();posted.text='https://files.catbox.moe/test.mp4'
+  media=Mock();media.headers={'Content-Type':'video/mp4'};media.iter_content.return_value=iter([b'\x00\x00\x00 ftypisom'])
+  context=Mock();context.__enter__=Mock(return_value=media);context.__exit__=Mock(return_value=False)
+  with tempfile.TemporaryDirectory() as d:
+   path=Path(d)/'input.mp4';path.write_bytes(b'video')
+   with patch('media_host.setting',side_effect=lambda k,d='':{'MEDIA_HOST':'catbox'}.get(k,d)),patch('media_host.requests.post',return_value=posted),patch('media_host.requests.get',return_value=context):
+    with warnings.catch_warnings(record=True) as caught:
+     warnings.simplefilter('always')
+     self.assertEqual(upload(path),'https://files.catbox.moe/test.mp4')
+    self.assertTrue(any('public, persistent' in str(w.message) for w in caught))
  def test_primary_failure_uses_configured_fallback(self):
   def settings(k,d=''):return {'MEDIA_HOST':'tmpfiles','MEDIA_HOST_FALLBACKS':'catbox'}.get(k,d)
   with patch('media_host.setting',side_effect=settings),patch('media_host.time.sleep'),patch('media_host._upload_once',side_effect=[ValueError('bad'),ValueError('bad'),'https://files.catbox.moe/test.mp4']) as send:

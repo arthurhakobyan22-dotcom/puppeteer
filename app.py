@@ -172,4 +172,4 @@ def resume_saved_generations():
 
 @app.get('/health')
 def health():
-    return {'status':'ok','service':'TEIN Video Workflow'}
+    return {'status':'ok','service':'Puppeteer'}
