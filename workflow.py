@@ -2,13 +2,14 @@
 import argparse,json
 from pathlib import Path
 from config import ROOT,load_env
+from providers import PROVIDERS
 load_env()
 p=argparse.ArgumentParser();sub=p.add_subparsers(dest='command',required=True)
 c=sub.add_parser('prepare');c.add_argument('video');c.add_argument('--subject',default='person');c.add_argument('--provider',default='replicate',choices=['replicate','replicate-chenxwh','huggingface']);c.add_argument('--clean-dialogue',action='store_true',help='isolate vocals with Demucs and embed them instead of the original audio')
 for command in ['status','repair-rgb','resume','hd','review','submit']:
  c=sub.add_parser(command);c.add_argument('job')
  if command=='review':c.add_argument('--approve',action='store_true');c.add_argument('--fingerprint',required=True);c.add_argument('--note',required=True)
- if command=='submit':c.add_argument('--prompt-file',help='defaults to the built-in identity-only prompt');c.add_argument('--reference',required=True);c.add_argument('--second-reference')
+ if command=='submit':c.add_argument('--prompt-file',help='defaults to the built-in identity-only prompt');c.add_argument('--reference',required=True,help='Character 1: image or identity video');c.add_argument('--second-reference',help='Character 2: image');c.add_argument('--provider',choices=PROVIDERS,help='Seedance provider; defaults to SEEDANCE_PROVIDER or the first configured key')
  if command=='resume':c.add_argument('--hd',action='store_true')
 sub.choices['prepare'].add_argument('--mode',choices=['depth','face_mesh','depth_mesh'],default='depth')
 a=p.parse_args()
@@ -56,7 +57,7 @@ elif a.command=='repair-rgb':
 else:
  from seedance_bridge import submit,submit_hd,wait_and_finish,DEFAULT_PROMPT
  if a.command=='submit':
-  request=submit(folder,Path(a.prompt_file).read_text() if a.prompt_file else DEFAULT_PROMPT,a.reference,a.second_reference)
+  request=submit(folder,Path(a.prompt_file).read_text() if a.prompt_file else DEFAULT_PROMPT,a.reference,a.second_reference,a.provider)
  elif a.command=='hd':
   request=submit_hd(folder);folder=folder/'hd'
  else:

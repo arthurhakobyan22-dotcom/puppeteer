@@ -39,25 +39,28 @@ def get(ident:str):
         raise HTTPException(404)
     return jobs[ident]
 @app.post('/jobs/{ident}/seedance')
-def seedance(ident:str,prompt:str=Form(...),sirio:UploadFile=File(...),tein:UploadFile|None=File(None)):
+def seedance(ident:str,prompt:str=Form(...),char1:UploadFile=File(...),char2:UploadFile|None=File(None),provider:str=Form('')):
     if len(ident)!=32 or not all(c in '0123456789abcdef' for c in ident):raise HTTPException(404)
     folder=RUNS/ident
+    from providers import PROVIDERS
+    provider=provider.strip().lower()
+    if provider and provider not in PROVIDERS:raise HTTPException(400,'Unknown Seedance provider; choose one of: '+', '.join(PROVIDERS))
     if not (folder/'audio-manifest.json').exists():raise HTTPException(400,'Audio preparation must complete first.')
     from mask_review import require_approved
     try:require_approved(folder)
     except ValueError as e:raise HTTPException(409,str(e))
     paths=[]
-    for name,upload in [('sirio-reference',sirio),('tein-reference',tein)]:
+    for name,upload in [('char1-reference',char1),('char2-reference',char2)]:
         if upload is None:
             paths.append(None)
             continue
         suffix=Path(upload.filename or '').suffix.lower()
-        if suffix not in (['.png','.jpg','.jpeg','.webp','.mp4','.mov','.webm'] if name=='sirio-reference' else ['.png','.jpg','.jpeg','.webp']):raise HTTPException(400,'Use an image or a Sirio reference video.')
+        if suffix not in (['.png','.jpg','.jpeg','.webp','.mp4','.mov','.webm'] if name=='char1-reference' else ['.png','.jpg','.jpeg','.webp']):raise HTTPException(400,'Use an image, or an identity video for Character 1 only.')
         path=folder/(name+suffix)
         with path.open('wb') as f:shutil.copyfileobj(upload.file,f)
         paths.append(path)
     from seedance_bridge import submit
-    try:request_id=submit(folder,prompt,*paths)
+    try:request_id=submit(folder,prompt,*paths,provider=provider or None)
     except Exception as e:raise HTTPException(502,str(e))
     jobs[ident]={'id':ident,'state':'running','status':'Seedance rendering: '+request_id}
     def collect():
@@ -69,6 +72,12 @@ def seedance(ident:str,prompt:str=Form(...),sirio:UploadFile=File(...),tein:Uplo
         (folder/'status.json').write_text(json.dumps(jobs[ident]))
     threading.Thread(target=collect,daemon=True).start()
     return {'request_id':request_id,'id':ident,'state':'running','status':jobs[ident]['status']}
+
+@app.get('/providers')
+def list_providers():
+    """Capabilities plus a configured flag per provider; never the key values."""
+    from providers import PROVIDERS,get_provider,configured,default_provider
+    return {'default':default_provider(),'providers':{name:{**get_provider(name).capabilities(),'configured':configured(name)} for name in PROVIDERS}}
 
 @app.post('/jobs/{ident}/finish')
 def finish(ident:str,video:UploadFile=File(...)):
@@ -99,7 +108,7 @@ def get_hd(ident:str):
     if ident in hd_jobs:return hd_jobs[ident]
     saved=folder/'hd/status.json'
     if saved.exists():return json.loads(saved.read_text())
-    return {'state':'idle','status':'Approve your draft to generate 1080p.'}
+    return {'state':'idle','status':'Approve your draft to generate the full-resolution version.'}
 
 @app.post('/jobs/{ident}/hd')
 def create_hd(ident:str):
@@ -108,17 +117,20 @@ def create_hd(ident:str):
         previous=get_hd(ident)
         if previous['state'] in ['running','done']:return previous
         if not (folder/'final-preview.mp4').exists():raise HTTPException(400,'Complete and review a draft first.')
+        from seedance_bridge import provider_for
+        from providers import get_provider
+        caps=get_provider(provider_for(folder)).capabilities()
         hd=folder/'hd';hd.mkdir(exist_ok=True)
-        hd_jobs[ident]={'state':'running','status':'Submitting approved draft for 1080p','id':ident}
+        hd_jobs[ident]={'state':'running','status':'Submitting approved draft for '+caps['final_resolution'],'id':ident,'provider':caps['name']}
         def save(): (hd/'status.json').write_text(json.dumps(hd_jobs[ident]))
         save()
     def work_hd():
         from seedance_bridge import submit_hd,wait_and_finish
         try:
             request_id=submit_hd(folder)
-            hd_jobs[ident].update(request_id=request_id,status='Generating 1080p through Enhancor');save()
+            hd_jobs[ident].update(request_id=request_id,status='Generating '+caps['final_resolution']+' through '+caps['label']);save()
             wait_and_finish(hd,request_id,lambda s:hd_jobs[ident].update(status=s))
-            hd_jobs[ident].update(state='done',status='1080p ready · original source audio restored')
+            hd_jobs[ident].update(state='done',status=caps['final_resolution']+' ready · original source audio restored')
         except Exception as e:hd_jobs[ident].update(state='error',status=str(e))
         save()
     threading.Thread(target=work_hd,daemon=True).start()

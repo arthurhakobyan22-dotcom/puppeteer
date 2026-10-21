@@ -48,7 +48,8 @@ Do not send a new creative prompt or input files with draft completion. The prov
 - `GET /jobs/{id}`: local progress.
 - `GET /jobs/{id}/mask-review`: artifact fingerprint and approval.
 - `POST /jobs/{id}/mask-review`: `approved`, `fingerprint`, `note`.
-- `POST /jobs/{id}/seedance`: `prompt`, `sirio` (primary reference), optional `tein` (second image). Historical field names retained for compatibility.
+- `POST /jobs/{id}/seedance`: `prompt`, `char1` (Character 1: image or identity video), optional `char2` (second image), optional `provider` (`enhancor` or `fal`; defaults per `SEEDANCE_PROVIDER`). Files are saved as `char1-reference.<ext>` / `char2-reference.<ext>`.
+- `GET /providers`: capabilities and `configured` flag per provider plus the `default`; see `docs/PROVIDERS.md`.
 - `POST /jobs/{id}/hd`, `GET /jobs/{id}/hd`: approved upgrade and progress.
 - `POST /jobs/{id}/finish`: manually upload returned `video` and restore original audio.
 - `/docs`: FastAPI-generated local endpoint documentation.
