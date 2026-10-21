@@ -4,11 +4,11 @@ from pathlib import Path
 from config import ROOT,load_env
 load_env()
 p=argparse.ArgumentParser();sub=p.add_subparsers(dest='command',required=True)
-c=sub.add_parser('prepare');c.add_argument('video');c.add_argument('--subject',default='person');c.add_argument('--provider',default='replicate',choices=['replicate','replicate-chenxwh','huggingface'])
+c=sub.add_parser('prepare');c.add_argument('video');c.add_argument('--subject',default='person');c.add_argument('--provider',default='replicate',choices=['replicate','replicate-chenxwh','huggingface']);c.add_argument('--clean-dialogue',action='store_true',help='isolate vocals with Demucs and embed them instead of the original audio')
 for command in ['status','repair-rgb','resume','hd','review','submit']:
  c=sub.add_parser(command);c.add_argument('job')
  if command=='review':c.add_argument('--approve',action='store_true');c.add_argument('--fingerprint',required=True);c.add_argument('--note',required=True)
- if command=='submit':c.add_argument('--prompt-file',required=True);c.add_argument('--reference',required=True);c.add_argument('--second-reference')
+ if command=='submit':c.add_argument('--prompt-file',help='defaults to the built-in identity-only prompt');c.add_argument('--reference',required=True);c.add_argument('--second-reference')
  if command=='resume':c.add_argument('--hd',action='store_true')
 sub.choices['prepare'].add_argument('--mode',choices=['depth','face_mesh','depth_mesh'],default='depth')
 a=p.parse_args()
@@ -19,11 +19,11 @@ if a.command=='prepare':
  shutil.copy2(a.video,folder/'upload.mp4');print('JOB:',folder.name,flush=True)
  if a.mode=='face_mesh':
   from face_mesh import run as run_mesh
-  run_mesh(folder/'upload.mp4',folder)
+  run_mesh(folder/'upload.mp4',folder,clean_dialogue=a.clean_dialogue)
  elif a.mode=='depth_mesh':
   from face_mesh import run_depth
-  run_depth(folder/'upload.mp4',folder,a.subject,a.provider)
- else:run(folder/'upload.mp4',folder,a.subject,a.provider)
+  run_depth(folder/'upload.mp4',folder,a.subject,a.provider,clean_dialogue=a.clean_dialogue)
+ else:run(folder/'upload.mp4',folder,a.subject,a.provider,clean_dialogue=a.clean_dialogue)
  (folder/'status.json').write_text(json.dumps({'id':folder.name,'state':'done','status':'Mask review required'}));raise SystemExit
 if len(a.job)!=32 or any(c not in '0123456789abcdef' for c in a.job):p.error('Expected a 32-character local job ID')
 folder=ROOT/'runs'/a.job
@@ -48,14 +48,15 @@ elif a.command=='repair-rgb':
   import shutil,subprocess
   shutil.copy2(folder/'composite-silent.mp4',folder/'depth-composite-silent.mp4')
   subprocess.run([str(ROOT/'.venv-face/bin/python'),str(ROOT/'mesh_worker.py'),str(folder),'--depth'],check=True)
- prepare_seedance_video(folder)
+ audio_meta=json.loads((folder/'audio-manifest.json').read_text()) if (folder/'audio-manifest.json').exists() else {}
+ prepare_seedance_video(folder,bool(meta.get('clean_dialogue',audio_meta.get('clean_dialogue',False))))
  (folder/'mask-review.json').unlink(missing_ok=True)
  meta['mask_method']='SAM 3 on original RGB, preserving depth colors';(folder/'manifest.json').write_text(json.dumps(meta,indent=2))
  print('Repaired. Review the entire clip again; approval cleared.')
 else:
- from seedance_bridge import submit,submit_hd,wait_and_finish
+ from seedance_bridge import submit,submit_hd,wait_and_finish,DEFAULT_PROMPT
  if a.command=='submit':
-  request=submit(folder,Path(a.prompt_file).read_text(),a.reference,a.second_reference)
+  request=submit(folder,Path(a.prompt_file).read_text() if a.prompt_file else DEFAULT_PROMPT,a.reference,a.second_reference)
  elif a.command=='hd':
   request=submit_hd(folder);folder=folder/'hd'
  else:

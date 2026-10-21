@@ -38,8 +38,8 @@ The launcher starts a callback-only Quick Tunnel when no custom webhook is confi
 ## Manual setup
 
 1. Install Python 3.12+ (the development runtime was Python 3.14) and Rubber Band CLI:
-   - macOS: `brew install rubberband cloudflared`
-   - Ubuntu/Debian or WSL: `sudo apt install rubberband-cli python3-venv`
+   - macOS: `brew install cloudflared`
+   - Ubuntu/Debian or WSL: `sudo apt install python3-venv`
    - Install [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) too, unless you already have a public HTTPS webhook receiver. On launch it creates a temporary callback-only tunnel; the UI and media stay on localhost.
 2. In this folder, run `bash setup.sh`. This creates an isolated `.venv`, installs `requirements.txt`, creates a blank `.env`, and checks dependencies. To enable all three modes, install Python 3.12 and run `bash setup-face-mesh.sh`, then `.venv/bin/python doctor.py --mesh`. On macOS, install the worker interpreter with `brew install python@3.12` if needed.
 3. Fill `.env` with **your own** `ENHANCOR_API_KEY` and `REPLICATE_API_TOKEN`. Get them from [Enhancor](https://app.enhancor.ai/api-dashboard) and [Replicate](https://replicate.com/account/api-tokens). Fund/enable the relevant API accounts. `HF_TOKEN` is optional for the Hugging Face depth alternative.
@@ -48,16 +48,15 @@ The launcher starts a callback-only Quick Tunnel when no custom webhook is confi
 5. Upload your own MP4/MOV, prepare it, inspect the entire mask and prepared video, approve that exact mask, provide your own character references, review the prompt, and create a draft.
 6. When you like the draft, click the 1080p approval button. The completed draft and HD result remain separate; both final previews use source audio.
 
-No local model weights or GPU are needed for the default hosted setup. Python packages and the Rubber Band executable are required locally. No API keys, signed media URLs, or old jobs are included. Four user-selected demonstration videos are included in `examples/`. The bundled TEIN companion artwork is part of the UI.
+No local model weights or GPU are needed for the default hosted setup. Python packages are required locally. No API keys, signed media URLs, or old jobs are included. Four user-selected demonstration videos are included in `examples/`. The bundled TEIN companion artwork is part of the UI.
 
 ## What happens
 
-1. Save the source unchanged; extract audio and separate vocals/music with Demucs on Replicate.
-2. Pitch isolated vocals **+3 semitones**, maintaining duration with Rubber Band.
+1. Save the source unchanged. By default the prepared clip carries the **entire original audio**, remuxed packet-for-packet. With **Clean dialogue** enabled, extract audio and separate vocals/music with Demucs on Replicate so the clip carries isolated vocals only.
 3. Normalize the working video to 24 fps, up to 960 pixels; obtain colored depth with `lucataco/depth-anything-video`. Preserve returned colors.
 4. Use SAM 3 raw PNG masks on depth. Check alignment, coverage and background spill. An agent can retry segmentation on the original RGB if depth loses detail.
 5. Composite the depth subject over the original background. Mandatory full-clip visual mask review gates every generation. Approval is bound to hashes of the current artifacts.
-6. Embed the pitched vocals into the composite MP4. Send this video, **no standalone audio**, with character references.
+6. Embed the audio (original track, or isolated vocals with Clean dialogue) into the composite MP4. Send this video, **no standalone audio**, with character references.
 7. Enhancor Seedance **Edit** for image references; **Omni / multi_reference** for a video identity reference. Generate a draft by default.
 8. Poll for completion, download the result, discard its audio and copy the complete original soundtrack into the final MP4.
 9. After explicit HD approval, complete the accepted draft at 1080p and restore the soundtrack again.
@@ -132,7 +131,7 @@ TEIN names, logos, companion artwork, and all example media are excluded from th
 
 Choose **Fast · Face mesh** in the UI, or use `workflow.py prepare VIDEO --mode face_mesh`. Install the optional worker once with `bash setup-face-mesh.sh` (Python 3.12 required; isolated `.venv-face`). The model downloads from Google's official storage on first use.
 
-This path keeps the original video, tracks and saves facial landmarks, draws the mesh, isolates vocals and embeds the +3 pitched vocals. It makes **no depth or SAM calls**. It is currently designed for a single centered speaker; inspect all frames and stop on tracking gaps or incorrect face alignment. Do not claim mask review in this mode: review facial tracking and audio instead. Saved artifact hashes gate submission.
+This path keeps the original video, tracks and saves facial landmarks, draws the mesh and embeds the original audio (or isolated vocals with Clean dialogue). It makes **no depth or SAM calls**. It is currently designed for a single centered speaker; inspect all frames and stop on tracking gaps or incorrect face alignment. Do not claim mask review in this mode: review facial tracking and audio instead. Saved artifact hashes gate submission.
 
 Use the same character references, draft-first submission, collection, original-audio restoration and explicitly approved HD upgrade. In the prompt, explain that mesh lines are motion guidance and must disappear, replace the complete original identity including hair, and preserve all dialogue and timing. Image reference uses Edit; video identity uses Omni. Keep advanced depth mode available. Do not submit automatically during setup.
 
@@ -150,8 +149,7 @@ For setup with all three preparation modes, also install Python 3.12 and run `ba
 | --- | --- |
 | Local app | Python 3.12+, FastAPI, Uvicorn; HTML, CSS and vanilla JavaScript UI |
 | Video/audio processing | PyAV, NumPy, Pillow, OpenCV and SciPy; local encoding, compositing and audio restoration |
-| Vocal isolation | Hosted Demucs / htdemucs through Replicate |
-| Pitch | Rubber Band CLI; isolated vocals +3 semitones without changing duration |
+| Vocal isolation | Optional (Clean dialogue): hosted Demucs / htdemucs through Replicate |
 | Colored depth | Replicate `lucataco/depth-anything-video`; optional Hugging Face Video Depth Anything or `chenxwh/depth-any-video` |
 | Segmentation | Replicate `lucataco/sam3-video`; raw per-frame masks and mandatory visual review |
 | Face mesh | Local Google MediaPipe Face Landmarker; saved landmarks and overlay, isolated Python 3.12 worker environment |
@@ -160,7 +158,7 @@ For setup with all three preparation modes, also install Python 3.12 and run `ba
 | Completion | Persisted job files and polling; callback-only Cloudflare Quick Tunnel for the provider callback requirement |
 | Agent workflow | Included AGENTS.md, setup runbook, skill and CLI; a user-supplied coding agent performs visual QA |
 
-Fast face mesh skips both depth and SAM. Combined mode uses depth + SAM + facial landmarks. All modes embed pitched vocals before generation and restore the original source soundtrack afterward.
+Fast face mesh skips both depth and SAM. Combined mode uses depth + SAM + facial landmarks. All modes embed the original audio (or isolated vocals with Clean dialogue) before generation and restore the entire original source soundtrack afterward.
 
 ## Hosting and failure recovery
 

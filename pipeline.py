@@ -125,10 +125,11 @@ def composite(original,depth,seg,directory,audio_source=None):
                 if packet.dts is not None:packet.stream=astream;output.mux(packet)
     return counts[0]
 
-def run(src,directory,prompt='person',provider='replicate',status=print):
+def run(src,directory,prompt='person',provider='replicate',status=print,clean_dialogue=False):
     directory=Path(directory);directory.mkdir(parents=True,exist_ok=True)
-    from audio_workflow import separate
-    separate(src,directory,status)
+    if clean_dialogue:
+        from audio_workflow import separate
+        separate(src,directory,status)
     status('Preparing video · 24 fps');meta=normalize(src,directory/'original.mp4')
     status('Video Depth Anything · generating depth')
     if provider=='huggingface':depth_hf(directory/'original.mp4',directory/'depth-raw.mp4')
@@ -140,7 +141,7 @@ def run(src,directory,prompt='person',provider='replicate',status=print):
     status('Compositing · depth subject over original background')
     composite(directory/'original.mp4',directory/'depth.mp4',raw_dir,directory,src)
     from audio_workflow import prepare_seedance_video
-    status('Embedding isolated vocals · +3 semitones')
-    prepare_seedance_video(directory)
-    meta.update(prompt=prompt,depth_provider=provider,sam_space=SAM,mask_method='SAM 3 raw PNG masks')
+    status('Embedding isolated vocals (clean dialogue)' if clean_dialogue else 'Embedding original source audio')
+    prepare_seedance_video(directory,clean_dialogue)
+    meta.update(prompt=prompt,depth_provider=provider,sam_space=SAM,mask_method='SAM 3 raw PNG masks',clean_dialogue=bool(clean_dialogue))
     (directory/'manifest.json').write_text(json.dumps(meta,indent=2));status('Complete')

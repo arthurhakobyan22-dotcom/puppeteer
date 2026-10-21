@@ -3,7 +3,7 @@ from pathlib import Path
 import json,subprocess,sys,shutil
 ROOT=Path(__file__).resolve().parent
 
-def run(src,folder,status=print):
+def run(src,folder,status=print,clean_dialogue=False):
     from pipeline import normalize
     from audio_workflow import separate,prepare_seedance_video
     folder=Path(folder)
@@ -14,22 +14,23 @@ def run(src,folder,status=print):
     status('Tracking face mesh locally · no depth or SAM')
     subprocess.run([str(python),str(ROOT/'mesh_worker.py'),str(folder)],check=True)
     (folder/'workflow-mode.json').write_text(json.dumps({'mode':'face_mesh'}))
-    separate(src,folder,status)
-    prepare_seedance_video(folder)
-    status('Face mesh ready · review tracking and pitched audio')
+    if clean_dialogue:separate(src,folder,status)
+    prepare_seedance_video(folder,clean_dialogue)
+    (folder/'manifest.json').write_text(json.dumps({'mode':'face_mesh','clean_dialogue':bool(clean_dialogue)},indent=2))
+    status('Face mesh ready · review tracking and embedded audio')
 
 
-def run_depth(src,folder,prompt='person',provider='replicate',status=print):
+def run_depth(src,folder,prompt='person',provider='replicate',status=print,clean_dialogue=False):
     from pipeline import run as run_advanced
     from audio_workflow import prepare_seedance_video
     folder=Path(folder)
     python=ROOT/'.venv-face/bin/python'
     if not python.exists():raise ValueError('Install face mesh first: bash setup-face-mesh.sh')
     folder.mkdir(parents=True,exist_ok=True)
-    run_advanced(src,folder,prompt,provider,status)
+    run_advanced(src,folder,prompt,provider,status,clean_dialogue)
     shutil.copy2(folder/'composite-silent.mp4',folder/'depth-composite-silent.mp4')
     status('Adding face mesh from original video onto depth composite')
     subprocess.run([str(python),str(ROOT/'mesh_worker.py'),str(folder),'--depth'],check=True)
     (folder/'workflow-mode.json').write_text(json.dumps({'mode':'depth_mesh'}))
-    prepare_seedance_video(folder)
+    prepare_seedance_video(folder,clean_dialogue)
     status('Depth + face mesh ready · full mask and facial tracking review required')

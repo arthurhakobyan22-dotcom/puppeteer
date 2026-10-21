@@ -1,6 +1,6 @@
 # Third-party notices
 
-Python dependencies retain their respective licenses. Rubber Band is an external executable with its own licensing; obtain it from its official distribution/package manager. Hosted Demucs, depth, SAM and Seedance models are not redistributed in this package and remain subject to their providers' terms.
+Python dependencies retain their respective licenses. Hosted Demucs, depth, SAM and Seedance models are not redistributed in this package and remain subject to their providers' terms.
 
 TEIN branding and companion illustrations are included from the existing user-authorized UI. Those assets are excluded from the MIT license covering this project’s code and documentation; this package grants no new rights to them. Google Fonts are requested by CSS, not vendored here. Two user-selected videos are included under `examples/`; see its README for media rights and usage notes. No license to third-party footage, music or likenesses is granted by this package.
 

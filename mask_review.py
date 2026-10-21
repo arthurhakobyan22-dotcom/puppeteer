@@ -3,7 +3,7 @@ import hashlib,json
 from pathlib import Path
 from datetime import datetime,timezone
 
-FILES=('original.mp4','depth.mp4','mask.mp4','composite-silent.mp4')
+FILES=('original.mp4','depth.mp4','mask.mp4','composite-silent.mp4','seedance-input.mp4')
 def is_mesh(folder):
     p=Path(folder)/'workflow-mode.json'
     return p.exists() and json.loads(p.read_text()).get('mode') in ['face_mesh','depth_mesh']

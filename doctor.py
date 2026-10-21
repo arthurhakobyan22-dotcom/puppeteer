@@ -1,5 +1,5 @@
 """Offline checks; never prints credential values or starts paid calls."""
-import argparse,importlib,shutil,sys
+import argparse,importlib,sys
 from config import setting
 
 def main():
@@ -9,7 +9,6 @@ def main():
     for name in ['av','numpy','PIL','requests','fastapi','uvicorn','multipart','gradio_client','scipy']:
         try:importlib.import_module(name);print(name+': OK')
         except Exception as exc:print(name+': FAILED ('+type(exc).__name__+')');failed=True
-    binary=shutil.which('rubberband');print('rubberband:', 'OK' if binary else 'MISSING — see docs/SETUP-AGENT.md');failed=failed or not binary
     if args.mesh:
         from pathlib import Path
         import subprocess

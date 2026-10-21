@@ -4,9 +4,9 @@ The user can ask an existing coding agent to carry out this runbook. No addition
 
 ## 1. Detect and install prerequisites
 
-- Detect OS, architecture, Python version, available package manager, and `rubberband` and `cloudflared` executables. Python must be 3.12 or later. Prefer an already compatible interpreter; `PYTHON=python3.14 bash setup.sh` selects one explicitly.
-- macOS with Homebrew: install missing Python and Rubber Band using `brew install python rubberband cloudflared`. Do not reinstall components already present.
-- Ubuntu/Debian/WSL: install missing components using `sudo apt update` then `sudo apt install python3 python3-venv python3-pip rubberband-cli`. Confirm Python is >=3.12; older distributions need a supported Python installation before continuing.
+- Detect OS, architecture, Python version, available package manager, and the `cloudflared` executable. Python must be 3.12 or later. Prefer an already compatible interpreter; `PYTHON=python3.14 bash setup.sh` selects one explicitly.
+- macOS with Homebrew: install missing Python using `brew install python cloudflared`. Do not reinstall components already present.
+- Ubuntu/Debian/WSL: install missing components using `sudo apt update` then `sudo apt install python3 python3-venv python3-pip`. Confirm Python is >=3.12; older distributions need a supported Python installation before continuing.
 - Native Windows: use WSL2 Ubuntu for this package's Bash launch scripts. If WSL is not installed, tell the user a system installation/restart is required and guide them through it. Native PowerShell setup has not been tested.
 - If no package manager exists, guide the user to the official installation: [Homebrew](https://brew.sh), [Python](https://www.python.org/downloads/), or [WSL](https://learn.microsoft.com/windows/wsl/install). Respect the host's approval requirements for system changes; never ask for or handle their administrator password.
 
@@ -50,7 +50,7 @@ Explain the first run: upload source, inspect and approve the full mask, add a c
 
 Choose **Fast · Face mesh** in the UI, or use `workflow.py prepare VIDEO --mode face_mesh`. Install the optional worker once with `bash setup-face-mesh.sh` (Python 3.12 required; isolated `.venv-face`). The model downloads from Google's official storage on first use.
 
-This path keeps the original video, tracks and saves facial landmarks, draws the mesh, isolates vocals and embeds the +3 pitched vocals. It makes **no depth or SAM calls**. It is currently designed for a single centered speaker; inspect all frames and stop on tracking gaps or incorrect face alignment. Do not claim mask review in this mode: review facial tracking and audio instead. Saved artifact hashes gate submission.
+This path keeps the original video, tracks and saves facial landmarks, draws the mesh and embeds the original audio (or isolated vocals with clean dialogue). It makes **no depth or SAM calls**. It is currently designed for a single centered speaker; inspect all frames and stop on tracking gaps or incorrect face alignment. Do not claim mask review in this mode: review facial tracking and audio instead. Saved artifact hashes gate submission.
 
 Use the same character references, draft-first submission, collection, original-audio restoration and explicitly approved HD upgrade. In the prompt, explain that mesh lines are motion guidance and must disappear, replace the complete original identity including hair, and preserve all dialogue and timing. Image reference uses Edit; video identity uses Omni. Keep advanced depth mode available. Do not submit automatically during setup.
 

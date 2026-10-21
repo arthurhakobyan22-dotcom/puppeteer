@@ -6,10 +6,6 @@ if ! command -v "$PYTHON" >/dev/null 2>&1; then
   echo "Install Python 3.12+ first. See docs/SETUP-AGENT.md."; exit 1
 fi
 "$PYTHON" -c 'import sys; sys.exit(0 if sys.version_info >= (3,12) else "Python 3.12+ required. Set PYTHON to a compatible interpreter.")'
-if ! command -v rubberband >/dev/null 2>&1; then
-  echo "Rubber Band CLI is missing. macOS: brew install rubberband; Ubuntu/WSL: sudo apt install rubberband-cli"
-  echo "See docs/SETUP-AGENT.md for agent-led installation."; exit 1
-fi
 if [ ! -d .venv ]; then "$PYTHON" -m venv .venv; fi
 .venv/bin/python -m pip install -r requirements.txt
 if [ ! -f .env ]; then cp .env.example .env; chmod 600 .env; fi

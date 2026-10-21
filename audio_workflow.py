@@ -1,4 +1,4 @@
-"""Isolate vocals before generation and replace generated sound with entire original source audio."""
+"""Prepare the clip audio (original track by default, optional Demucs vocals) and restore the entire original source audio after generation."""
 from pathlib import Path
 import os,json,time
 import av,numpy as np,requests
@@ -23,7 +23,7 @@ def write_audio(path,a):
 
 def separate(src,folder,status=print):
     folder=Path(folder)
-    if (folder/'audio-manifest.json').exists():return
+    if (folder/'vocals.wav').exists() and (folder/'music.wav').exists():return
     status('Audio · extracting original track');original=read_audio(src);write_audio(folder/'original-audio.wav',original)
     token=os.getenv('REPLICATE_API_TOKEN')
     if not token:raise ValueError('REPLICATE_API_TOKEN is required for audio separation.')
@@ -45,7 +45,7 @@ def separate(src,folder,status=print):
     for name,a in stems.items():
         if name!='vocals':n=min(music.shape[1],a.shape[1]);music[:,:n]+=a[:,:n]
     write_audio(folder/'music.wav',np.clip(music,-1,1))
-    (folder/'audio-manifest.json').write_text(json.dumps({'prediction_id':j['id'],'seedance_video':'composite-silent.mp4','seedance_audio':'vocals.wav','final_audio':'upload.mp4 (entire original audio track)','discard_seedance_audio':True,'separation':'Demucs htdemucs; residual music or vocal bleed is possible'},indent=2))
+    (folder/'audio-manifest.json').write_text(json.dumps({'prediction_id':j['id'],'stems':['vocals.wav','music.wav'],'final_audio':'entire original source audio','discard_seedance_audio':True,'separation':'Demucs htdemucs; residual music or vocal bleed is possible'},indent=2))
 
 def finish_preview(generated,folder):
     folder=Path(folder);target=folder/'final-preview.mp4'
@@ -82,28 +82,39 @@ def finish_preview(generated,folder):
             if p.dts is not None:p.stream=astream;out.mux(p)
     return target
 
-def prepare_seedance_video(folder, semitones=3):
-    """Embed +3-semitone isolated vocals into the colored-depth composite."""
-    import subprocess,shutil
-    folder=Path(folder);binary=shutil.which('rubberband')
-    if not binary:raise RuntimeError('Rubber Band is required for pitch shifting.')
-    pitched=folder/f'vocals-plus{semitones}.wav'
-    subprocess.run([binary,'--fine','--pitch',str(semitones),'--time','1',str(folder/'vocals.wav'),str(pitched)],check=True,capture_output=True)
-    original=read_audio(folder/'vocals.wav');samples=read_audio(pitched)
-    n=original.shape[1]
-    samples=np.pad(samples,((0,0),(0,max(0,n-samples.shape[1]))))[:,:n]
-    write_audio(pitched,samples)
-    target=folder/'seedance-input.mp4'
-    with av.open(str(folder/'composite-silent.mp4')) as video,av.open(str(target),'w') as out:
-        vs=out.add_stream_from_template(video.streams.video[0]);audio=out.add_stream('aac',rate=RATE);audio.layout='stereo';audio.bit_rate=192000
-        for packet in video.demux(video=0):
-            if packet.dts is not None:packet.stream=vs;out.mux(packet)
-        for i in range(0,n,4096):
-            f=av.AudioFrame.from_ndarray(np.ascontiguousarray(samples[:,i:i+4096]),format='fltp',layout='stereo');f.sample_rate=RATE;f.pts=i
-            for packet in audio.encode(f):out.mux(packet)
-        for packet in audio.encode():out.mux(packet)
-    manifest=folder/'audio-manifest.json'
+def prepare_seedance_video(folder,clean_dialogue=False):
+    """Build seedance-input.mp4 from the silent composite plus the original source audio (default) or isolated vocals."""
+    folder=Path(folder);target=folder/'seedance-input.mp4';manifest=folder/'audio-manifest.json'
     data=json.loads(manifest.read_text()) if manifest.exists() else {}
-    data.update(seedance_video='seedance-input.mp4',seedance_audio=None,pitch_semitones=semitones,embedded_vocals=f'vocals-plus{semitones}.wav',final_audio='entire original source audio')
+    def build(samples=None):
+        with av.open(str(folder/'composite-silent.mp4')) as video,av.open(str(folder/'upload.mp4')) as source,av.open(str(target),'w') as out:
+            if not source.streams.audio:raise ValueError('Original source has no audio track.')
+            vs=out.add_stream_from_template(video.streams.video[0])
+            if samples is None:
+                # Copy the original compressed audio packets so decoded samples equal the source exactly.
+                astream=out.add_stream_from_template(source.streams.audio[0])
+                for packet in video.demux(video=0):
+                    if packet.dts is not None:packet.stream=vs;out.mux(packet)
+                for packet in source.demux(audio=0):
+                    if packet.dts is not None:packet.stream=astream;out.mux(packet)
+                return
+            audio=out.add_stream('aac',rate=RATE);audio.layout='stereo';audio.bit_rate=192000
+            for packet in video.demux(video=0):
+                if packet.dts is not None:packet.stream=vs;out.mux(packet)
+            for i in range(0,samples.shape[1],4096):
+                f=av.AudioFrame.from_ndarray(np.ascontiguousarray(samples[:,i:i+4096].astype(np.float32)),format='fltp',layout='stereo');f.sample_rate=RATE;f.pts=i
+                for packet in audio.encode(f):out.mux(packet)
+            for packet in audio.encode():out.mux(packet)
+    if clean_dialogue:
+        vocals=folder/'vocals.wav'
+        if not vocals.exists():raise ValueError('Clean dialogue needs vocals.wav; run audio separation first.')
+        build(read_audio(vocals));embedded='vocals.wav (Demucs)';remux='reencoded'
+    else:
+        try:build();embedded='entire original source audio';remux='copy'
+        except (av.FFmpegError,ValueError,OSError) as exc:
+            if 'no audio track' in str(exc):raise
+            # The source codec cannot live in MP4; re-encode the decoded original instead.
+            target.unlink(missing_ok=True);build(read_audio(folder/'upload.mp4'));embedded='entire original source audio';remux='reencoded'
+    data.update(clean_dialogue=bool(clean_dialogue),seedance_video='seedance-input.mp4',embedded_audio=embedded,audio_remux=remux,final_audio='entire original source audio',discard_seedance_audio=True)
     manifest.write_text(json.dumps(data,indent=2))
     return target

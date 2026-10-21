@@ -10,8 +10,9 @@ app=FastAPI();jobs={}
 @app.get('/')
 def index():return FileResponse(ROOT/'static/index.html')
 @app.post('/jobs')
-def create(video:UploadFile=File(...),prompt:str=Form('person'),provider:str=Form('replicate'),mode:str=Form('depth')):
+def create(video:UploadFile=File(...),prompt:str=Form('person'),provider:str=Form('replicate'),mode:str=Form('depth'),clean_dialogue:str=Form('')):
     if mode not in ['depth','face_mesh','depth_mesh']:raise HTTPException(400,'Unknown workflow mode')
+    clean=clean_dialogue.strip().lower() in ['1','true','on','yes']
     if provider not in ['huggingface','replicate','replicate-chenxwh']:raise HTTPException(400,'Unknown provider')
     ident=uuid.uuid4().hex;folder=RUNS/ident;folder.mkdir();src=folder/'upload.mp4'
     with src.open('wb') as out:shutil.copyfileobj(video.file,out)
@@ -20,11 +21,11 @@ def create(video:UploadFile=File(...),prompt:str=Form('person'),provider:str=For
         try:
             if mode=='face_mesh':
                 from face_mesh import run as run_mesh
-                run_mesh(src,folder,lambda s:jobs[ident].update(status=s))
+                run_mesh(src,folder,lambda s:jobs[ident].update(status=s),clean)
             elif mode=='depth_mesh':
                 from face_mesh import run_depth
-                run_depth(src,folder,prompt,provider,lambda s:jobs[ident].update(status=s))
-            else:run(src,folder,prompt,provider,lambda s:jobs[ident].update(status=s))
+                run_depth(src,folder,prompt,provider,lambda s:jobs[ident].update(status=s),clean)
+            else:run(src,folder,prompt,provider,lambda s:jobs[ident].update(status=s),clean)
             jobs[ident].update(state='done',status='Preparation complete · input review required')
             (folder/'status.json').write_text(json.dumps(jobs[ident]))
         except Exception as e:
@@ -41,7 +42,7 @@ def get(ident:str):
 def seedance(ident:str,prompt:str=Form(...),sirio:UploadFile=File(...),tein:UploadFile|None=File(None)):
     if len(ident)!=32 or not all(c in '0123456789abcdef' for c in ident):raise HTTPException(404)
     folder=RUNS/ident
-    if not (folder/'audio-manifest.json').exists():raise HTTPException(400,'Audio separation must complete first.')
+    if not (folder/'audio-manifest.json').exists():raise HTTPException(400,'Audio preparation must complete first.')
     from mask_review import require_approved
     try:require_approved(folder)
     except ValueError as e:raise HTTPException(409,str(e))

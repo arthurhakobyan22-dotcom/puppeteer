@@ -10,8 +10,7 @@ All neural inference in the default path is hosted. No weight downloads are incl
 | Depth alternative | [Video-Depth-Anything Space](https://huggingface.co/spaces/depth-anything/Video-Depth-Anything) | public GPU quota/availability; optional HF_TOKEN |
 | Segmentation | [lucataco/sam3-video](https://replicate.com/lucataco/sam3-video) | pinned version `408f82fc20c300aac5d61d2e34ddb34cd0181e810e9f609d250aed14d5f81269`; `video`, `prompt`, `mask_only=true`, `return_zip=true` |
 | Generation | Enhancor Seedance 2.5 | Edit or multi_reference; draft then approved 1080p |
-| Pitch | Rubber Band CLI | +3 semitones, time ratio 1 |
-| Video/audio IO | PyAV / FFmpeg libraries | normalization, compositing, AAC input vocals, original audio packet remux |
+| Video/audio IO | PyAV / FFmpeg libraries | normalization, compositing, original audio packet remux (AAC vocals only with clean dialogue) |
 
 The pinned SAM and Demucs versions and the depth model schema were verified through authenticated Replicate API reads on 2026-10-06. If a model becomes unavailable, inspect its current schema before changing the adapter. [Replicate HTTP API](https://replicate.com/docs/reference/http).
 
