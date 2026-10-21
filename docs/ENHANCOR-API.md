@@ -47,6 +47,7 @@ Do not send a new creative prompt or input files with draft completion. The prov
 - `POST /jobs`: multipart `video`, `mode` (`depth`, `face_mesh`, `depth_mesh`), `prompt` (segmentation subject), `provider` (depth provider), `clean_dialogue`.
 - `GET /jobs/{id}`: local progress.
 - `GET /jobs/{id}/mask-review`: artifact fingerprint and approval.
+- `GET /jobs/{id}/files`: relative paths of every file in the run folder (the UI reads this once per refresh instead of probing optional files).
 - `POST /jobs/{id}/mask-review`: `approved`, `fingerprint`, `note`.
 - `POST /jobs/{id}/seedance`: `prompt`, `char1` (Character 1: image or identity video), optional `char2` (second image), optional `provider` (`enhancor` or `fal`; defaults per `SEEDANCE_PROVIDER`). Files are saved as `char1-reference.<ext>` / `char2-reference.<ext>`.
 - `GET /providers`: capabilities and `configured` flag per provider plus the `default`; see `docs/PROVIDERS.md`.

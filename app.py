@@ -6,7 +6,11 @@ from fastapi.staticfiles import StaticFiles
 from pipeline import run
 ROOT=Path(__file__).resolve().parent
 RUNS=ROOT/'runs';RUNS.mkdir(exist_ok=True)
-app=FastAPI();jobs={}
+from contextlib import asynccontextmanager
+@asynccontextmanager
+async def lifespan(_):
+    resume_saved_generations();yield
+app=FastAPI(lifespan=lifespan);jobs={}
 @app.get('/')
 def index():return FileResponse(ROOT/'static/index.html')
 @app.post('/jobs')
@@ -102,6 +106,12 @@ def hd_folder(ident):
     if not folder.exists():raise HTTPException(404)
     return folder
 
+@app.get('/jobs/{ident}/files')
+def list_files(ident:str):
+    """Relative paths of files in the run folder; the UI uses this instead of probing for optional files."""
+    folder=hd_folder(ident)
+    return {'files':sorted(p.relative_to(folder).as_posix() for p in folder.rglob('*') if p.is_file())}
+
 @app.get('/jobs/{ident}/hd')
 def get_hd(ident:str):
     folder=hd_folder(ident)
@@ -149,7 +159,6 @@ def save_mask_review(ident:str,approved:bool=Form(...),fingerprint:str=Form(...)
 
 app.mount('/static',StaticFiles(directory=ROOT/'static'),name='static')
 
-@app.on_event('startup')
 def resume_saved_generations():
     """Resume collection only: never requeue a paid prediction on restart."""
     from seedance_bridge import wait_and_finish

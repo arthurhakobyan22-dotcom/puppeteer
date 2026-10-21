@@ -52,7 +52,7 @@ def finish_preview(generated,folder):
     # Accommodate a small provider rounding gap without cutting source audio.
     with av.open(str(generated)) as probe, av.open(str(folder/'upload.mp4')) as source:
         stream=probe.streams.video[0]
-        vd=float(stream.duration*stream.time_base)
+        vd=float(stream.duration*stream.time_base) if stream.duration else float(probe.duration/av.time_base)
         sd=float(source.duration/av.time_base)
     if 0.25 < sd-vd <= 0.5:
         import subprocess

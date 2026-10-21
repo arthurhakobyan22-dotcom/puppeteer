@@ -35,8 +35,9 @@ def submit(folder,prompt,char1,char2=None,provider=None,status=print):
     adapter=get_provider(name);adapter.require_configured()
     from audio_workflow import prepare_seedance_video
     clean_dialogue=bool(json.loads((folder/'audio-manifest.json').read_text() or '{}').get('clean_dialogue'))
-    status('Embedding audio in the prepared video')
-    prepared=folder/'seedance-input.mp4' if is_mesh(folder) else prepare_seedance_video(folder,clean_dialogue)
+    prepared=folder/'seedance-input.mp4'
+    if not is_mesh(folder) and not prepared.exists():
+        status('Embedding audio in the prepared video');prepared=prepare_seedance_video(folder,clean_dialogue)
     refs={'char1':Path(char1),'char2':Path(char2) if char2 else None}
     full_prompt,mode=build_prompt(prompt,folder,refs)
     ident=adapter.submit_draft(prepared,refs,prompt,folder=folder,status=status)
