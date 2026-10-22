@@ -48,7 +48,8 @@ elif a.command=='repair-rgb':
  if mode=='depth_mesh':
   import shutil,subprocess
   shutil.copy2(folder/'composite-silent.mp4',folder/'depth-composite-silent.mp4')
-  subprocess.run([str(ROOT/'.venv-face/bin/python'),str(ROOT/'mesh_worker.py'),str(folder),'--depth'],check=True)
+  from face_mesh import mesh_worker
+  mesh_worker(folder,'--depth')
  audio_meta=json.loads((folder/'audio-manifest.json').read_text()) if (folder/'audio-manifest.json').exists() else {}
  prepare_seedance_video(folder,bool(meta.get('clean_dialogue',audio_meta.get('clean_dialogue',False))))
  (folder/'mask-review.json').unlink(missing_ok=True)
