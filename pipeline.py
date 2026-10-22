@@ -9,7 +9,6 @@ from config import load_env
 load_env()
 
 DEPTH='depth-anything/Video-Depth-Anything'
-SAM='linoyts/SAM3-Video'
 
 def frames(path):
     with av.open(str(path)) as c:
@@ -135,13 +134,15 @@ def run(src,directory,prompt='person',provider='replicate',status=print,clean_di
     if provider=='huggingface':depth_hf(directory/'original.mp4',directory/'depth-raw.mp4')
     else:depth_replicate(directory/'original.mp4',directory/'depth-raw.mp4', 'chenxwh/depth-any-video' if provider=='replicate-chenxwh' else 'lucataco/depth-anything-video')
     shutil.copyfile(directory/'depth-raw.mp4',directory/'depth.mp4')
-    status('SAM 3 · segmenting the depth subject')
+    status(f'SAM 3 · segmenting {prompt!r} on the depth video')
     from raw_masks import segment_raw,clean_border_fragments
-    raw_dir=clean_border_fragments(segment_raw(directory/'depth.mp4',directory,prompt))
+    raw_dir=clean_border_fragments(segment_raw(directory/'depth.mp4',directory,prompt,rgb_video=directory/'original.mp4',status=status))
     status('Compositing · depth subject over original background')
     composite(directory/'original.mp4',directory/'depth.mp4',raw_dir,directory,src)
     from audio_workflow import prepare_seedance_video
     status('Embedding isolated vocals (clean dialogue)' if clean_dialogue else 'Embedding original source audio')
     prepare_seedance_video(directory,clean_dialogue)
-    meta.update(prompt=prompt,depth_provider=provider,sam_space=SAM,mask_method='SAM 3 raw PNG masks',clean_dialogue=bool(clean_dialogue))
+    try:mask_method=json.loads((directory/'sam-report.json').read_text()).get('method') or 'SAM 3 raw PNG masks'
+    except (OSError,ValueError):mask_method='SAM 3 raw PNG masks'
+    meta.update(prompt=prompt,depth_provider=provider,mask_method=mask_method,clean_dialogue=bool(clean_dialogue))
     (directory/'manifest.json').write_text(json.dumps(meta,indent=2));status('Complete')

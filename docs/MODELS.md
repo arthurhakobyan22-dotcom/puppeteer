@@ -9,12 +9,12 @@ All neural inference in Puppeteer's default path is hosted. No weight downloads 
 | Depth alternative | [chenxwh/depth-any-video](https://replicate.com/chenxwh/depth-any-video) | explicitly selected alternative model |
 | Depth alternative | [Video-Depth-Anything Space](https://huggingface.co/spaces/depth-anything/Video-Depth-Anything) | public GPU quota/availability; optional HF_TOKEN |
 | Segmentation | [lucataco/sam3-video](https://replicate.com/lucataco/sam3-video) | pinned version `408f82fc20c300aac5d61d2e34ddb34cd0181e810e9f609d250aed14d5f81269`; `video`, `prompt`, `mask_only=true`, `return_zip=true` |
+| Segmentation fallback | [8digit/gener8-sam3](https://replicate.com/8digit/gener8-sam3) via `SAM_FALLBACK_MODEL` (latest version at run time) | tried only when the primary model finds nothing on depth and RGB frames or fails with a model error; output parsed as PNG zip, PNG frames or a mask video; not live-verified in this fork |
 | Face mesh (optional modes) | MediaPipe Face Landmarker, local `.venv-face` worker | model downloaded from Google storage on first use; a single speaker; the crop follows the face, so it need not be centred |
 | Generation | Seedance 2.5 via fal (`bytedance/seedance-2.5/reference-to-video`, 480p draft → `draft/complete` 1080p) or Enhancor (edit / multi_reference, 1080p draft → `draft_id` completion) | see `docs/PROVIDERS.md` |
 | Video/audio IO | PyAV / FFmpeg libraries | normalization, compositing, original audio packet remux (AAC isolated vocals only with `clean_dialogue`); final export always restores the original track |
 
 The pinned SAM and Demucs versions and the depth model schema were verified through authenticated Replicate API reads on 2026-10-06. If a model becomes unavailable, inspect its current schema before changing the adapter. [Replicate HTTP API](https://replicate.com/docs/reference/http).
 
-The [SAM3-Video Hugging Face Space](https://huggingface.co/spaces/linoyts/SAM3-Video) was an earlier exploration; it is not the active raw-mask implementation. Never describe a green visualization overlay as a raw mask. Public Spaces may change their Gradio API. An RGB segmentation retry is a deliberate repair, not a different depth color treatment.
 
 `requirements.txt` records versions from the development environment. Setup installs them into a clean venv; the package's local tests are also runnable using a compatible existing environment. Hosted availability, price and access are account-dependent; no free-inference claim is made. Local self-hosting of model weights is not configured here.

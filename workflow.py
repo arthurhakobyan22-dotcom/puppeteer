@@ -43,7 +43,7 @@ elif a.command=='repair-rgb':
  from pipeline import composite
  from audio_workflow import prepare_seedance_video
  meta=json.loads((folder/'manifest.json').read_text());repair=folder/'rgb-repair';repair.mkdir(exist_ok=True)
- masks=clean_border_fragments(segment_raw(folder/'original.mp4',repair,meta.get('prompt','person')))
+ masks=clean_border_fragments(segment_raw(folder/'original.mp4',repair,meta.get('prompt','person'),status=print))
  composite(folder/'original.mp4',folder/'depth.mp4',masks,folder,folder/'upload.mp4')
  if mode=='depth_mesh':
   import shutil,subprocess
