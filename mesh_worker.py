@@ -1,39 +1,94 @@
+"""Face-mesh worker, run inside .venv-face: `python mesh_worker.py RUN_FOLDER [--depth]`.
+
+Pass 1 tracks the face with a face-first crop: the crop box follows the previous frame's landmarks (padded,
+smoothed over a few frames) and falls back to a full-frame detection whenever tracking is lost.
+Short gaps are filled by interpolation; pass 2 draws the mesh (dimmer on filled frames) over the original
+frames, or over the depth composite with --depth. face-landmarks.json and face-tracking.json are written
+before the run is judged, so the review screen can show the numbers even when the run fails.
+"""
 from pathlib import Path
 from fractions import Fraction
 import av, mediapipe as mp, numpy as np, sys, json, urllib.request
 from PIL import ImageDraw
-root=Path(sys.argv[1]).resolve()
-source=root/'original.mp4'
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+from mesh_tracking import face_box,smooth_box,fill_gaps,evaluate,MAX_GAP
+
+root=Path(sys.argv[1]).resolve();source=root/'original.mp4';FPS=24;depth='--depth' in sys.argv
 model=Path(__file__).resolve().parent/'models/face_landmarker.task'
 if not model.exists():
- model.parent.mkdir(exist_ok=True)
- temporary=model.with_suffix('.download')
- urllib.request.urlretrieve('https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task',str(temporary))
- temporary.replace(model)
-opts=mp.tasks.vision.FaceLandmarkerOptions(base_options=mp.tasks.BaseOptions(model_asset_path=str(model)),running_mode=mp.tasks.vision.RunningMode.VIDEO,num_faces=1,min_face_detection_confidence=0.15,min_face_presence_confidence=0.15,min_tracking_confidence=0.15)
-connections=mp.tasks.vision.FaceLandmarksConnections
-counts=[];saved=[]
-background=[]
-if '--depth' in sys.argv:
- with av.open(str(root/'depth-composite-silent.mp4')) as bg:background=[f.to_image() for f in bg.decode(video=0)]
-with mp.tasks.vision.FaceLandmarker.create_from_options(opts) as detector, av.open(str(source)) as inp, av.open(str(root/'composite-silent.mp4'),'w') as out:
- stream=inp.streams.video[0]
- if background and (len(background)!=stream.frames or background[0].size!=(stream.width,stream.height)):raise ValueError('Depth and original frame count or dimensions differ; rebuild the depth composite before overlay.')
- vs=out.add_stream('libx264',rate=24);vs.width=stream.width;vs.height=stream.height;vs.pix_fmt='yuv420p';vs.options={'crf':'18'}
- for i,f in enumerate(inp.decode(video=0)):
-  im=f.to_image();x0=int(im.width*.25);y0=0;cw=int(im.width*.5);ch=int(im.height*.65);crop=im.crop((x0,y0,x0+cw,ch));result=detector.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB,data=np.array(crop)),round(i*1000/24));im=background[i].copy() if background else im;d=ImageDraw.Draw(im);counts.append(len(result.face_landmarks))
-  saved.append({"frame":i,"time":i/24,"faces":[[{"x":(x0+l.x*cw)/im.width,"y":(y0+l.y*ch)/im.height} for l in face] for face in result.face_landmarks]})
-  for face in result.face_landmarks:
-   pts=[(round(x0+l.x*cw),round(y0+l.y*ch)) for l in face]
-   for c in connections.FACE_LANDMARKS_TESSELATION:d.line([pts[c.start],pts[c.end]],fill=(50,170,205),width=1)
-   for name,col in [('FACE_LANDMARKS_LIPS',(255,135,100)),('FACE_LANDMARKS_LEFT_EYE',(130,255,150)),('FACE_LANDMARKS_RIGHT_EYE',(130,255,150))]:
-    for c in getattr(connections,name):d.line([pts[c.start],pts[c.end]],fill=col,width=2)
-  vf=av.VideoFrame.from_image(im);vf.pts=i;vf.time_base=Fraction(1,24)
-  for pkt in vs.encode(vf):out.mux(pkt)
-  if i==30:im.save(root/'preview.jpg')
- for pkt in vs.encode():out.mux(pkt)
-print({'frames':len(counts),'tracked':sum(x>0 for x in counts),'missing':[i for i,x in enumerate(counts) if not x]})
+    model.parent.mkdir(exist_ok=True)
+    temporary=model.with_suffix('.download')
+    urllib.request.urlretrieve('https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task',str(temporary))
+    temporary.replace(model)
+V=mp.tasks.vision
+def options(mode):
+    return V.FaceLandmarkerOptions(base_options=mp.tasks.BaseOptions(model_asset_path=str(model)),running_mode=mode,num_faces=1,
+                                   min_face_detection_confidence=0.15,min_face_presence_confidence=0.15,min_tracking_confidence=0.15)
 
-(root/'face-landmarks.json').write_text(json.dumps({'fps':24,'frames':saved}))
-(root/'face-tracking.json').write_text(json.dumps({'frames':len(counts),'tracked':sum(bool(x) for x in counts),'missing_frames':[i for i,x in enumerate(counts) if not x]}))
-if not counts or not all(counts):raise RuntimeError('Face tracking gaps: inspect face-tracking.json and repair before submitting.')
+def detect(detector,frame,box,timestamp=None):
+    """Run the landmarker on `box` of `frame` (RGB ndarray); return landmarks normalized to the full frame, or None."""
+    x0,y0,x1,y1=box;crop=np.ascontiguousarray(frame[y0:y1,x0:x1])
+    image=mp.Image(image_format=mp.ImageFormat.SRGB,data=crop)
+    result=detector.detect_for_video(image,timestamp) if timestamp is not None else detector.detect(image)
+    if not result.face_landmarks:return None
+    height,width=frame.shape[:2];w=x1-x0;h=y1-y0
+    return [((x0+l.x*w)/width,(y0+l.y*h)/height) for l in result.face_landmarks[0]]
+
+# Pass 1: track.
+landmarks=[];sources=[];history=[];box=None;lost=0
+with V.FaceLandmarker.create_from_options(options(V.RunningMode.VIDEO)) as tracker,V.FaceLandmarker.create_from_options(options(V.RunningMode.IMAGE)) as finder,av.open(str(source)) as inp:
+    stream=inp.streams.video[0];W,H=stream.width,stream.height;full=(0,0,W,H)
+    for i,f in enumerate(inp.decode(video=0)):
+        frame=f.to_ndarray(format='rgb24');points=None;how=None
+        if box is not None:
+            points=detect(tracker,frame,box,round(i*1000/FPS));how='crop'
+            if points is None:points=detect(finder,frame,box);how='crop-redetect'
+        if points is None:
+            points=detect(finder,frame,full);how='full'
+        if points is None:
+            lost+=1
+            if lost>MAX_GAP:box=None;history.clear()   # keep trying the last known box through a short loss
+        else:
+            lost=0;box=smooth_box(history,face_box(points,W,H))
+        landmarks.append(points);sources.append(how if points else None)
+
+filled,status=fill_gaps(landmarks,MAX_GAP);report=evaluate(status,FPS)
+
+# Pass 2: draw.
+connections=V.FaceLandmarksConnections
+COLOURS={'tess':(50,170,205),'FACE_LANDMARKS_LIPS':(255,135,100),'FACE_LANDMARKS_LEFT_EYE':(130,255,150),'FACE_LANDMARKS_RIGHT_EYE':(130,255,150)}
+def colour(name,state):
+    c=COLOURS[name];return c if state=='tracked' else tuple(int(v*.45) for v in c)
+preview_frame=next((i for i in range(30,len(status)) if status[i]=='tracked'),next((i for i,s in enumerate(status) if s=='tracked'),0))
+background=av.open(str(root/'depth-composite-silent.mp4')) if depth else None
+try:
+    with av.open(str(source)) as inp,av.open(str(root/'composite-silent.mp4'),'w') as out:
+        stream=inp.streams.video[0]
+        if background is not None:
+            bg_stream=background.streams.video[0]
+            if bg_stream.frames!=stream.frames or (bg_stream.width,bg_stream.height)!=(stream.width,stream.height):
+                raise ValueError('Depth and original frame count or dimensions differ; rebuild the depth composite before overlay.')
+            bg_frames=background.decode(video=0)
+        vs=out.add_stream('libx264',rate=FPS);vs.width=stream.width;vs.height=stream.height;vs.pix_fmt='yuv420p';vs.options={'crf':'18'}
+        for i,f in enumerate(inp.decode(video=0)):
+            im=(next(bg_frames) if background is not None else f).to_image().convert('RGB');d=ImageDraw.Draw(im)
+            if i<len(filled) and filled[i]:
+                pts=[(round(x*im.width),round(y*im.height)) for x,y in filled[i]];state=status[i]
+                for c in connections.FACE_LANDMARKS_TESSELATION:d.line([pts[c.start],pts[c.end]],fill=colour('tess',state),width=1)
+                for name in ['FACE_LANDMARKS_LIPS','FACE_LANDMARKS_LEFT_EYE','FACE_LANDMARKS_RIGHT_EYE']:
+                    for c in getattr(connections,name):d.line([pts[c.start],pts[c.end]],fill=colour(name,state),width=2)
+            vf=av.VideoFrame.from_image(im);vf.pts=i;vf.time_base=Fraction(1,FPS)
+            for pkt in vs.encode(vf):out.mux(pkt)
+            if i==preview_frame:im.save(root/'preview.jpg')
+        for pkt in vs.encode():out.mux(pkt)
+finally:
+    if background is not None:background.close()
+
+(root/'face-landmarks.json').write_text(json.dumps({'fps':FPS,'frames':[
+    {'frame':i,'time':round(i/FPS,4),'status':status[i],'source':sources[i],'faces':[[{'x':x,'y':y} for x,y in filled[i]]] if filled[i] else []} for i in range(len(filled))],
+    'summary':{k:report[k] for k in ['frames','tracked','filled','missing']}}))
+(root/'face-tracking.json').write_text(json.dumps({**report,'fps':FPS,
+    'missing_frames':[i for i,s in enumerate(status) if s=='missing'],'filled_frames':[i for i,s in enumerate(status) if s=='filled'],
+    'crop':'face-first, padded %.1fx, smoothed; full-frame re-detection when lost'%1.8},indent=1))
+print({k:report[k] for k in ['frames','tracked','filled','missing','ok','message']},flush=True)
+if not report['ok']:raise RuntimeError('Face tracking gaps: '+report['message'])

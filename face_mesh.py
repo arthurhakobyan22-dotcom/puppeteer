@@ -3,6 +3,14 @@ from pathlib import Path
 import json,subprocess,sys,shutil
 ROOT=Path(__file__).resolve().parent
 
+def tracking_summary(folder):
+    """Short 'tracked / filled / missing' line from face-tracking.json, or '' when absent."""
+    path=Path(folder)/'face-tracking.json'
+    if not path.exists():return ''
+    try:t=json.loads(path.read_text())
+    except ValueError:return ''
+    return f"tracked {t.get('tracked')} / filled {t.get('filled')} / missing {t.get('missing')} of {t.get('frames')} frames"
+
 def mesh_worker(folder,*args):
     """Run the isolated MediaPipe worker; surface its own error line instead of a raw CalledProcessError."""
     python=ROOT/'.venv-face/bin/python'
@@ -27,7 +35,7 @@ def run(src,folder,status=print,clean_dialogue=False):
     if clean_dialogue:separate(src,folder,status)
     prepare_seedance_video(folder,clean_dialogue)
     (folder/'manifest.json').write_text(json.dumps({'mode':'face_mesh','clean_dialogue':bool(clean_dialogue)},indent=2))
-    status('Face mesh ready · review tracking and embedded audio')
+    status('Face mesh ready · '+tracking_summary(folder)+' · review tracking and embedded audio')
 
 
 def run_depth(src,folder,prompt='person',provider='replicate',status=print,clean_dialogue=False):
@@ -43,4 +51,4 @@ def run_depth(src,folder,prompt='person',provider='replicate',status=print,clean
     mesh_worker(folder,'--depth')
     (folder/'workflow-mode.json').write_text(json.dumps({'mode':'depth_mesh'}))
     prepare_seedance_video(folder,clean_dialogue)
-    status('Depth + face mesh ready · full mask and facial tracking review required')
+    status('Depth + face mesh ready · '+tracking_summary(folder)+' · full mask and facial tracking review required')

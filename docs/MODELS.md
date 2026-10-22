@@ -9,7 +9,7 @@ All neural inference in Puppeteer's default path is hosted. No weight downloads 
 | Depth alternative | [chenxwh/depth-any-video](https://replicate.com/chenxwh/depth-any-video) | explicitly selected alternative model |
 | Depth alternative | [Video-Depth-Anything Space](https://huggingface.co/spaces/depth-anything/Video-Depth-Anything) | public GPU quota/availability; optional HF_TOKEN |
 | Segmentation | [lucataco/sam3-video](https://replicate.com/lucataco/sam3-video) | pinned version `408f82fc20c300aac5d61d2e34ddb34cd0181e810e9f609d250aed14d5f81269`; `video`, `prompt`, `mask_only=true`, `return_zip=true` |
-| Face mesh (optional modes) | MediaPipe Face Landmarker, local `.venv-face` worker | model downloaded from Google storage on first use; one centered speaker |
+| Face mesh (optional modes) | MediaPipe Face Landmarker, local `.venv-face` worker | model downloaded from Google storage on first use; a single speaker; the crop follows the face, so it need not be centred |
 | Generation | Seedance 2.5 via fal (`bytedance/seedance-2.5/reference-to-video`, 480p draft → `draft/complete` 1080p) or Enhancor (edit / multi_reference, 1080p draft → `draft_id` completion) | see `docs/PROVIDERS.md` |
 | Video/audio IO | PyAV / FFmpeg libraries | normalization, compositing, original audio packet remux (AAC isolated vocals only with `clean_dialogue`); final export always restores the original track |
 

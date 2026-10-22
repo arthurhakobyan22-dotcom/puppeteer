@@ -139,7 +139,7 @@ class FalTests(unittest.TestCase):
     def test_missing_key_raises_before_any_fal_call(self):
         with tempfile.TemporaryDirectory() as d:
             p=run_folder(d)
-            with patch('providers.fal.setting',side_effect=lambda k,d='':d),patch('providers.fal.load_env'),patch('providers.fal.fal_client.upload_file') as up,patch('providers.fal.fal_client.submit') as submit:
+            with patch('providers.fal.setting',side_effect=lambda k,d='':d),patch('providers.fal.credential',side_effect=ValueError('Set FAL_KEY in this project’s .env file.')),patch('providers.fal.load_env'),patch('providers.fal.fal_client.upload_file') as up,patch('providers.fal.fal_client.submit') as submit:
                 with self.assertRaises(ValueError) as caught:falmod.Fal().submit_draft(p/'seedance-input.mp4',{'char1':p/'char1-reference.png','char2':None},'Base',folder=p,status=lambda s:None)
             self.assertIn('FAL_KEY',str(caught.exception));up.assert_not_called();submit.assert_not_called()
     @no_network
