@@ -22,7 +22,7 @@ An image `char1` uses the provider's edit path: one video (`@Video1`, the prepar
 ## Modes
 
 - **Advanced · Depth + SAM** (`depth`): Replicate depth and SAM 3; full mask review required.
-- **Fast · Face mesh** (`face_mesh`): MediaPipe landmarks drawn on the original frames; no depth or SAM calls; needs `bash setup-face-mesh.sh` (Python 3.12, isolated `.venv-face`, model downloaded on first use). One centered speaker. Review face tracking, not a mask.
+- **Fast · Face mesh** (`face_mesh`): MediaPipe landmarks drawn on the original frames; no depth or SAM calls; needs `bash setup-face-mesh.sh` (Python 3.12, isolated `.venv-face`, model downloaded on first use). One speaker; the crop follows the face, so it need not be centred, and gaps of up to 6 frames are interpolated (drawn dimmer). Review face tracking, not a mask.
 - **Advanced + Face mesh** (`depth_mesh`): depth pipeline plus the mesh over the depth composite; landmarks in `face-landmarks.json`. Review both mask coverage and tracking.
 
 In mesh modes, the prompt must say the mesh lines are motion guidance that must disappear, that the whole identity including hair is replaced, and that all dialogue and timing are preserved. Keep advanced depth mode available. Never submit automatically during setup.
