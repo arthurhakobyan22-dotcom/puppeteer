@@ -102,8 +102,10 @@ def _collect(output,out_dir,label):
         if content[:4]==b'PK\x03\x04':
             # Zip of per-frame PNGs (the primary model). Other entries such as overlay.mp4 are previews, not masks.
             with zipfile.ZipFile(io.BytesIO(content)) as z:
-                for n in sorted(n for n in z.namelist() if n.lower().endswith('.png')):frames.append(_png_mask(z.read(n)))
-        elif content[:8]==b'\x89PNG\r\n\x1a\n':frames.append(_png_mask(content))
+                for n in sorted(n for n in z.namelist() if n.lower().endswith('.png')):
+                    m=re.search(r'(\d+)\.png$',Path(n).name)   # the model names masks by frame index and skips frames with no detection
+                    frames.append((int(m.group(1)) if m else len(frames),_png_mask(z.read(n))))
+        elif content[:8]==b'\x89PNG\r\n\x1a\n':frames.append((len(frames),_png_mask(content)))
         elif url.lower().endswith(('.mp4','.mkv','.webm','.mov')) or b'ftyp' in content[:64]:videos.append(content)
     if not frames and videos:
         # A label-map or black-and-white mask video (fallback models): any clearly non-black pixel is mask.
@@ -111,27 +113,33 @@ def _collect(output,out_dir,label):
         with tempfile.NamedTemporaryFile(suffix='.mp4',delete=False) as t:t.write(videos[0]);temp=t.name
         try:
             with av.open(temp) as c:
-                for f in c.decode(video=0):frames.append(np.asarray(f.to_image().convert('L'))>64)
+                for i,f in enumerate(c.decode(video=0)):frames.append((i,np.asarray(f.to_image().convert('L'))>64))
         except Exception as exc:raise SamError('bad_output',f'SAM ({label}) returned a video that could not be decoded as masks: {type(exc).__name__}')
         finally:Path(temp).unlink(missing_ok=True)
-    for i,mask in enumerate(frames):_save(mask,out_dir/f'mask_{i:05d}.png')
-    return sum(1 for m in frames if m.any())
+    for i,mask in frames:_save(mask,out_dir/f'mask_{i:05d}.png')
+    return sum(1 for _,m in frames if m.any())
 
-def _union(dirs,out):
-    """Union per-frame masks from several term runs; frame counts must agree."""
+def _union(dirs,out,frames):
+    """Union per-frame masks from several runs by frame index; frames no run detected get an empty mask."""
     import numpy as np
     out=Path(out);shutil.rmtree(out,ignore_errors=True);out.mkdir()
-    dirs=[d for d in dirs if any(Path(d).glob('mask_*.png'))]
-    if not dirs:return 0
-    lists=[sorted(Path(d).glob('mask_*.png')) for d in dirs]
-    if len({len(l) for l in lists})!=1:raise SamError('bad_output','SAM term runs returned different frame counts: '+str([len(l) for l in lists]))
-    nonempty=0
-    for i,group in enumerate(zip(*lists)):
-        mask=None
-        for p in group:
-            m=_png_mask(p.read_bytes());mask=m if mask is None else (mask|m)
-        _save(mask,out/f'mask_{i:05d}.png');nonempty+=bool(mask.any())
+    found={}
+    for d in dirs:
+        for p in Path(d).glob('mask_*.png'):
+            i=int(p.stem.split('_')[-1]);m=_png_mask(p.read_bytes())
+            if i>=frames:raise SamError('bad_output',f'SAM returned a mask for frame {i} but the clip has {frames} frames.')
+            found[i]=m if i not in found else (found[i]|m)
+    if not any(m.any() for m in found.values()):return 0
+    shape=next(iter(found.values())).shape;nonempty=0
+    for i in range(frames):
+        mask=found.get(i,np.zeros(shape,bool));_save(mask,out/f'mask_{i:05d}.png');nonempty+=bool(mask.any())
     return nonempty
+
+def _frame_count(video):
+    import av
+    with av.open(str(video)) as c:
+        n=c.streams.video[0].frames
+        return n or sum(1 for _ in c.decode(video=0))
 
 def _model_version(name,h):
     r=requests.get(API+'/models/'+name,headers=h,timeout=30)
@@ -140,11 +148,11 @@ def _model_version(name,h):
     if not version:raise SamError('bad_output',f'Replicate model {name} has no published version.')
     return version
 
-def segment_raw(video,folder,prompt='person',rgb_video=None,status=print):
+def segment_raw(video,folder,prompt='person',rgb_video=None,status=print,frames=None):
     """Return a folder of mask_XXXXX.png (one per frame) or raise SamError with the real reason."""
     folder=Path(folder);folder.mkdir(parents=True,exist_ok=True);h=_headers()
     terms=[t.strip() for t in str(prompt).split(',') if t.strip()] or ['person']
-    out=folder/'raw-masks';report={'prompt':prompt,'terms':terms,'attempts':[]}
+    out=folder/'raw-masks';frames=frames or _frame_count(video);report={'prompt':prompt,'terms':terms,'frames':frames,'attempts':[]}
     for p in folder.glob('sam-attempts.json'):p.unlink()
     sources=[('depth',Path(video))]+([('rgb',Path(rgb_video))] if rgb_video and Path(rgb_video).resolve()!=Path(video).resolve() else [])
     urls={}
@@ -155,7 +163,7 @@ def segment_raw(video,folder,prompt='person',rgb_video=None,status=print):
             j=_predict(h,{'version':PRIMARY_VERSION,'input':{'video':urls[source],'prompt':term,'mask_only':True,'return_zip':True}},folder,label)
             d=folder/f'raw-masks-{source}-{k}';count=_collect(j['output'],d,label);dirs.append(d)
             report['attempts'].append({'model':PRIMARY_MODEL,'source':source,'term':term,'id':j.get('id'),'frames_with_mask':count})
-        if _union(dirs,out):
+        if _union(dirs,out,frames):
             matched=[a['term'] for a in report['attempts'] if a['source']==source and a['frames_with_mask']]
             report.update(method=f'SAM 3 ({PRIMARY_MODEL}) on {source} frames; terms matched: {matched}',source=source,model=PRIMARY_MODEL)
             (folder/'sam-report.json').write_text(json.dumps(report,indent=1));return out
@@ -165,7 +173,7 @@ def segment_raw(video,folder,prompt='person',rgb_video=None,status=print):
         source='rgb' if 'rgb' in urls else 'depth';label=f'{fallback} · {prompt!r} on {source}';status(f'Fallback · {fallback} on {source} frames')
         try:
             j=_predict(h,{'version':_model_version(fallback,h),'input':{'video':urls[source],'prompt':prompt}},folder,label)
-            count=_collect(j['output'],out,label)
+            d=folder/'raw-masks-fallback';count=_collect(j['output'],d,label);count=_union([d],out,frames) if count else 0
         except SamError as e:
             if e.kind in ('auth','quota','timeout'):raise
             report['attempts'].append({'model':fallback,'source':source,'term':prompt,'error':str(e)});count=0
