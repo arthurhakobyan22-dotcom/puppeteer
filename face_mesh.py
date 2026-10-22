@@ -28,6 +28,7 @@ def run(src,folder,status=print,clean_dialogue=False):
     python=ROOT/'.venv-face/bin/python'
     if not python.exists():raise ValueError('Fast face mesh needs setup: bash setup-face-mesh.sh (Python 3.12).')
     folder.mkdir(parents=True,exist_ok=True)
+    (folder/'workflow-mode.json').write_text(json.dumps({'mode':'face_mesh'}))
     status('Normalizing video');normalize(src,folder/'original.mp4')
     status('Tracking face mesh locally · no depth or SAM')
     mesh_worker(folder)
@@ -45,6 +46,7 @@ def run_depth(src,folder,prompt='person',provider='replicate',status=print,clean
     python=ROOT/'.venv-face/bin/python'
     if not python.exists():raise ValueError('Install face mesh first: bash setup-face-mesh.sh')
     folder.mkdir(parents=True,exist_ok=True)
+    (folder/'workflow-mode.json').write_text(json.dumps({'mode':'depth_mesh'}))
     run_advanced(src,folder,prompt,provider,status,clean_dialogue)
     shutil.copy2(folder/'composite-silent.mp4',folder/'depth-composite-silent.mp4')
     status('Adding face mesh from original video onto depth composite')

@@ -40,6 +40,19 @@ class ReviewGateTests(unittest.TestCase):
  def test_depth_mode_prepared_clip_change_clears_approval(self):self.run_mode('depth','seedance-input.mp4')
  def test_face_mesh_landmark_change_clears_approval(self):self.run_mode('face_mesh','face-landmarks.json')
  def test_depth_mesh_overlay_change_clears_approval(self):self.run_mode('depth_mesh','depth-composite-silent.mp4')
+ def test_runs_listing(self):
+  with tempfile.TemporaryDirectory() as d,patch.object(application,'RUNS',Path(d)):
+   ident,p=fixture(d,'depth');(p/'mask-review.json').write_text('{}')
+   q=Path(d)/('b'*32);q.mkdir();(q/'workflow-mode.json').write_text('{"mode":"face_mesh"}');(q/'upload.mp4').write_bytes(b'u')
+   (q/'status.json').write_text(json.dumps({'id':'b'*32,'state':'error','status':'Face mesh worker failed: lost face 1.0–2.0 s'}))
+   r=Path(d)/('c'*32);r.mkdir();(r/'face-tracking.json').write_text('{}');(r/'upload.mp4').write_bytes(b'u')   # failed before workflow-mode.json existed
+   (Path(d)/'notarun').mkdir();client=TestClient(application.app)
+   runs=client.get('/jobs').json()['runs'];self.assertEqual({r['id'] for r in runs},{ident,'b'*32,'c'*32})
+   legacy=next(r for r in runs if r['id']=='c'*32);self.assertEqual((legacy['mode'],legacy['state']),('face_mesh','unknown'))
+   depth=next(r for r in runs if r['id']==ident);mesh=next(r for r in runs if r['id']=='b'*32)
+   self.assertEqual((depth['mode'],depth['state'],depth['reviewed']),('depth','done',True))
+   self.assertEqual((mesh['mode'],mesh['state']),('face_mesh','error'));self.assertIn('lost face',mesh['status']);self.assertRegex(mesh['created'],r'^\d{4}-\d{2}-\d{2}T')
+   self.assertEqual([r['id'] for r in runs],sorted([r['id'] for r in runs],key=lambda i:next(x['created'] for x in runs if x['id']==i),reverse=True))
  def test_files_listing_and_health(self):
   with tempfile.TemporaryDirectory() as d,patch.object(application,'RUNS',Path(d)):
    ident,p=fixture(d);(p/'hd').mkdir();(p/'hd/final-preview.mp4').write_bytes(b'v');client=TestClient(application.app)

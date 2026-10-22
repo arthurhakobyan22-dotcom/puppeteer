@@ -36,6 +36,30 @@ def create(video:UploadFile=File(...),prompt:str=Form('person'),provider:str=For
             jobs[ident].update(state='error',status=str(e))
             (folder/'status.json').write_text(json.dumps(jobs[ident]))
     threading.Thread(target=work,daemon=True).start();return jobs[ident]
+def run_summary(folder):
+    """id, mode, state, status text, date and what exists, for the Runs list. Never reads key values."""
+    import datetime
+    ident=folder.name
+    status=jobs.get(ident)
+    if status is None:
+        try:status=json.loads((folder/'status.json').read_text())
+        except (OSError,ValueError):status={'state':'unknown','status':'No status saved (interrupted before preparation finished).'}
+    mode='unknown'
+    try:mode=json.loads((folder/'workflow-mode.json').read_text()).get('mode') or mode
+    except (OSError,ValueError):
+        mesh=(folder/'face-tracking.json').exists() or (folder/'face-landmarks.json').exists();depth=(folder/'depth.mp4').exists() or (folder/'depth-raw.mp4').exists()
+        mode='depth_mesh' if mesh and depth else 'face_mesh' if mesh else 'depth' if depth else mode
+    source=folder/'upload.mp4';stamp=(source if source.exists() else folder).stat().st_mtime
+    return {'id':ident,'mode':mode,'state':status.get('state','unknown'),'status':str(status.get('status',''))[:200],
+            'created':datetime.datetime.fromtimestamp(stamp).astimezone().isoformat(timespec='minutes'),
+            'reviewed':(folder/'mask-review.json').exists(),'draft':(folder/'final-preview.mp4').exists(),'final':(folder/'hd/final-preview.mp4').exists(),'request':(folder/'seedance-response.json').exists()}
+
+@app.get('/jobs')
+def list_jobs():
+    runs=[run_summary(f) for f in RUNS.iterdir() if f.is_dir() and len(f.name)==32 and all(c in '0123456789abcdef' for c in f.name)]
+    runs.sort(key=lambda r:r['created'],reverse=True)
+    return {'runs':runs}
+
 @app.get('/jobs/{ident}')
 def get(ident:str):
     if ident not in jobs:
