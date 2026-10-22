@@ -64,15 +64,23 @@ def ranges(status,fps,kind='missing'):
             result.append({'start_frame':start,'end_frame':i-1,'frames':i-start,'start_s':round(start/fps,2),'end_s':round(i/fps,2)});start=None
     return result
 
-def evaluate(status,fps,max_gap=MAX_GAP,max_untracked=MAX_UNTRACKED):
-    """Warn, don't block: fail only for a gap longer than `max_gap` frames or too many untracked frames."""
+def evaluate(status,fps,max_gap=MAX_GAP,max_untracked=MAX_UNTRACKED,strict=True):
+    """Warn, don't block: fail only for a gap longer than `max_gap` frames or too many untracked frames.
+
+    strict=False (Advanced + Face mesh): long gaps never fail, because the depth composite stands in where the
+    face is lost; they are reported as a warning instead."""
     n=len(status);tracked=status.count('tracked');filled=status.count('filled');missing=status.count('missing')
     gaps=ranges(status,fps,'missing');long_gaps=[g for g in gaps if g['frames']>max_gap]
     problems=[]
     if not n:problems.append('no frames decoded')
-    if long_gaps:problems.append('lost face '+', '.join(f"{g['start_s']}–{g['end_s']} s" for g in long_gaps))
+    lost='lost face '+', '.join(f"{g['start_s']}–{g['end_s']} s" for g in long_gaps) if long_gaps else ''
     missing_ratio=missing/n if n else 1;untracked=(filled+missing)/n if n else 1
-    if n and missing_ratio>max_untracked:problems.append(f'{round(missing_ratio*100)}% of frames missing (limit {round(max_untracked*100)}%)')
-    warning=f'{round(untracked*100)}% of frames were not detected directly ({filled} interpolated); check lip motion closely' if n and not problems and untracked>max_untracked else ''
+    warnings=[]
+    if strict:
+        if lost:problems.append(lost)
+        if n and missing_ratio>max_untracked:problems.append(f'{round(missing_ratio*100)}% of frames missing (limit {round(max_untracked*100)}%)')
+    elif lost:warnings.append(lost+' · depth composite only on those frames (no mesh)')
+    if n and not problems and untracked>max_untracked:warnings.append(f'{round(untracked*100)}% of frames were not detected directly ({filled} interpolated); check lip motion closely')
+    warning='; '.join(warnings)
     return {'frames':n,'tracked':tracked,'filled':filled,'missing':missing,'gaps':gaps,'filled_ranges':ranges(status,fps,'filled'),
-            'max_gap_frames':max_gap,'max_missing_ratio':max_untracked,'ok':not problems,'warning':warning,'message':'; '.join(problems) if problems else 'face tracked throughout'}
+            'max_gap_frames':max_gap,'max_missing_ratio':max_untracked,'strict':strict,'ok':not problems,'warning':warning,'message':'; '.join(problems) if problems else 'face tracked throughout'}

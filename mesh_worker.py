@@ -52,7 +52,8 @@ with V.FaceLandmarker.create_from_options(options(V.RunningMode.VIDEO)) as track
             lost=0;box=smooth_box(history,face_box(points,W,H))
         landmarks.append(points);sources.append(how if points else None)
 
-filled,status=fill_gaps(landmarks,MAX_GAP);report=evaluate(status,FPS)
+# Fast mode is strict (no fallback for lost frames); Advanced + Face mesh keeps the depth composite where the face is lost.
+filled,status=fill_gaps(landmarks,MAX_GAP);report=evaluate(status,FPS,strict=not depth)
 
 # Pass 2: draw.
 connections=V.FaceLandmarksConnections
@@ -90,5 +91,5 @@ finally:
 (root/'face-tracking.json').write_text(json.dumps({**report,'fps':FPS,
     'missing_frames':[i for i,s in enumerate(status) if s=='missing'],'filled_frames':[i for i,s in enumerate(status) if s=='filled'],
     'crop':'face-first, padded %.1fx, smoothed; full-frame re-detection when lost'%1.8},indent=1))
-print({k:report[k] for k in ['frames','tracked','filled','missing','ok','message']},flush=True)
+print({k:report[k] for k in ['frames','tracked','filled','missing','ok','warning','message']},flush=True)
 if not report['ok']:raise RuntimeError('Face tracking gaps: '+report['message'])

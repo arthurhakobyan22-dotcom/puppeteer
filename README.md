@@ -24,7 +24,7 @@ Pick a provider in the draft panel, with `workflow.py submit --provider`, or wit
 
 - **Advanced · Depth + SAM** (`depth`): colored depth from Depth Anything, SAM 3 raw masks, subject cutout over the original background. Calls Replicate. Use one short noun phrase as the subject; comma-separated terms run as separate SAM jobs and are combined. If SAM finds nothing on the depth video it retries on the RGB frames, then `SAM_FALLBACK_MODEL`; failures report Replicate's real reason (billing, model error, empty result) and `sam-attempts.json` keeps every prediction.
 - **Fast · Face mesh** (`face_mesh`): MediaPipe face mesh drawn on the original frames. No depth or SAM calls. The crop follows the face (padded, smoothed), re-detecting on the full frame when tracking is lost, so the speaker need not be centred. Gaps of up to 6 frames are interpolated and drawn dimmer; the run fails only for a longer gap or more than 15% missing frames, and the error lists the lost ranges in seconds. Full 90° profiles are outside MediaPipe's range. `face-tracking.json` and the review screen show tracked / filled / missing counts.
-- **Advanced + Face mesh** (`depth_mesh`): the depth pipeline with the face mesh overlaid on the depth composite.
+- **Advanced + Face mesh** (`depth_mesh`): the depth pipeline with the face mesh overlaid on the depth composite. Tracking gaps do not fail this mode: the mesh is drawn on tracked and interpolated frames, the depth composite stands alone where the face is lost, and the review screen shows the lost ranges as a yellow warning. Fast mode keeps the strict rule because it has no depth fallback.
 
 ## Review gate
 

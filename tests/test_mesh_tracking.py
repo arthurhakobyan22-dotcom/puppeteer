@@ -65,6 +65,16 @@ class GapRuleTests(unittest.TestCase):
   _,status=fill_gaps(frames);self.assertTrue(evaluate(status,24)['ok'])
   frames=[face(0,0)]*170+[None]*6+[face(0,0)]*18+[None]*6   # 12 of 200 = 6%
   _,status=fill_gaps(frames);self.assertTrue(evaluate(status,24)['ok'])
+ def test_lenient_mode_turns_long_gaps_into_a_warning(self):
+  frames=[face(0,0)]*10+[None]*7+[face(0,0)]*33+[None]*12+[face(0,0)]*133   # the user's clip shape: gaps at 0.42–0.71 s and 2.08–2.58 s
+  _,status=fill_gaps(frames)
+  strict=evaluate(status,24);lenient=evaluate(status,24,strict=False)
+  self.assertFalse(strict['ok']);self.assertIn('lost face 0.42–0.71 s, 2.08–2.58 s',strict['message'])
+  self.assertTrue(lenient['ok']);self.assertEqual(lenient['message'],'face tracked throughout'[:0] or lenient['message'])
+  self.assertIn('lost face 0.42–0.71 s, 2.08–2.58 s',lenient['warning']);self.assertIn('depth composite only',lenient['warning']);self.assertFalse(lenient['strict'])
+  self.assertEqual(lenient['missing'],19);self.assertEqual(lenient['gaps'],strict['gaps'])
+ def test_lenient_mode_still_fails_on_empty_clip(self):
+  self.assertFalse(evaluate([],24,strict=False)['ok'])
  def test_empty_clip_fails(self):
   self.assertFalse(evaluate([],24)['ok'])
 if __name__=='__main__':unittest.main()
