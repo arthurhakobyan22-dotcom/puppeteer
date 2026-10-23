@@ -291,6 +291,50 @@ class Routes(unittest.TestCase):
         self.assertEqual(tree_hashes(child),child_before,'the edited child is never written by a later save')
         self.assertEqual(json.loads((grand/'edit-layer/mesh.json').read_text())['layer']['keys'],{'9':{'dx':.02,'dy':0.0,'scale':1.0,'rot':0.0}})
         lm=json.loads((grand/'face-landmarks.json').read_text());self.assertEqual([f['frame'] for f in lm['frames'] if not f['faces']],[5,20,21],'off from the first save stays, the new key applies on top')
+    def test_two_generation_save_keeps_earlier_off_frames_in_the_data(self):
+        # review fix 2: mesh off 5–7 → save → mesh off 12 on the child → save: edited.off_frames lists both generations,
+        # and mouth-guidance (from the landmarks' status too) hides the mouth on 5–7 as well as 12
+        from stages import words as W
+        self.commit('mesh','Mesh off on frames 5–7',lambda v:{**v,'off':[[5,7]]})
+        _,child,_=self.save()
+        self.commit('mesh','Mesh off on frame 12',lambda v:{**v,'off':[[12,12]]},ident=child.name)
+        _,grand,_=self.save(child.name)
+        edited=json.loads((grand/'face-tracking.json').read_text())['edited']
+        self.assertEqual(edited['off_frames'],[5,6,7,12]);self.assertEqual(edited['off_ranges'],[[5,7],[12,12]])
+        self.assertEqual(edited['this_save']['off_frames'],[12]);self.assertEqual([h['base_run'] for h in edited['history']],[HEX])
+        lm=json.loads((grand/'face-landmarks.json').read_text());self.assertEqual([f['frame'] for f in lm['frames'] if f.get('status')=='off'],[5,6,7,12])
+        g=W.mouth_guidance([{'text':'all','start':0.0,'end':N/24}],grand)
+        hidden=[p['frame'] for p in g['per_frame'] if p['mouth_hidden']]
+        for f in (5,6,7,12,20,21):self.assertIn(f,hidden)
+        # even an old record without the merged list: the landmarks' status 'off' still hides the mouth
+        t=json.loads((grand/'face-tracking.json').read_text());t['edited']={'off_frames':[12]};(grand/'face-tracking.json').unlink();(grand/'face-tracking.json').write_text(json.dumps(t))
+        hidden=[p['frame'] for p in W.mouth_guidance([{'text':'all','start':0.0,'end':N/24}],grand)['per_frame'] if p['mouth_hidden']]
+        for f in (5,6,7,12):self.assertIn(f,hidden)
+    def test_merge_edited_is_pure(self):
+        prev={'off_frames':[1,2],'keyed_frames':[4],'base_run':'a','layer_sha':'x','summary':['s']}
+        out=meshedit.merge_edited(prev,{'off_frames':[9],'off_ranges':[[9,9]],'keyed_frames':[],'transformed_frames':[],'expression_frames':[3]},None)
+        self.assertEqual((out['off_frames'],out['off_ranges'],out['keyed_frames'],out['expression_frames']),([1,2,9],[[1,2],[9,9]],[4],[3]))
+        self.assertEqual(out['history'],[{'base_run':'a','layer_sha':'x','summary':['s']}]);self.assertEqual(meshedit.merge_edited(None,{'off_frames':[3]},None)['off_frames'],[3])
+    def test_tools_that_need_saved_edits_or_an_import_are_refused_bare(self):
+        # review fix 3: a plain branch / estimate with edit_layer, mesh_edit or an import tool and nothing to feed it is a
+        # plain 400 before any run is created; a re-run of a run that already has the saved edits still works
+        before=runs_in(self.runs)
+        for stage,tool,word in (('face','mesh_edit','Save edits'),('mask','edit_layer','Save edits'),('mask','import_mask','Import my own'),('depth','import_depth','Import my own'),('face','import_face','Import my own')):
+            for route in ('branch','estimate'):
+                r=self.client.post(f'/jobs/{HEX}/{route}',json={'stage':stage,'tool':tool});self.assertEqual(r.status_code,400,(route,tool,r.text))
+                self.assertIn(word,r.json()['message']+r.json()['fix']);self.assertTrue(r.json()['fix'])
+        r=self.client.post(f'/jobs/{HEX}/estimate',json={'stage':'mask','tool':'import_mask','params':{'file':'a'*64,'ext':'.mp4'}});self.assertEqual(r.status_code,200,'an import with its file in the params is not refused')
+        self.assertEqual(self.client.post(f'/jobs/{HEX}/estimate',json={'stage':'mask','tool':'keep_parent'}).status_code,200,'the parent has masks to keep')
+        self.assertEqual(self.client.post(f'/jobs/{HEX}/estimate',json={'stage':'face','tool':'mediapipe_mesh'}).status_code,200)
+        self.assertEqual([r for r in runs_in(self.runs) if r not in before and not (self.runs/r/'run.json').exists()],[])
+        self.commit('mesh','Mesh off on frame 5',lambda v:{**v,'off':[[5,5]]});_,child,_=self.save()
+        r=self.client.post(f'/jobs/{child.name}/estimate',json={'stage':'face','tool':'mesh_edit'});self.assertEqual(r.status_code,200,'the child has edit-layer/ inputs: a re-run is legitimate')
+        r=self.client.post(f'/jobs/{child.name}/estimate',json={'stage':'composite'});self.assertEqual(r.status_code,200,'a re-run from earlier keeps the linked edits')
+        r=self.client.post(f'/jobs/{child.name}/branch',json={'stage':'prompt'});self.assertEqual(r.status_code,200,r.text);grand=wait(r.json()['id'])
+        self.assertTrue((self.runs/grand['id']/'edit-layer/mesh.json').exists(),'a later branch still links the saved edits')
+        r=self.client.post(f'/jobs/{grand["id"]}/estimate',json={'stage':'face','tool':'mesh_edit'});self.assertEqual(r.status_code,200,'so its face stage can be re-run too')
+        needs={t['name']:t['needs'] for s in self.client.get('/stages').json()['stages'] for t in s['tools']}
+        self.assertEqual((needs['mesh_edit'],needs['edit_layer'],needs['import_mask'],needs['mediapipe_mesh']),('edits','edits','import',None))
     def test_registry_and_static_files(self):
         tools=[t.name for t in stages.tools_for('face')];self.assertEqual(tools[0],'mediapipe_mesh');self.assertIn('mesh_edit',tools);self.assertFalse(stages.get_tool('face','mesh_edit').paid)
         self.assertEqual(stages.chain_for_mode('depth_mesh')['face']['tool'],'mediapipe_mesh')

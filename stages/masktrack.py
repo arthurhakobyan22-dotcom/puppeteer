@@ -445,7 +445,8 @@ class MaskTrack(Track):
         points,strokes,_=items(value)
         if points or strokes:
             what=' and '.join(x for x in [plural(len(points),'mask click') if points else '',plural(len(strokes),'brush stroke') if strokes else ''] if x)
-            return (f'{what} {"is" if len(points)+len(strokes)==1 else "are"} not applied yet. Apply them to the clip first, or remove them.','Use "Apply now" to follow them through the clip, or "Save without them" to drop them.')
+            one=len(points)+len(strokes)==1;them='it' if one else 'them'
+            return (f'{what} {"is" if one else "are"} not applied yet. Apply {them} to the clip first, or remove {them}.',f'Use "Apply now" to follow {them} through the clip, or "Save without {them}" to drop {them}.')
         return None
     def change(self,value,parent_folder,session_dir):
         key=current_key(value)

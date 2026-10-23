@@ -1,5 +1,5 @@
 """Face mesh track of the edit layer (Agent 3): mesh off on ranges, keyframed transform corrections, expression
-offsets, the local renderer and the `mesh_edit` face tool (registered in stages/face.py). docs/TIMELINE-SPEC.md §5, §A3.
+offsets, the local renderer and the `mesh_edit` face tool (registered at the end of this file, after face.py's tools). docs/TIMELINE-SPEC.md §5, §A3.
 
 Layer value (`layer.mesh`), all optional:
   off:  [[a, b], …]                                   inclusive frame ranges drawn without a mesh (the base clip only)
@@ -302,6 +302,29 @@ class MeshTrack(Track):
 
 register_track('mesh',MeshTrack)
 
+def runs_of(frames):
+    """[3, 4, 5, 9] → [[3, 5], [9, 9]]"""
+    out=[]
+    for f in sorted(set(frames)):
+        if out and f==out[-1][1]+1:out[-1][1]=f
+        else:out.append([f,f])
+    return out
+
+def merge_edited(previous,section,edited):
+    """The `edited` section of face-tracking.json for a save made from an already edited run: this save's frame lists
+    united with the previous generations' (the base landmarks already carry those edits, e.g. status 'off'), so
+    `off_frames` lists every frame drawn without a mesh, not just this save's. `history` keeps each earlier save's
+    {base_run, layer_sha, summary}; `this_save` = this save's own lists."""
+    previous=previous if isinstance(previous,dict) else {}
+    frames=(edited or {}).get('frames') or []
+    off=set(section.get('off_frames') or [])|{int(f) for f in previous.get('off_frames') or []}|{i for i,fr in enumerate(frames) if fr.get('status')=='off'}
+    out={**section,'this_save':{k:section.get(k) for k in ('off_frames','off_ranges','keyed_frames','transformed_frames','expression_frames')}}
+    out['off_frames']=sorted(off);out['off_ranges']=runs_of(off)
+    for k in ('keyed_frames','transformed_frames','expression_frames'):out[k]=sorted(set(section.get(k) or [])|{int(f) for f in previous.get(k) or []})
+    if previous:
+        out['history']=list(previous.get('history') or [])+[{k:previous.get(k) for k in ('base_run','layer_sha','summary')}]
+    return out
+
 # ---------------------------------------------------------------- the `mesh_edit` face tool (registered here, after face.py's tools, so mediapipe_mesh stays first)
 
 class MeshEdit(Tool):
@@ -333,8 +356,9 @@ class MeshEdit(Tool):
             from mesh_tracking import evaluate
             st=[fr.get('status') or 'missing' for fr in landmarks.get('frames') or []];depth=base.name!='original.mp4'
             tracking={**evaluate(st,int(landmarks.get('fps') or 24),strict=not depth),'fps':int(landmarks.get('fps') or 24),'missing_frames':[i for i,s in enumerate(st) if s=='missing'],'filled_frames':[i for i,s in enumerate(st) if s=='filled']}
+        section=merge_edited(tracking.get('edited'),section,edited)   # a re-save from an edited run keeps the earlier generations' frames
         tracking['edited']={**section,'tool':self.name,'base_run':record.get('base_run') or params.get('base_run'),'layer_sha':params.get('layer_sha') or record.get('layer_sha'),'summary':record.get('summary') or summary_lines(layer),
-                            'note':'Base tracking numbers above are unchanged; edited.off_frames are drawn without a mesh (the base clip only).'}
+                            'note':'Base tracking numbers above are unchanged; edited.off_frames are drawn without a mesh (the base clip only). Frame lists include earlier saves (edited.history).'}
         (folder/'face-tracking.json').write_text(json.dumps(tracking,indent=1))
         drawn=render(folder,edited,base,status)
         result=tracking_report(folder);lines=record.get('summary') or summary_lines(layer)

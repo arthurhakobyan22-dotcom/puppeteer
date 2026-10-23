@@ -235,7 +235,8 @@ def frame_span(start,end,fps):
 def mouth_guidance(words,folder):
     """Per word {text, start, end, start_frame, end_frame} (inclusive frames) plus per frame {frame, word (index | null),
     mouth_hidden}: true where the face is missing or interpolated in face-tracking.json, or the mesh is switched off
-    (`edited.off_frames`); null when the run has no face tracking."""
+    (`edited.off_frames`, or status 'off' / 'missing' / 'filled' in face-landmarks.json, which covers every earlier
+    mesh-edit save); null when the run has no face tracking."""
     frames,fps,_=clip_info(folder);fps=fps or 24.0
     try:tracking=json.loads((Path(folder)/'face-tracking.json').read_text())
     except (OSError,ValueError):tracking=None
@@ -245,6 +246,10 @@ def mouth_guidance(words,folder):
         if not tracking.get('missing_frames'):
             for g in tracking.get('gaps') or []:hidden|=set(range(int(g['start_frame']),int(g['end_frame'])+1))
         frames=frames or int(tracking.get('frames') or 0)
+        try:   # the landmarks themselves: a frame whose status is 'off' (any mesh-edit generation) or 'missing' has no mesh
+            lm=json.loads((Path(folder)/'face-landmarks.json').read_text())
+            hidden|={i for i,fr in enumerate(lm.get('frames') or []) if isinstance(fr,dict) and fr.get('status') in ('off','missing','filled')}
+        except (OSError,ValueError,AttributeError):pass
     rows=[];owner={}
     for i,w in enumerate(words):
         a,b=frame_span(float(w['start']),float(w['end']),fps);rows.append({'text':w['text'],'start':w['start'],'end':w['end'],'start_frame':a,'end_frame':b})

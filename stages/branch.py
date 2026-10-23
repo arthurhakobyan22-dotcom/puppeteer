@@ -6,7 +6,7 @@
 runs the child from `stage` with `runner.run_chain(child, chain, from_stage=stage)`.
 """
 from pathlib import Path
-import copy,json,shutil,uuid
+import copy,json,re,shutil,uuid
 from .base import STAGES,PREP_STAGES,get_tool
 from .report import write_report,now
 from .runner import load_run,new_run,save_run,link_artifact,log
@@ -74,6 +74,29 @@ def also_chain(chain,stage,changed,also):
         entry=entry or {};chain,line=changed_chain(chain,other,entry.get('tool'),entry.get('params'));lines.append(line)
     return chain,' · '.join(lines)
 
+def refusal(parent,stage,chain,runs_root=None):
+    """(message, fix) when a plain branch (POST /jobs/{id}/branch or /estimate) at `stage` would run a tool whose inputs it
+    cannot supply, else None: an import tool without an imported file in its params; a tool that reads saved timeline
+    edits (edit-layer/…: mask edit_layer, face mesh_edit) when the parent has none to link (a re-run of a run that already
+    has them is fine, branch() links them); keep_parent when there is no earlier mask to keep. Save edits and Import my
+    own create their branches themselves and never come through here."""
+    parent=Path(parent);runs_root=Path(runs_root) if runs_root else parent.parent
+    later=PREP_STAGES[PREP_STAGES.index(stage):] if stage in PREP_STAGES else [stage]
+    for name in later:
+        entry=(chain or {}).get(name) or {}
+        try:tool=get_tool(name,entry.get('tool') or 'off')
+        except ValueError:continue
+        params=entry.get('params') or {};needs=tool.needs()
+        if needs=='import' and not re.fullmatch(r'[0-9a-f]{64}',str(params.get('file') or '')):
+            return (f'"{tool.label}" needs a file you import, and these settings have none.',f'Use "Import my own…" on the {name} card to choose the file; it makes the new version for you. Or pick another tool.')
+        if needs=='edits' and not all((parent/n).exists() for n in tool.inputs if str(n).startswith('edit-layer/')):
+            return (f'"{tool.label}" runs from "Save edits" in the editor; this run has no saved timeline edits for it.','Make the change on the timeline in the review step (02) and click "Save edits", or pick another tool.')
+        if tool.name=='keep_parent':
+            base=runs_root/str(params.get('base_run')) if params.get('base_run') else parent
+            if not any((base/d).is_dir() for d in ('clean-masks','raw-masks')):
+                return ('"Keep the earlier mask" has no earlier mask to keep in this run.','Pick a mask tool (SAM 3, or Import my own mask) instead.')
+    return None
+
 def branch(parent,stage,tool=None,params=None,runs_root=None,preset=None,also=None):
     """Create the child folder and its run.json; returns (child_folder, chain, changed). Nothing runs yet.
     `also` = {later_stage: {tool, params}, …} changes more stages in the same child (one branch); `changed` lists all."""
@@ -101,7 +124,7 @@ def branch(parent,stage,tool=None,params=None,runs_root=None,preset=None,also=No
     if index>STAGES.index('audio') and (parent/'audio-manifest.json').exists() and not (child/'audio-manifest.json').exists():shutil.copy2(parent/'audio-manifest.json',child/'audio-manifest.json')
     for name in CARRY:
         if (parent/name).exists() and not (child/name).exists():link_artifact(parent/name,child/name)
-    for later in PREP_STAGES[index:] if stage in PREP_STAGES else []:   # a re-run edit-layer tool (mask edit_layer, face mesh_edit) reads the parent's saved edits
+    for later in PREP_STAGES:   # an edit-layer tool (mask edit_layer, face mesh_edit) reads the saved edits: linked for every stage, so a later re-run of an earlier stage of the child still finds them
         try:tool_inputs=get_tool(later,chain[later]['tool']).inputs
         except ValueError:continue
         for name in tool_inputs:

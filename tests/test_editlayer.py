@@ -55,6 +55,14 @@ class Base(unittest.TestCase):
         return steps,patches
 
 class SessionStoreTests(Base):
+    def test_note_never_resurrects_a_saved_or_absent_session(self):
+        # review nit: a preview arriving right after a save must not start a stray session log a later save would copy
+        sdir=self.runs/'_sessions'/HEX
+        self.assertFalse(editlayer.note(self.runs,HEX,'preview before any edit'));self.assertFalse(sdir.exists())
+        self.assertEqual(self.put(0,'Edit','words',{'words':[],'singing':False}).status_code,200)
+        self.assertTrue(editlayer.note(self.runs,HEX,'mask preview: 1 point'));self.assertIn('mask preview',(sdir/'log.txt').read_text())
+        (sdir/'saved-x').mkdir();os.replace(sdir/'session.json',sdir/'saved-x'/'session.json');os.replace(sdir/'log.txt',sdir/'saved-x'/'log.txt')   # what save() leaves behind
+        self.assertFalse(editlayer.note(self.runs,HEX,'late preview'));self.assertFalse((sdir/'log.txt').exists())
     def test_get_writes_nothing_put_rev_and_conflict(self):
         before=tree_hashes(self.parent)
         r=self.client.get(f'/jobs/{HEX}/edits');self.assertEqual(r.status_code,200);body=r.json()
@@ -101,9 +109,10 @@ class SaveTests(Base):
     def test_words_only_save_is_one_done_child_at_prompt(self):
         (self.parent/'words.json').write_text(json.dumps({'version':1,'engine':'mlx','language':'en','singing':False,'words':[{'text':'helo','start':0.0,'end':0.4}]}))
         (self.parent/'mouth-guidance.json').write_text('{}')
+        self.assertEqual(self.put(0,'Nothing yet','words',None).status_code,200)   # notes are kept only while a session exists (review nit)
         editlayer.note(self.runs,HEX,'mask preview: 1 point on frame 4');(self.runs/'_sessions'/HEX/'calls.jsonl').write_text(json.dumps({'provider':'fal','endpoint':'x','cost_usd':0.01,'ok':True})+'\n')
         self.assertEqual(self.client.post(f'/jobs/{HEX}/edits/save').status_code,400)   # a log line alone is not an edit
-        self.put(0,'Fix "helo"','words',{'words':[{'id':'w1','text':'hello','start':0.0,'end':0.4},{'id':'w2','text':'there','start':0.5,'end':0.9}],'edited':['w1','w2']})
+        self.put(1,'Fix "helo"','words',{'words':[{'id':'w1','text':'hello','start':0.0,'end':0.4},{'id':'w2','text':'there','start':0.5,'end':0.9}],'edited':['w1','w2']})
         before=tree_hashes(self.parent);runs_before=runs_in(self.runs)
         r=self.client.post(f'/jobs/{HEX}/edits/save');self.assertEqual(r.status_code,200,r.text);body=r.json();job=wait(body['id'])
         self.assertEqual(len(runs_in(self.runs)),len(runs_before)+1,'exactly one child');child=self.runs/body['id']

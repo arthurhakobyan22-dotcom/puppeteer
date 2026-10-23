@@ -167,6 +167,24 @@ class Refusals(Base):
             r=self.post('mask','big.mp4',b'0'*5000);self.assertEqual(r.status_code,413);self.assertIn('larger than',r.json()['message'])
         self.assertEqual(len([p for p in self.runs.iterdir() if len(p.name)==32]),1,'no branch was made')
 
+    def test_oversized_bodies_are_refused_before_they_are_read(self):
+        # review fix 8: Content-Length over the limit → plain 413 without parsing (store() never runs); a chunked body with
+        # no Content-Length is counted while it streams and cut off with the same 413; PUT edits likewise
+        def never(*a,**k):raise AssertionError('the body must not be parsed or stored')
+        with patch.object(imports,'MAX_BYTES',1000),patch.object(imports,'store',never):
+            r=self.post('mask','big.mp4',b'0'*1_100_000);self.assertEqual(r.status_code,413,r.text);self.assertIn('larger than 0 MB',r.json()['message']);self.assertTrue(r.json()['fix'])
+            body=b'--b\r\nContent-Disposition: form-data; name="stage"\r\n\r\nmask\r\n--b\r\nContent-Disposition: form-data; name="file"; filename="big.mp4"\r\n\r\n'+b'0'*1_100_000+b'\r\n--b--\r\n'
+            chunks=(body[i:i+65536] for i in range(0,len(body),65536))
+            r=self.client.post(f'/jobs/{HEX}/import',content=chunks,headers={'content-type':'multipart/form-data; boundary=b'});self.assertEqual(r.status_code,413,r.text);self.assertTrue(r.json()['fix'])
+        from stages import editlayer
+        with patch.object(editlayer,'MAX_LAYER_BYTES',1000):
+            big=json.dumps({'rev':0,'label':'x','track':'words','value':{'words':[{'id':'w','text':'a'*5000,'start':0,'end':1}]}}).encode()
+            r=self.client.put(f'/jobs/{HEX}/edits',content=big,headers={'content-type':'application/json'});self.assertEqual(r.status_code,413,r.text);self.assertIn('too large',r.json()['message'])
+            r=self.client.put(f'/jobs/{HEX}/edits',content=(big[i:i+500] for i in range(0,len(big),500)),headers={'content-type':'application/json'});self.assertEqual(r.status_code,413,r.text)
+        r=self.client.put(f'/jobs/{HEX}/edits',json={'rev':0,'label':'ok','track':'words','value':None});self.assertEqual(r.status_code,200,'a normal edit still passes')
+        self.client.delete(f'/jobs/{HEX}/edits')
+        self.assertFalse(list((self.runs/'_imports').glob('*.mp4')) if (self.runs/'_imports').exists() else [])
+
     def test_zip_downloads_refuse_paths_and_unknown_folders(self):
         (self.runs/'secret').mkdir();(self.runs/'secret'/'x.txt').write_text('no')
         os.symlink(self.runs/'secret',self.parent/'linked')

@@ -95,6 +95,58 @@ from contextlib import asynccontextmanager
 async def lifespan(_):
     resume_saved_generations();yield
 app=FastAPI(lifespan=lifespan);jobs={}
+
+# ---------------------------------------------------------------- request body bounds (checked before the body is read)
+
+import re as _re
+IMPORT_PATH=_re.compile(r'^/jobs/[0-9a-f]{32}/import$');EDITS_PATH=_re.compile(r'^/jobs/[0-9a-f]{32}/edits$')
+
+def body_limit(method,path):
+    """(limit in bytes, message, fix) for the routes whose bodies are bounded, else None. Import my own: the 1 GB file limit
+    plus 1 MB for the multipart envelope; PUT edits: twice the 2 MB layer limit (a form body escapes the JSON)."""
+    from stages import imports,editlayer
+    if method=='POST' and IMPORT_PATH.match(path):
+        return (imports.MAX_BYTES+1_000_000,f'This file is larger than {imports.MAX_BYTES//1_000_000} MB, the import limit.','Export a shorter or smaller version (the clip is at most 30 s), then import it again.')
+    if method=='PUT' and EDITS_PATH.match(path):
+        return (2*editlayer.MAX_LAYER_BYTES,'These edits are too large to keep.','Keep pixel data in files under the session folder and reference them by hash.')
+    return None
+
+class BodyTooLarge(Exception):pass
+
+class BodyLimit:
+    """ASGI middleware: a bounded route with a Content-Length over its limit gets a plain 413 {message, fix} before a byte
+    of the body is read (so Starlette never spools a huge upload to disk); a body without a usable Content-Length is
+    counted as it streams and cut off with the same 413 once it passes the limit. The routes keep their own checks."""
+    def __init__(self,app):self.app=app
+    async def __call__(self,scope,receive,send):
+        rule=body_limit(scope.get('method'),scope.get('path','')) if scope.get('type')=='http' else None
+        if rule is None:return await self.app(scope,receive,send)
+        limit,message,fix=rule
+        headers=dict(scope.get('headers') or [])
+        try:length=int(headers.get(b'content-length',b'') or -1)
+        except ValueError:length=-1
+        async def refuse():
+            await JSONResponse(status_code=413,content={'detail':message,'message':message,'fix':fix})(scope,receive,send)
+        if length>limit:return await refuse()
+        state={'seen':0,'over':False,'started':False}
+        async def counted():
+            msg=await receive()
+            if msg.get('type')=='http.request':
+                state['seen']+=len(msg.get('body') or b'')
+                if state['seen']>limit:state['over']=True;raise BodyTooLarge()
+            return msg
+        async def guarded(msg):
+            if state['over']:return   # the app's own reply to the cut-off body (a parse error) is replaced by the 413 below
+            if msg.get('type')=='http.response.start':state['started']=True
+            await send(msg)
+        try:await self.app(scope,counted,guarded)
+        except BodyTooLarge:pass
+        except Exception:
+            if not state['over']:raise
+        if state['over'] and not state['started']:
+            await JSONResponse(status_code=413,content={'detail':message,'message':message,'fix':fix})(scope,receive,send)
+
+app.add_middleware(BodyLimit)
 @app.get('/')
 def index():return FileResponse(ROOT/'static/index.html')
 @app.post('/jobs')
@@ -395,6 +447,8 @@ async def estimate_branch(ident:str,request:Request):
     except ValueError as e:return fail(400,'The params field is not a JSON object.','Send params as JSON, for example {"strict": true}.')
     try:chain,changed=stages.changed_chain(stages.run_info(folder)['run']['chain'],stage,data.get('tool') or None,params)
     except ValueError as e:return fail(400,str(e),'Pick a tool listed by GET /stages for this stage.')
+    refused=stages.branch_refusal(folder,stage,chain,runs_root=RUNS)
+    if refused:return fail(400,*refused)
     names=rerun_stages(stage);total,paid=estimate_stages(chain,stages.costs.clip_seconds(folder),names)
     return {'id':ident,'stage':stage,'changed':changed,'stages_to_run':names,'estimated_cost_usd':total,'paid':paid,'free':total==0,'note':stages.costs.NOTE}
 
@@ -407,6 +461,8 @@ async def branch_job(ident:str,request:Request):
     except ValueError:return fail(400,'The params field is not a JSON object.','Send params as JSON, for example {"strict": true}.')
     try:chain,changed=stages.changed_chain(stages.run_info(folder)['run']['chain'],stage,tool,params)
     except ValueError as e:return fail(400,str(e),'Pick a tool listed by GET /stages for this stage.')
+    refused=stages.branch_refusal(folder,stage,chain,runs_root=RUNS)
+    if refused:return fail(400,*refused)
     names=rerun_stages(stage);estimate,paid=estimate_stages(chain,stages.costs.clip_seconds(folder),names)
     refused=cost_gate(estimate,data.get('confirm_cost'),legacy=False,folder=folder,what=f'Re-running from the {stage} stage')
     if refused is not None:return refused

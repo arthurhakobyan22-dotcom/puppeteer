@@ -72,10 +72,15 @@ def new_session(ident,folder):
     return {'version':1,'run':ident,'rev':0,'created':now(),'updated':now(),'base_fingerprint':fingerprint(folder),'layer':empty_layer(),'undo':[],'redo':[]}
 
 def note(runs_root,ident,line):
-    """One line in the session log (copied into the child's log.txt on save). Tracks call this for previews / applies / hands passes."""
+    """One line in the session log (copied into the child's log.txt on save). Tracks call this for previews / applies / hands passes.
+    Written only while the session exists (session.json): a preview that lands just after a save (or discard) must not
+    start a stray log.txt that the next save would copy into an unrelated child. Returns whether the line was written."""
     from datetime import datetime,timezone
-    folder=session_dir(runs_root,ident);folder.mkdir(parents=True,exist_ok=True)
-    with (folder/'log.txt').open('a') as f:f.write(datetime.now(timezone.utc).isoformat(timespec='seconds')+' '+str(line).rstrip()+'\n')
+    folder=session_dir(runs_root,ident)
+    with lock:
+        if not (folder/'session.json').exists():return False
+        with (folder/'log.txt').open('a') as f:f.write(datetime.now(timezone.utc).isoformat(timespec='seconds')+' '+str(line).rstrip()+'\n')
+    return True
 
 def track_value(layer,name):
     hooks=TRACKS[name];value=layer.get(name)

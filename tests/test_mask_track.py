@@ -207,7 +207,7 @@ class SaveAsOneChild(Base):
         self.add_point(click(12));r=self.client.post(f'/jobs/{HEX}/edits/mask/apply',json={'quality':'full'}).json();key=r['apply']['result']
         self.add_point(click(20,label=0))
         r=self.client.post(f'/jobs/{HEX}/edits/save');self.assertEqual(r.status_code,400);self.assertEqual(r.json()['track'],'mask')
-        self.assertIn('1 mask click is not applied yet. Apply them to the clip first, or remove them.',r.json()['message']);self.assertIn('Save without them',r.json()['fix'])
+        self.assertIn('1 mask click is not applied yet. Apply it to the clip first, or remove it.',r.json()['message']);self.assertIn('Save without it',r.json()['fix'])
         self.commit('Drop unapplied',lambda v:{**v,'points':[]})
         runs_before=runs_in(self.runs);steps=FakeSteps()
         patches=[patch('pipeline.composite',side_effect=steps.composite),patch('audio_workflow.prepare_seedance_video',side_effect=steps.prepare_seedance_video),patch('face_mesh.ROOT',fake_face_root(self.d))]

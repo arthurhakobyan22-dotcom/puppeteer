@@ -49,8 +49,15 @@ class Tool:
     def run(self,inputs,params,folder,status):
         raise NotImplementedError
 
+    def needs(self):
+        """What a plain branch cannot supply: 'import' (a file chosen with Import my own), 'edits' (saved timeline edits under
+        edit-layer/, written by Save edits), or None. The UI disables such tools for a plain re-run; /branch refuses them (branch.refusal)."""
+        if self.imported:return 'import'
+        if any(str(n).startswith('edit-layer/') for n in self.inputs):return 'edits'
+        return None
+
     def describe(self):
-        return {'name':self.name,'stage':self.stage,'label':self.label,'paid':self.paid,'experimental':self.experimental,'description':self.description,'imported':self.imported,
+        return {'name':self.name,'stage':self.stage,'label':self.label,'paid':self.paid,'experimental':self.experimental,'description':self.description,'imported':self.imported,'needs':self.needs(),
                 'params':{k:{**v,'default':v.get('default')} for k,v in self.params.items()},'outputs':list(self.outputs),'inputs':list(self.inputs)}
 
 class OffTool(Tool):
