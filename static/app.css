@@ -300,5 +300,27 @@ footer{margin-top:30px;color:var(--muted);font-size:12px}
 .ft-slider input{width:100%;min-width:0}
 .ft-slider output{font-size:11px;text-align:right;color:var(--muted)}
 .ft-where{margin:0}
+/* Words track (static/track-words.js) */
+.wb-layer{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:1}
+.wb{position:absolute;top:5px;bottom:5px;display:flex;align-items:center;min-width:3px;background:#eef0fb;border:1px solid #1f18c0;border-radius:5px;color:#16181f;font-size:11px;line-height:1;pointer-events:auto;cursor:pointer;box-sizing:border-box;overflow:hidden;touch-action:none}
+.wb.sel{background:#1f18c0;color:#fff}
+.wb.here{box-shadow:inset 0 -2px 0 #e5362b}
+.wb-t{flex:1 1 auto;min-width:0;padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:none}
+.wb.narrow .wb-t{padding:0 1px;text-overflow:clip}
+.wb-h{flex:0 0 6px;align-self:stretch;cursor:ew-resize;background:rgba(31,24,192,.22)}
+.wb.sel .wb-h{background:rgba(255,255,255,.45)}
+.wb.narrow .wb-h{flex-basis:3px}
+.wb.adding,.wb.editing{z-index:2;min-width:90px;background:#fff;border-style:dashed;color:#16181f}
+.wb-input{width:100%;min-width:0;height:100%;border:0;border-radius:4px;padding:0 4px;font-size:12px;background:transparent}
+.words-track select{max-width:100%;padding:6px 8px}
+/* Subtitles, downloads and imports (Agent 4) */
+.subs{display:grid;gap:8px;margin-top:14px;padding:12px;border:1px solid var(--line-strong);border-radius:12px;background:#fafafb;min-width:0}
+.subs video{width:100%;max-height:360px;background:#09090c;border-radius:8px}
+.downloads{display:flex;gap:4px 10px;flex-wrap:wrap;font-size:12px;min-width:0}
+.downloads a{overflow-wrap:anywhere}
+.import-own{display:grid;gap:6px;margin-top:8px;padding:8px 10px;border:1px dashed var(--line-strong);border-radius:10px;min-width:0}
+.import-own summary{cursor:pointer;font-size:13px}
+.import-own input[type=file]{max-width:100%;font-size:12px}
+.chip.imported{background:#fff3e0;color:#9a5b00}
 @media(max-width:520px){.ft-sliders{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:520px){.tl{grid-template-columns:58px minmax(0,1fr)}.tl-label{padding:0 6px;font-size:10px}.tr-counter{flex-basis:100%;order:3}}

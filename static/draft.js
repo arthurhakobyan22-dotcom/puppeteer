@@ -1,9 +1,10 @@
 // Steps 03 and 04: create a draft, approve and complete it at full resolution. Both paid buttons show the estimate
 // before anything runs and send confirm_cost=true from that click only.
-import { api, plain } from './api.js';
+import { api, plain, getJSON, send } from './api.js';
 import { $, el, usd, showError, notice, tpl, wireUploads } from './ui.js';
 import { state } from './state.js';
 import { loadJob, isBusy, pollHD } from './jobdata.js';
+import { edits } from './editlayer.js';
 
 export const DEFAULT_PROMPT = "@Image1 defines the character's identity only (face, hair, outfit, proportions); do not copy its pose, expression, props, background or lighting. Pose, motion, timing and lip-sync come from @Video1.";
 const REF_EXT = ['png', 'jpg', 'jpeg', 'webp', 'mp4', 'mov', 'webm'];
@@ -37,6 +38,24 @@ export function mountDraft(parent) {
   const form = q('[data-form=seedance]'), select = q('select[name=provider]'), hint = q('[data-provider-hint]'), button = q('[data-draft-button]'), textarea = q('textarea[name=prompt]');
   const thumbs = { char1: q('input[name=char1]').closest('.upload'), char2: q('input[name=char2]').closest('.upload') };
   let filled = false;
+
+  // dialogue beats from the Words track: timed lines inserted into the prompt, editable before submit (what is in the textarea is sent)
+  const beatsButton = el('button', { type: 'button', class: 'small secondary', text: 'Insert dialogue beats', onclick: () => insertBeats() });
+  const beatsHint = el('span', { class: 'hint' });
+  textarea.closest('label').after(el('div', { class: 'row', style: 'margin-top:8px;align-items:center' }, beatsButton, beatsHint));
+  const hasWords = () => (state.files && state.files.has('words.json')) || (edits.jobId === state.jobId && edits.layer.words && Array.isArray(edits.layer.words.words) && edits.layer.words.words.length > 0);
+  async function insertBeats() {
+    beatsButton.disabled = true;
+    try {
+      const r = await getJSON('/jobs/' + state.jobId + '/words/beats');
+      const lines = textarea.value.split('\n'), start = lines.findIndex(l => l.startsWith('Dialogue beats'));
+      if (start >= 0) { let end = start + 1; while (end < lines.length && /^\d+(\.\d+)?–\d+(\.\d+)? s says: /.test(lines[end])) end++; lines.splice(start, end - start, ...r.text.split('\n')); textarea.value = lines.join('\n'); }
+      else textarea.value = textarea.value.replace(/\s+$/, '') + '\n\n' + r.text;
+      textarea.focus(); textarea.scrollTop = textarea.scrollHeight;
+      notice(`Inserted ${r.lines.length} dialogue beat${r.lines.length === 1 ? '' : 's'} from ${r.source === 'edits' ? 'your pending word edits' : 'words.json'}. Edit them as you like; the text in the box is what is sent.`, { kind: 'ok', key: 'beats' });
+    } catch (e) { showError(e, { key: 'beats' }); }
+    finally { beatsButton.disabled = !hasWords(); }
+  }
 
   wireUploads(form, (input, file) => { if (input.name === 'char1' && file) q('[data-mode-label]').textContent = file.type.startsWith('video/') ? 'Seedance · Omni reference' : 'Seedance · Edit'; });
   select.onchange = () => applyProvider(select.value);
@@ -75,6 +94,8 @@ export function mountDraft(parent) {
       }
     }
     button.disabled = !files.has('seedance-input.mp4') || isBusy() || !review.approved;
+    beatsButton.disabled = !hasWords();
+    beatsHint.textContent = hasWords() ? 'Adds timed lines like  0.0–1.8 s says: "…"  from the transcript (your pending word edits first); edit them before you create the draft.' : 'Transcribe on the Words track in step 02 (free) to insert timed dialogue beats here.';
   }
 
   form.onsubmit = async e => {
@@ -109,6 +130,42 @@ export function mountFinal(parent) {
   const upgrade = q('[data-upgrade]'), upgradeStatus = q('[data-upgrade-status]'), sent = q('[data-sent]'), finishForm = q('[data-form=finish]');
   wireUploads(finishForm);
 
+  // subtitles: "Burn subtitles into final" (off by default; free, local) + .srt export, from the run's words
+  const subs = el('div', { class: 'subs' }); ready.append(subs);
+  const sub = { state: null, key: '', busy: false, status: '' };
+  async function loadSubs(force = false) {
+    const files = state.files || new Set();
+    const key = state.jobId + '|' + ['final-preview.mp4', 'hd/final-preview.mp4', 'words.json', 'final-preview-subtitled.mp4', 'hd/final-preview-subtitled.mp4'].map(f => (files.has(f) ? 1 : 0)).join('') + '|' + (edits.jobId === state.jobId ? edits.rev : '');
+    if (!force && key === sub.key) return;
+    sub.key = key;
+    try { sub.state = await getJSON('/jobs/' + state.jobId + '/subtitles'); renderSubs(); } catch (e) { showError(e, { key: 'subtitles' }); }
+  }
+  async function toggleSubs(on) {
+    sub.busy = true; sub.status = on ? 'Burning the subtitles in locally (free)… about 10 s for a short clip.' : ''; renderSubs();
+    try { sub.state = await send('/jobs/' + state.jobId + '/subtitles', { burn: on ? 'true' : 'false' }); sub.status = ''; }
+    catch (e) { sub.status = ''; showError(e, { key: 'subtitles' }); }
+    sub.busy = false; renderSubs();
+  }
+  function renderSubs() {
+    const s = sub.state; if (!s) { subs.replaceChildren(); return; }
+    const box = el('input', { type: 'checkbox', 'aria-label': 'Burn subtitles into final' }); box.checked = !!s.burn; box.disabled = sub.busy || (!s.words && !s.burn);
+    box.onchange = () => toggleSubs(box.checked);
+    const made = s.finals.filter(f => f.has_final);
+    const line = sub.status ? ['info', sub.status] : !s.words ? ['info', 'No transcript yet: transcribe on the Words track in step 02 (free) to add subtitles.'] : !s.burn ? ['info', `Off: the final has no subtitles (${s.cues} subtitle line${s.cues === 1 ? '' : 's'} ready from ${s.source === 'edits' ? 'your pending word edits' : 'words.json'}).`]
+      : s.up_to_date ? ['ok', `On: ${s.cues} subtitle line${s.cues === 1 ? '' : 's'} burned locally into a copy of the final; the untouched final stays as it is.`] : ['warn', 'On, but the words changed since the subtitles were burned (or this final has no subtitled copy yet).'];
+    const shown = [...made].reverse().find(f => f.exists);
+    const kids = [
+      el('label', { class: 'check' }, box, el('span', {}, 'Burn subtitles into final', el('span', { class: 'hint', text: ' · free, runs locally; off by default' }))),
+      el('p', { class: 'line ' + line[0], 'aria-live': 'polite', text: line[1] }),
+      s.burn && !s.up_to_date && s.words && !sub.busy ? el('div', { class: 'row' }, el('button', { type: 'button', class: 'small', text: 'Burn again · free', onclick: () => toggleSubs(true) })) : null,
+      s.burn && shown ? el('video', { src: shown.url + '?v=' + encodeURIComponent(s.updated || ''), controls: true, playsinline: true, preload: 'metadata' }) : null,
+      el('div', { class: 'downloads' },
+        s.words ? el('a', { href: '/jobs/' + state.jobId + '/subtitles.srt', download: '', text: 'Export subtitles (.srt) ↓' }) : null,
+        ...(s.burn ? made.filter(f => f.exists).map(f => el('a', { href: f.url, download: f.subtitled.replace('/', '-'), text: (f.final.startsWith('hd/') ? 'Download HD with subtitles' : 'Download draft with subtitles') + ' ↓' })) : [])),
+    ];
+    subs.replaceChildren(...kids.filter(Boolean));
+  }
+
   function providerName() {
     const g = state.generation;
     return (g && g.provider && state.providers[g.provider]) ? g.provider : usableProvider();
@@ -133,6 +190,7 @@ export function mountFinal(parent) {
       const hdRunning = state.hd && state.hd.state === 'running';
       upgrade.disabled = isBusy() || hd || hdRunning;
     }
+    if (draft || hd) loadSubs();
     const s = state.hd;
     if (s && s.state && s.state !== 'idle') {
       upgradeStatus.hidden = false; upgradeStatus.className = 'line ' + (s.state === 'error' ? 'error' : s.state === 'done' ? 'ok' : 'info');
