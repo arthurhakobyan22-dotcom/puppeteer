@@ -785,3 +785,70 @@ and "Import my own…" on depth / mask / face / composite. Mask round trip and m
 (children `6f20c4d1543a468485988b4ba7894a1d`, `36536b28c76044c79109adf3f7e02896`; "imported" chips on card, header and
 Runs list). 380 px: `scrollWidth` 380 (words panel 284 px, Studio cards with imports open, finish step). Console: no
 messages. `85e5…` and `3c54…` sha256-identical before/after; the two copies only gained the additive files named above.
+
+## §A-fix notes (review fix pass, 2026-10-24)
+
+The independent review's defects and nits, each fixed without removing anything (suite 250 → 255 passed).
+
+1. **Notices out of view** → `#notices` is a fixed toast stack at the bottom of the viewport (`static/ui.js`
+   `notice()`, `app.css .notices`; details in `docs/UI.md` §3). Save-bar refusals ("1 mask click is not applied yet…"
+   with Apply now / Save without it), the two-tab notice, import errors and 402 refusals now show where the user is,
+   at 380 px too. Action buttons disable with "…" while they run. Job banner untouched.
+2. **Re-saving mesh edits lost earlier "mesh off" frames** → `MeshEdit.run` merges the base's `edited` section
+   (`meshedit.merge_edited`): `off_frames` / `off_ranges` / `keyed_frames` / `transformed_frames` /
+   `expression_frames` = this save ∪ earlier saves ∪ landmark frames whose status is `off`; `this_save` keeps this
+   save's own lists, `history` each earlier save's `{base_run, layer_sha, summary}`. `words.mouth_guidance` also hides
+   the mouth on frames whose `face-landmarks.json` status is `off` / `missing` / `filled`, so an older record still
+   comes out right. Test: `test_two_generation_save_keeps_earlier_off_frames_in_the_data`.
+3. **Bare runs of edit / import tools** → `Tool.needs()` (`'import'`, `'edits'`, None; in `GET /stages`) and
+   `stages.branch.refusal()`: `POST /jobs/{id}/branch` and `/estimate` answer 400 + fix before creating anything
+   ("… runs from "Save edits" in the editor …" / "… needs a file you import … Use "Import my own…" …"; `keep_parent`
+   without an earlier mask). Re-runs stay legitimate: `branch()` now links every `edit-layer/` input the chain reads
+   (not only the stages that re-run), so a later branch of an edited run can still re-run its mask / face stage.
+   Studio: such tools are listed but disabled with " · from "Save edits" only" / " · use "Import my own…"" unless
+   the run already has what they need; a selected one shows the hint and Re-run stays disabled.
+4. **No keys on faceless frames** → the dx / dy / scale / rot fields work on any frame (`static/track-face.js`), plus
+   "Set key here" (the current blend, or no correction, as a key). Handles stay only where a mesh exists. A key on a
+   missing frame blends into the tracked frames around it exactly as elsewhere (`transformAt` uses keys only); the
+   panel line says so on a faceless frame.
+5. **Words merge** → rule in `docs/WORDS.md`: parts of one split word rejoin with what the split removed (`split_of`
+   / `split_sep` on the right part), anything else with a space. The merged-away id leaves `edited` (count fixed).
+6. **Classic wand over the face track** → `static/wand.js` closes the classic wand when a track is selected or the
+   Mesh edit view activates; opening it deselects the track and leaves the Mesh edit view first.
+7. **409 console error** → the API keeps 409 for stale revs; the page avoids sending one (`static/editlayer.js`):
+   tabs announce each new rev on a `BroadcastChannel('puppeteer-edits')` and the others re-read the layer at once;
+   after the tab was hidden or the window blurred, the next edit / undo first GETs the rev and, if it moved, adopts it
+   and drops that edit with the same (warn) notice instead of PUTting. A commit built before such a refresh landed is
+   dropped the same way (never overwrites the other tab). A 409 can still happen when two different browsers edit
+   within the same moment; it is handled as before (notice + reload) and the browser logs that failed request.
+8. **Upload size bounds** → `BodyLimit` ASGI middleware in `app.py`: `POST /jobs/{id}/import` over 1 GB + 1 MB and
+   `PUT /jobs/{id}/edits` over 2 × 2 MB get a plain 413 `{message, fix}` from `Content-Length` before a byte is read;
+   a chunked body is counted as it streams and cut off with the same 413. `imports.store` and `editlayer.put` keep
+   their own checks. Test: `test_oversized_bodies_are_refused_before_they_are_read`.
+
+Nits: Studio cards no longer repeat a file under the preview when the Download row lists it; the Tint view's link
+says "Download the mask (B/W video)" (Mesh edit: "Download the depth composite (no mesh)"; `editor.addView`
+takes `downloadLabel`); "1 mask click is not applied yet. Apply it … Save without it" (server + page); the
+`meshedit.py` docstring names the right registration; `editlayer.note()` writes only while `session.json` exists
+(a late preview after a save no longer starts a stray log); panel / transport buttons get `aria-label` = the
+visible label (`ui.ariaFor`; symbol-only buttons use the title's first clause; Play/Pause updates; track names
+"Mask track"…), `title` stays the tooltip; the editor preloads every view's video (hidden, `preload=auto`) and drops
+ones no view uses, so the first switch to Composite after an Apply is instant. Also found and fixed: the mask
+track's Mask / Tint views went missing after an in-app re-render of the same run (Quick ↔ Studio), and the classic
+wand's "started" notice was cleared by the navigation it preceded.
+
+### Verification (2026-10-24, port 8775, `PUPPETEER_OFFLINE=1`, built-in browser)
+
+`754aabcf20c44826adb96d6f93211b32` = new hard-link copy of `85e5…`. Mask track click on frame 30 → Save edits at the
+bottom of the page → the toast sat at the bottom of the viewport (desktop 1024 × 768 and 380 × 760: 12–368 px wide,
+`scrollWidth` 380) → "Apply now" (buttons disabled while it ran) → child `35e8779ab3dd46ddaa560f45edb1c880`. There:
+classic wand open → Face track selected → wand overlay gone, Mesh edit view on. Frame 52 (no face): dx field 0.05;
+frame 40: "Set key here"; blend on the edited mesh: frame 41 +0.001, 45 +0.019, 49 +0.042 (x of point 1); mesh off
+100–102; Undo / Redo; Save → `dec04b29388f40e79f3d56288faeadd5` (keys 40, 52; off 100–102). There: mesh off 120 → Save
+→ `53de319a71be4414a8c6bf985a6914dc`: `edited.off_frames` [100, 101, 102, 120], `this_save` [120], history = the
+first save; mouth guidance hides 100–102 and 120. Words: "and" split at frame 28 → "a" / "nd" (3 words edited) →
+merge → "and" (2 words edited). Two tabs on one run: an edit in tab B was picked up by tab A over the channel and A's
+next edit went through (rev 4 → 5, no 409); a write from "another browser" (direct PUT) + a blurred tab → A's edit
+dropped with the warn notice, no 409 in the network log. Studio: dropdown labels/disabled as in 3; `curl` branch with
+`mesh_edit` / `edit_layer` / `import_mask` → 400 + fix. 380 px: Quick, Studio, Lab, Runs and the editor with each
+track selected all `scrollWidth` 380. Console: no errors in either tab. Session discarded afterwards.

@@ -54,6 +54,13 @@ page did still works; it is now split into readable files and has three depths (
 - `#notices` is for everything else: upload failures, saved presets, 402 cost refusals, network trouble. Use
   `notice(message, {fix, kind, actions, key})` or `showError(error, {actions, key})`; `key` replaces an earlier
   notice with the same key. Actions are `[{label, run, secondary?}]` and render as fix buttons.
+- `#notices` is a **fixed toast stack** at the bottom of the viewport (bottom-right, 460 px wide from 720 px up;
+  full width minus 12 px gutters below), so a notice raised from the editor's Save bar, a track tool or a Studio
+  card is visible wherever the page is scrolled (review fix 1). Newest at the bottom, at most 4 (the oldest goes),
+  scrolls inside itself above 60 vh. Errors (`role="alert"`) and notices with actions stay until × / Esc / an
+  action; `ok` notices fade after 10 s and plain warnings after 16 s, paused while hovered or focused. While an
+  action runs its buttons are disabled and the label gets "…"; the notice closes when it resolves. The job banner is
+  unchanged (in the page flow, bound to the job in the URL).
 - Every error on screen is `message` + `fix`: the server's `{detail|message, fix}` body, or a mapped sentence
   (network: "The app could not be reached. Is it still running? Restart it and reload."). `plain()` in `api.js`
   never lets an array, object or `Error:` prefix through.

@@ -76,7 +76,10 @@ Blocks are DOM elements (`data-tl-item`): click = select + jump to its start; do
 (Enter keeps, Esc cancels, empty = delete); drag the left/right edge = timing (snaps to frames, clamped between the
 neighbours, at least one frame; one commit per drag). Panel: engine select (local "free, runs locally" / fal "paid ·
 about $0.03"), Singing mode, Transcribe; the selected word's text field and times (s + frames); Split at playhead
-(text split at the nearest space, else proportionally), Merge with next, Add word at playhead / in range (an inline
+(text split at the nearest space, else proportionally), Merge with next (rule: the two parts of one split word join
+with exactly what the split removed, so "and" → "a" + "nd" → "and" and "hello there" → "hello" + "there" → "hello
+there"; the right part carries `split_of` = the word both came from and `split_sep` = `''` or `' '`; any other pair
+joins with a space; the merged-away id leaves `edited`, so the summary counts the merged word once), Add word at playhead / in range (an inline
 field; fills the range or up to 0.4 s, never over a neighbour), Delete, ◀ Prev / Next ▶; Export subtitles (.srt),
 `words.json ↓`, `mouth-guidance.json ↓`. While the track is selected the current word is drawn as a caption on the
 overlay. Every edit is `edits.commit('words', …)` (shared undo/redo, persists across reloads).

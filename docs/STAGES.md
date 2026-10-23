@@ -260,6 +260,11 @@ All existing routes are unchanged. New or extended (every error body: `{detail, 
   `{"id","stage","changed":"face: mediapipe_mesh strict: false → true","stages_to_run":["face"],"estimated_cost_usd":0,"paid":[],"free":true,"note"}`.
   For `mask`: `stages_to_run` = `["mask","composite","face"]`, `paid` = `[{"stage":"mask","tool":"sam3_replicate","label":"SAM 3 on Replicate","estimated_cost_usd":0.123}]`.
 - `POST /jobs/{id}/branch` — form or JSON `{stage, tool?, params? (JSON object or string), confirm_cost?}`.
+  400 (plain message + fix, nothing created; also on `POST /jobs/{id}/estimate`) when a re-run stage's tool needs
+  inputs a plain branch cannot supply (`Tool.needs()` in `GET /stages`): `import` tools without an imported `file`
+  in their params ("Use Import my own…"), `edits` tools (mask `edit_layer`, face `mesh_edit`) when the parent has no
+  `edit-layer/` inputs ("runs from Save edits"), `keep_parent` with no earlier mask (`stages.branch.refusal`). A run
+  that already has its saved edits re-runs fine: `branch()` links every `edit-layer/` input the chain reads.
   402 when the re-run includes a paid stage and `confirm_cost` is not true. Otherwise creates the child and runs
   it in a background thread like `POST /jobs`:
   `{"state":"running","status":"Branched from <parent> · face: mediapipe_mesh → off","id":"<child>","parent":"<parent>","changed":"…","estimated_cost_usd":0}`.
