@@ -346,6 +346,12 @@ Details in `docs/INPUT-DOCTOR.md` and the "Implementation" section of `docs/MASK
   skipped, so existing keys are unchanged); `mesh_worker.py` tracks on the zoomed copy when both exist and maps
   landmarks back with `mesh_tracking.map_landmarks`. `face-tracking.json` says which file was tracked
   (`tracking_source`).
+- **Face stage tools**: `mediapipe_mesh` (default), `off`, `mesh_edit` (free, `stages/meshedit.py`: the timeline
+  editor's mesh edits; inputs `original.mp4`, `depth-composite-silent.mp4`, `edit-layer/mesh.json`,
+  `edit-layer/face-landmarks-base.json`; writes the edited `face-landmarks.json`, `face-tracking.json` (+ `edited`),
+  `composite-silent.mp4`, `preview.jpg` with the local PIL renderer `meshedit.render()`; no MediaPipe, no network).
+  `branch()` links a re-run edit-layer tool's `edit-layer/…` inputs from the parent, so a later branch re-runs
+  `mesh_edit` (or the mask `edit_layer`) on the same saved edits; docs/TIMELINE-SPEC.md §A3.
 - **Mask stage tools**: `sam3_replicate` (default, unchanged), `local_propagate` (free), `brush` (free),
   `sam3_points_fal` (paid), `sam2_points_replicate` (paid), `edit_layer` (free: the timeline editor's saved mask,
   copied from `edit-layer/mask/` by the mask track's save hook; docs/TIMELINE-SPEC.md §A2), `off`. The wand tools edit an existing mask and are

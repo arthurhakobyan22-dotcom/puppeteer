@@ -20,6 +20,7 @@ page did still works; it is now split into readable files and has three depths (
 | `static/timeline.js` | Track registry (`registerTrack`, `tracks`) and the timeline component (ruler, playhead, range, zoom, lanes, markers). |
 | `static/editlayer.js` | The `edits` client: pending edits (`GET/PUT/DELETE /jobs/{id}/edits`), undo/redo, save as one branch. |
 | `static/tracks.js` | One line per editor track (Mask, Face, Words); `static/track-placeholders.js` holds the placeholders until `track-mask.js` / `track-face.js` / `track-words.js` replace them. |
+| `static/track-face.js`, `static/meshedit.js` | The face mesh track (mesh off on a range, transform handles + keys, expression sliders, reset, the "Mesh edit" view) and the pure JS port of `stages/meshedit.py` it draws with; `static/face-connections.json` = MediaPipe's connection lists (exported once by `face_connections.py`). |
 | `static/draft.js` | Steps 03 and 04 (`mountDraft`, `mountFinal`): providers, saved references, the paid buttons with their estimate, manual import. |
 | `static/stagecard.js` | One Studio card per stage (`mountStageCard`). |
 | `static/runhead.js` | The run header (`mountRunHead`): name, state chip, spent so far, parent, what changed, Add to Lab, Save as preset. |
@@ -117,6 +118,18 @@ once the session mask differs), Prev / Next tick, "Grab hands on flagged frames 
 B/W · Composite · Tint (Tint = original + the mask video with `mix-blend-mode: screen` and an SVG colour-matrix
 filter `#mask-tint`; the Mask tab follows the session mask). A pending fix blocks "Save edits" with "Apply now" /
 "Save without them". New calls: `POST /jobs/{id}/edits/mask/preview|apply|hands`, `GET /jobs/{id}/mask/problems`.
+
+**Face track (Agent 3, `static/track-face.js`).** Select the Face lane: the view switches to **Mesh edit** (the depth
+composite, or the original in Fast mode, *without* the baked mesh; leaving the track switches back) and the edited mesh
+is drawn live on the overlay with the same colours as `mesh_worker.py` (dimmer on filled frames). A dashed box around
+the mesh: drag inside = move, the corner square = scale, the top circle = rotate; each drag is one undoable commit
+(a key on that frame). Panel: "Applies to frame N / frames a–b" (the selected range), "Mesh off on this frame / on
+range" and "Mesh on", dx / dy / scale / rot fields (the frame's effective correction; editing one sets a key), six
+expression sliders (jaw open, mouth smile, mouth pucker, blink left / right = the person's eyes, brow up; commit on
+release, applied to the frame or the range), ◀ Prev key / Next key ▶, Reset frame, Reset range, view buttons Mesh edit
+· Prepared input. Lane: tracked / filled / missing / off colours, mesh-off ranges hatched, keys ◆, the blended span as
+a bar, expression frames ●; `[` `]` jump between them. No server calls beyond the edit-layer PUTs and two static GETs
+(`/runs/<id>/face-landmarks.json`, `/static/face-connections.json`).
 
 ## 5. Stage cards (Studio)
 

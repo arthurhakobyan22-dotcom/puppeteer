@@ -41,7 +41,7 @@ and say so in your hand-off note. Read `AGENTS.md`, `docs/STAGES.md`, `docs/UI.m
 | Multi-stage branch (`also=`) | `stages/branch.py` (additive) | Agent 1 |
 | Editor shell: viewer, playhead, timeline, tracks API, keyboard, Save bar | `static/editor.js`, `static/timeline.js`, `static/editlayer.js`, `tpl-editor` in `index.html`, CSS | Agent 1 |
 | Mask track: batch wand, pending list, ticks, tint, Grab hands, quick preview, `edit_layer` mask tool | `static/track-mask.js`, `stages/masktrack.py` (+ `stages/mask.py` tool registration), `hands_worker.py` | Agent 2 |
-| Face mesh track: range off, transform, keyframes, expressions, `mesh_edit` face tool, local renderer | `static/track-face.js`, `stages/meshedit.py` (+ `stages/face.py` registration), `static/face-connections.json` | Agent 3 |
+| Face mesh track: range off, transform, keyframes, expressions, `mesh_edit` face tool, local renderer | `static/track-face.js`, `static/meshedit.js`, `stages/meshedit.py` (tool registered there, see §A3), `static/face-connections.json` | Agent 3 |
 | Words track, transcription, prompt beats, mouth guidance, subtitles, Import my own, Download | `static/track-words.js`, `stages/words.py`, `words_worker.py`, `setup-words.sh`, `stages/imports.py`, `static/draft.js`/`stagecard.js` additions | Agent 4 |
 
 New docs: each agent appends its own section to this file ("§A1 notes" … "§A4 notes") with what it built, the
@@ -586,3 +586,121 @@ Apply, and two from the pre-fix run of the save race described below).
   'reload'})` it once before `location.reload()` or you test a mix of old and new modules.
 - `replaceChildren(...)` prints `null` as text; filter children first (the `el()` helper skips nulls, the DOM API does not).
 - The track uses `onFrame` only while paused (no DOM work per frame during playback).
+
+## §A3 notes (Agent 3: face mesh track)
+
+### What exists now
+
+| piece | file | notes |
+|---|---|---|
+| Pure edit, track hooks, local renderer, `mesh_edit` face tool | `stages/meshedit.py` | replaces the stub; `register_track('mesh', MeshTrack)` and `register(MeshEdit)` at import (**spec change:** the tool registers in `meshedit.py`, after face.py's tools, not in `face.py`, so the TRACKS order stays mask, mesh, words and `mediapipe_mesh` stays first) |
+| Connection lists | `static/face-connections.json` (+ `face_connections.py`, run once in `.venv-face`) | MediaPipe 1.1.0 `FaceLandmarksConnections` in MediaPipe order: tessellation (2556), lips (40), left/right eye (16), brows, face oval, irises |
+| JS port of the formulas | `static/meshedit.js` | pure ES module, no DOM; checked against the same fixture under node |
+| Track | `static/track-face.js` (swapped in `static/tracks.js`), CSS block "Face track panel" in `app.css` | `facePlaceholder` stays exported, unused |
+| Shared fixture | `tests/fixtures/mesh-edit-cases.json` | a synthetic 478-point face, 8 expression/transform cases, the eased blend, normalize; regenerate only when the formulas change on purpose |
+| Tests | `tests/test_mesh_edit.py` (17) | suite: 227 passed |
+| Small fixes elsewhere | `stages/branch.py`, `stages/base.py` (`unshare`), `stages/editlayer.py`, `static/editlayer.js` | see "Changes to shared code" |
+
+### Layer schema as implemented (`layer.mesh`)
+
+```json
+{"off":  [[100, 102]],                                        // inclusive frame ranges, merged; drawn without a mesh
+ "keys": {"70": {"dx": 0.0549, "dy": -0.02083, "scale": 1, "rot": 0}},   // dx/dy in frame widths/heights, rot ° clockwise
+ "expr": {"40": {"jaw": 1}}}                                  // per frame; zero values dropped
+```
+
+`normalize()` (Python and JS identical) drops junk: frames must be whole numbers (int, integral float or digit string;
+booleans refused), keys clamp to |dx|,|dy| ≤ 2, scale 0.2–5, |rot| ≤ 180, expressions to their ranges (jaw, pucker,
+blink 0…1; smile, brow −1…1). `count` = off ranges + keys + expression runs (consecutive frames with equal values =
+one edit, so a slider on a 30-frame range counts once); `summary` e.g. "mesh off on frames 100–102, 2 transform keys
+(frames 70, 82), jaw on frame 40"; `check` never refuses; `change` → `('face', 'mesh_edit', {layer_sha, base_run})`
+(400 "This run has no face mesh…" when the parent has no `face-landmarks.json`); `materialize` writes
+`edit-layer/mesh.json` `{version, base_run, layer_sha, summary, layer}` and **copies** (spec said links) the parent's
+`face-landmarks.json` → `edit-layer/face-landmarks-base.json` and `face-tracking.json` → `edit-layer/face-tracking-base.json`.
+
+### Formulas (pixel-aspect space: x · width/height, y; all from the frame's own unedited points)
+
+- H = |p152 − p10| (face height), d = unit(p152 − p10) (face "down"), r = (d.y, −d.x) (face right on screen),
+  m = mean of 61, 291, 13, 14 (mouth centre). Expressions first (all offsets from the unedited points, summed), then
+  the transform about the centroid of the unedited points 0–467 (irises 468–477 move with it).
+- **jaw 0…1**: every point not in UPPER_LIP (61 185 40 39 37 0 267 269 270 409 291 78 191 80 81 82 13 312 311 310 415
+  308) moves jaw · 0.10 · H · wv · wl along d; wv = clamp((v − v_c)/(v_14 − v_c), 0, 1), v = (p − m)·d, v_c = mean
+  of the corners 61/291 (denominator ≥ 0.02 H); wl = clamp(2 − |(p − m)·r| / M, 0, 1), M = half the mouth width.
+  So the inner lower lip 14, the outer lower lip 17, the chin 152 and everything below the lip under the mouth drop by
+  exactly jaw · 10 % of H; the jaw angles near the ears barely move (hinge). Tested to 1e-12.
+- **smile −1…1**: points within 0.18 H of the nearer corner move smile · H · (1 − dist/0.18H)² · (0.06 · side · r −
+  0.04 · d); the corners themselves go out 6 % and up 4 % of H at 1 (−1 = frown).
+- **pucker 0…1**: the 40 lip points move pucker · (−0.4 ((p − m)·r) r + 0.15 ((p − m)·d) d): 40 % narrower, a bit rounder.
+- **blink_l / blink_r 0…1**: upper-lid contour points move onto their lower partners, u + blink · (l − u).
+  blink_l = MediaPipe LEFT_EYE = the person's left eye (right of the picture): (466,249) (388,390) (387,373) (386,374)
+  (385,380) (384,381) (398,382); blink_r = RIGHT_EYE: (246,7) (161,163) (160,144) (159,145) (158,153) (157,154) (173,155).
+- **brow −1…1**: the 20 brow points (46 53 52 65 55 70 63 105 66 107 / 276 283 282 295 285 300 293 334 296 336) move
+  brow · 0.06 · H against d.
+- **Transform**: p' = c + scale · R(rot) (p − c) + (dx · aspect, dy). Points no edit touches keep their exact input
+  values (no float round trip), and an identity key changes nothing.
+
+**Easing rule:** a key's frame uses that key; a frame strictly between consecutive keys a < f < b uses
+A + (B − A) · e(t), e(t) = t²(3 − 2t), t = (f − a)/(b − a), per value (dx, dy, scale, rot, linear in each); endpoints
+exact, e(½) = ½ (frame 46 between 40 and 52 is exactly half way); one key affects only its frame; before the first and
+after the last key there is no correction. A drag on a frame between keys starts from the blended value and adds a key
+there. Frames without a face (missing) stay faceless whatever the keys say; off frames get `faces: []`, `status:
+"off"`, `edited: "off"`; changed frames `edited: true`.
+
+### Renderer and tool
+
+`meshedit.render(folder, landmarks, base_clip, status=…, out_name='composite-silent.mp4', preview_name='preview.jpg')`
+draws any face-landmarks.json-shaped dict over every frame of `base_clip` exactly like `mesh_worker.py` pass 2
+(checked: byte-identical drawing on the same decoded frame; tessellation 1 px (50,170,205), lips 2 px (255,135,100),
+eyes 2 px (130,255,150), ×0.45 when status ≠ tracked; libx264 crf 18 yuv420p, 24 fps; preview = first tracked frame
+from 30 on), writing under temporary names then `os.replace` (never through a hard link). Pixel differences against
+`.venv-face` outputs (~1–2 levels) come from the different PyAV/FFmpeg builds of the two venvs, not the drawing.
+`mesh_edit`: base = `composite.base_clip(chain)` (refuses a legacy `composite-silent.mp4` base); writes edited
+`face-landmarks.json`, `face-tracking.json` = the base tracking numbers unchanged + `edited: {off_frames, off_ranges,
+keyed_frames, transformed_frames, expression_frames, changed_frames, tool, base_run, layer_sha, summary, note}`,
+`composite-silent.mp4`, `preview.jpg`; report health "Face mesh from the timeline edits (…) drawn locally on N
+frames. …". The runner builds `seedance-input.mp4` after it as usual. ~1.7 s for 195 frames at 960×550.
+
+### Changes to shared code (additive)
+
+- `branch()` (stages/branch.py): for every prep stage the child re-runs, a tool input under `edit-layer/` that the
+  parent has is hard-linked into the child. So `POST /jobs/{mesh child}/branch {stage: face|composite|mask}` re-runs
+  `mesh_edit` on the same saved edits (same inputs → same cache key; tested), and the same holds for the mask `edit_layer`.
+- `editlayer.save()` calls `stages.base.unshare(child/'edit-layer')` before the tracks' `materialize()`: linked files
+  are replaced by private copies, so a track writing its files (Agent 2's `copyfile` into `edit-layer/mask/`) can
+  never write through into the parent (tested: re-saving from an edited child leaves that child sha256-identical).
+- `edits.step()` (static/editlayer.js) is queued like commits: a fast Cmd+Z Cmd+Z used to send the second undo with
+  a stale rev (409 + console error); now each undo/redo uses the rev the previous one returned.
+
+### Verification (2026-10-23, port 8777, `PUPPETEER_OFFLINE=1`)
+
+`b03ff4240ede4cdb96489a911a2c47e2` = hard-link copy of `85e5…` (status/run.json copied, reconstructed). Studio:
+selecting Face switched to **Mesh edit** (depth composite, no baked mesh) with the live mesh + handles; leaving it
+switched back. Jaw-open slider dragged to 1 on frame 40 → one commit, the overlay's mouth/chin visibly opened
+(screenshots before/after). A real drag inside the mesh on frame 70 (move) and on the top circle (rotate) and the
+corner (scale) on frame 82 → one commit per drag (rev +1 each); frames 71–81 showed the blended correction (nose tip
+x shift 0.0549 → 0.0539 → 0.0511 → … 0.0050, eased). Keys on 40 and 52 (52 has no face in this clip) gave nose shifts
+0.0200, 0.0212, 0.0244, 0.0294, 0.0356, 0.0426, **0.0500** (46), 0.0574, 0.0644, 0.0706 on 40–49 (identical to the
+Python test values), then undone. Mask click + "Mesh off on range" 100–102, Cmd+Z ×2 / Shift+Cmd+Z ×2 undid and redid
+both across tracks. Network panel: only `localhost:8777` (static files, `/runs/<id>/face-landmarks.json`, `PUT
+/edits`, undo/redo, the mask preview); zero external requests. Save edits → exactly one child
+`ff22c0b5627a4be88717786696b26568` (runs 68 → 69; face `mesh_edit`, `changed` "face: mesh off on frames 100–102, 2
+transform keys (frames 70, 82), jaw on frame 40", no `calls.jsonl`); its `composite-silent.mp4` has zero mesh-coloured
+pixels on exactly frames 100–102 (1277–2095 on 96–99 / 103–105), and differs from the parent's (mean 8.3–9.6 vs ~2
+codec noise) on exactly 40 and 70–82. `b03f…` and `85e5…` sha256-identical before/after. 380 px:
+`scrollWidth` 380, a real rotate-handle drag worked (handles now clamped onto the picture), panel 284 px without
+overflow; that test edit was discarded. Fast-mode run `f5a3f11d…`: Mesh edit view = `original.mp4` with the live mesh.
+Console: one 409 from the double Cmd+Z before the `edits.step` fix, none after. Session record:
+`runs/_sessions/b03f…/saved-ff22c0b5…/`.
+
+### Notes for Agent 4
+
+- **Face import**: build a landmarks dict in the face-landmarks.json schema (`{fps, frames: [{frame, status, faces:
+  [[{x, y} × 468|478]]}]}`), then `meshedit.render(folder, landmarks, composite.base_clip(folder, chain))` writes
+  `composite-silent.mp4` + `preview.jpg` (refuse or warn when the point count is not 468/478; `draw_face` skips
+  connections whose indices are missing). `meshedit.apply(landmarks, layer, aspect)` and `edited_section()` are pure.
+- Mouth guidance: frames with no mesh drawn = `face-tracking.json` `missing_frames` ∪ `edited.off_frames` (the base
+  numbers are kept unchanged on purpose); `face-landmarks.json` frames with `status: "off"` have no face.
+- `editor.addView({id: 'mesh-edit'})` exists (order 15); the face track switches to it on select and back on leave
+  (`setView(…, {chosen: true})`, so the review panel's preferred view follows).
+- The face track's `markers()` = keys, off-range starts, expression-run starts; it only re-renders its panel on
+  `onFrame` while paused.
