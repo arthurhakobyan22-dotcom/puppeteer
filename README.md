@@ -94,6 +94,8 @@ if preparation failed it tells you why and offers the fix.
 1. `python3.14 -m venv .venv && bash setup.sh` (installs the dependencies, copies `.env.example` to `.env`, runs `doctor.py`).
 2. Put your keys in `.env`: `FAL_KEY` and/or `ENHANCOR_API_KEY` for Seedance, `REPLICATE_API_TOKEN` for depth, SAM 3 and Demucs.
 3. For the face-mesh presets: `bash setup-face-mesh.sh` once (needs Python 3.12; makes an isolated `.venv-face`).
+   For the Words track (free word-level transcription on Apple Silicon): `bash setup-words.sh` once (Python 3.12; makes
+   `.venv-words` with mlx-whisper and downloads the 1.6 GB Whisper large-v3-turbo model into `models/whisper/`; see `docs/WORDS.md`).
 4. `bash start.command` (starts the app and, when cloudflared is installed, the Enhancor callback tunnel).
 5. Open http://127.0.0.1:8770.
 6. `.venv/bin/python doctor.py --require-keys` tells you which keys, tools and providers are ready; it never makes a paid call.
@@ -161,3 +163,13 @@ All remote calls are mocked; no key or paid call is needed.
 ## License
 
 MIT (see `LICENSE`). Puppeteer is a fork of Sirio Berati's [Genjutsu Open Source Workflow](https://github.com/sirioberati/Genjustsu-Open-Source-Workflow); see `THIRD-PARTY.md` for attribution and hosted-model terms.
+
+## Words, subtitles and Import my own
+
+On the review timeline the **Words** track transcribes the clip's audio word by word (free, on your Mac, after
+`bash setup-words.sh`), and you fix the words and their timing by hand. The draft step can insert timed **dialogue
+beats** into the prompt, the finish step exports **subtitles (.srt)** and can **burn them into a copy of the final**
+(off by default). Every Studio card has **Download** links for its outputs, and the depth, mask, face and composite cards
+have **Import my own…**: bring back a file you edited elsewhere (a painted mask, your own depth video, a face overlay,
+a finished control video); it is fitted to the clip and becomes a new version labelled "imported". Details:
+`docs/WORDS.md`, `docs/IMPORTS.md`.

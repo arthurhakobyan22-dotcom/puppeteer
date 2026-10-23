@@ -704,3 +704,84 @@ Console: one 409 from the double Cmd+Z before the `edits.step` fix, none after. 
   (`setView(…, {chosen: true})`, so the review panel's preferred view follows).
 - The face track's `markers()` = keys, off-range starts, expression-run starts; it only re-renders its panel on
   `onFrame` while paused.
+
+## §A4 notes (Agent 4: words track, beats, mouth guidance, subtitles, Import my own, Download)
+
+### What exists now
+
+| piece | file | notes |
+|---|---|---|
+| Transcription, track hooks, beats, mouth guidance | `stages/words.py` | replaces Agent 1's stub (same `register_track('words', WordsTrack)`; the stub's count/summary wording is kept) |
+| Local worker | `words_worker.py` (runs in `.venv-words`), `setup-words.sh` | mlx-whisper 0.4.3 + `models/whisper/whisper-large-v3-turbo` (1.6 GB); engine comparison in `docs/WORDS.md` |
+| Subtitles (SRT, burn-in, toggle state) | `stages/subtitles.py` | PIL text over PyAV frames, audio packets copied |
+| Import tools, upload store, branch plan | `stages/imports.py` | `import_depth`, `import_mask`, `keep_parent` (mask), `import_face`, `import_control`; registered last in each stage |
+| Routes | `app.py` sections "words track" / "downloads" / "Import my own" | below |
+| Track | `static/track-words.js` (swapped in `static/tracks.js`), CSS "Words track" + "Subtitles, downloads and imports" in `app.css` | `wordsPlaceholder` stays exported, unused |
+| UI additions | `static/draft.js` (Insert dialogue beats; subtitles block in `mountFinal`), `static/stagecard.js` (Download links, Import my own…, imported chip), `static/runhead.js` + `static/runs.js` (imported chips), `static/editor.js` (mask.zip link) | |
+| Small shared changes | `stages/base.py` (`Tool.imported`, in `describe()`), `stages/presets.py` (`describe_chain` labels imports, `mode_for_chain`: `import_control` → `original`), `stages/costs.py` (`words_fal`, pricing model `usd_per_started_minute`), `app.py` (`run_summary.imported`, `run_child` refreshes mouth guidance) | all additive |
+| Tests | `tests/test_words.py` (14, one real local run skipped without `.venv-words`), `tests/test_imports.py` (9) | suite: 250 passed (one `test_editlayer` line changed, see below) |
+
+### Endpoints as implemented
+
+`GET /jobs/{id}/words` · `POST /jobs/{id}/words/transcribe {engine?, singing?, language?, confirm_cost?, estimate_only?}`
+(synchronous, ~4 s locally; 402 for fal without `confirm_cost`; 400 + `bash setup-words.sh` fix when the venv or model is
+missing; offline: local works, fal refused before any I/O) · `GET /jobs/{id}/words/beats` · `GET /jobs/{id}/subtitles.srt`
+· `GET/POST /jobs/{id}/subtitles {burn}` · `GET /jobs/{id}/download/<folder>.zip` · `POST /jobs/{id}/import` (multipart
+`stage`, `file`, `confirm_cost?`). Shapes in `docs/WORDS.md` §2/§6 and `docs/IMPORTS.md`.
+
+### Layer schema (`layer.words`)
+
+`{words: [{id, text, start, end}], singing, edited: [ids], replaced?: {engine, language}}`. Ids of words that came from
+`words.json` are `f<index>` until edited; new words get `w<time><rand>`. The client keeps blocks frame-snapped; the save
+hook normalizes anyway (`normalize_words`: sorted, trimmed text, ≥ 1 frame, an overlapping earlier word is trimmed to the
+next start, inside the clip). `count` = edited ids (+1 for a re-transcription), `summary` "3 words edited" / "transcribed
+again (10 words, singing mode)". `materialize` writes the child's `words.json` (`edited: true`, engine/language from the
+parent or the re-transcription) **and `mouth-guidance.json`** (fresh() first).
+
+### Spec changes (and why)
+
+- **Paid fallback = ElevenLabs speech-to-text on fal**, not `fal-ai/whisper`: the Whisper page lists "$0 per compute
+  second", so no honest estimate is possible; ElevenLabs lists $0.03/min and returns word timings natively. Estimate
+  counts started minutes ($0.03 for the fixture).
+- **`mouth-guidance.json` is rewritten in the child on save** (it was only CARRY-linked by Agent 1's stub);
+  `tests/test_editlayer.py::test_words_only_save_is_one_done_child_at_prompt` now asserts a fresh file with the edited
+  words and the parent's copy untouched, instead of the shared inode. It is also refreshed after every branch run
+  (`app.run_child` → `words.refresh_guidance`), because a face re-run (mesh off) changes `mouth_hidden`.
+- **SRT / beats / burn-in read the pending edits first**, then `words.json` (what you see on the lane is what you export).
+- **Depth import** re-runs the mask stage, so it brings `mask: keep_parent` (new free tool: the parent's masks unchanged)
+  in the same branch; otherwise SAM would be re-billed. **Control import** sets `face: off` via `also`, and
+  `mode_for_chain` answers `original` for `import_control` so the review fingerprint covers the files that exist.
+- Words in the last 0.15 s shorter than 20 ms are dropped at transcription (Whisper's tail artifact; large-v3 produced a
+  170-word loop there).
+
+### Gotchas for the reviewer
+
+- The Browser pane was hidden for most checks: `requestAnimationFrame` does not run then, so the word blocks (drawn in
+  the timeline's rAF `draw`) appear after the next frame (a screenshot triggers one). Not an app bug (Agent 1 note too).
+- The draft step's "Insert dialogue beats" button is enabled only when the run has `words.json` or pending word edits
+  (no 404 in the console). The words panel's .srt link likewise.
+- `runs/_cache/words/` holds transcriptions (also the ones made by the browser checks); `runs/_imports/` the uploads.
+- A transcription writes `words.json` + `mouth-guidance.json` into the run being viewed when it has none (allowed:
+  additive analysis output, like the face report); burning subtitles writes `subtitles.json` + `*-subtitled.mp4` next
+  to the untouched finals. Nothing else of mine writes into a run that is not a new child.
+
+### Verification (2026-10-24, port 8778, `PUPPETEER_OFFLINE=1`)
+
+`0be4cf2cadd945008a9c9131b6c75f12` = hard-link copy of `85e5…`. Words lane → Transcribe (free, local): 10 blocks in
+4.1 s ("And I need you, and I miss you, and I'm"), `words.json` + `mouth-guidance.json` written; double-click "And" →
+"Oh and" (rev 1); a real drag of its left edge to frame 18 = 0.75 s (one commit, rev 2); Split at playhead (frame 110)
+→ "a" / "nd" (rev 3); select "a" + Merge with next (rev 4); reload → the same 10 words and rev 4. A mask click (frame
+40) and "Mesh off on range" 100–102 → Cmd+Z ×3 / redo ×3 walked mesh → mask → words and back. Save edits → "Apply now"
+→ exactly one child `b96aaa69bf334ac69da65d68a69d53df` (runs 71 → 72; changed "mask: 1 click on frame 40 applied ·
+face: mesh off on frames 100–102 · words: 3 words edited"; its `words.json` has the edits, its `mouth-guidance.json`
+marks 100–102 hidden; no `calls.jsonl`). In that child "Insert dialogue beats" put
+`0.8–6.4 s says: "Oh and I need you, a nd I miss you,"` / `7.9–8.1 s says: "and I'm"` under the prompt (not
+submitted). `GET …/subtitles.srt` → `attachment; filename="b96aaa69-subtitles.srt"`, three valid cues ending at
+00:00:08,125. `5af8e90d1bf34849b7e768935da65cf2` = hard-link copy of `3c54f295…` (has a draft final): the burn toggle
+was off by default ("No transcript yet…"); after Transcribe (vocals.wav: "And I need you, and I miss you, and I") it
+turned on → `final-preview-subtitled.mp4` in 1.5 s, previewed with "And I need you, and I miss you," at 3.2 s, audio
+packets identical (381), `final-preview.mp4` sha256 unchanged. Studio cards show Download links (folders as zip, mask.zip)
+and "Import my own…" on depth / mask / face / composite. Mask round trip and mismatched import: `docs/IMPORTS.md`
+(children `6f20c4d1543a468485988b4ba7894a1d`, `36536b28c76044c79109adf3f7e02896`; "imported" chips on card, header and
+Runs list). 380 px: `scrollWidth` 380 (words panel 284 px, Studio cards with imports open, finish step). Console: no
+messages. `85e5…` and `3c54…` sha256-identical before/after; the two copies only gained the additive files named above.

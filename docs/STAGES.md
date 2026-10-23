@@ -386,3 +386,16 @@ The independent reviewer's findings and what changed:
 - Branch children show their own `run.json.created` date. The wand's backward propagation says "the start of the
   clip". The review tab follows the best available preview unless the user chose one.
 - The cost gate has no legacy exception any more (§8).
+
+## 17. Words, subtitles, Import my own (Agent 4, timeline stage)
+
+- **Words** are not a stage: `words.json`, `mouth-guidance.json`, `subtitles.json` are non-stage artifacts (`CARRY` in
+  `branch.py` links them into children). `stages/words.py` transcribes (free local mlx-whisper in `.venv-words`, or the
+  paid ElevenLabs speech-to-text on fal: `costs.PRICES['words_fal']`, new pricing model `usd_per_started_minute`, cost
+  gate + `record_call` first) and caches by audio sha256 under `runs/_cache/words/`; `stages/subtitles.py` makes SRT and
+  the burn-in. `app.run_child` refreshes a child's `mouth-guidance.json` after its run. Details: `docs/WORDS.md`.
+- **Import tools** (`stages/imports.py`, all free, `imported = True` on the Tool and in `describe()`): `depth:
+  import_depth`, `mask: import_mask`, `mask: keep_parent`, `face: import_face`, `composite: import_control`
+  (`composite.BASE_OF['import_control'] = 'imported-control.mp4'`; `mode_for_chain` → `original`). `describe_chain`
+  appends ` · imported` and shows the file name only. `GET /jobs` / `GET /jobs/tree` summaries carry `imported: [stages]`.
+  Upload route, conform rules and the zip download: `docs/IMPORTS.md`.

@@ -21,7 +21,8 @@ page did still works; it is now split into readable files and has three depths (
 | `static/editlayer.js` | The `edits` client: pending edits (`GET/PUT/DELETE /jobs/{id}/edits`), undo/redo, save as one branch. |
 | `static/tracks.js` | One line per editor track (Mask, Face, Words); `static/track-placeholders.js` holds the placeholders until `track-mask.js` / `track-face.js` / `track-words.js` replace them. |
 | `static/track-face.js`, `static/meshedit.js` | The face mesh track (mesh off on a range, transform handles + keys, expression sliders, reset, the "Mesh edit" view) and the pure JS port of `stages/meshedit.py` it draws with; `static/face-connections.json` = MediaPipe's connection lists (exported once by `face_connections.py`). |
-| `static/draft.js` | Steps 03 and 04 (`mountDraft`, `mountFinal`): providers, saved references, the paid buttons with their estimate, manual import. |
+| `static/track-words.js` | The words track (Agent 4): Transcribe (free local Whisper, or fal with its estimate), word blocks (click, double-click to edit, drag edges), split / merge / add / delete, .srt / words.json / mouth-guidance.json downloads. |
+| `static/draft.js` | Steps 03 and 04 (`mountDraft`, `mountFinal`): providers, saved references, the paid buttons with their estimate, manual import; "Insert dialogue beats" (step 03) and the subtitles block (step 04: "Burn subtitles into final", off by default, .srt export). |
 | `static/stagecard.js` | One Studio card per stage (`mountStageCard`). |
 | `static/runhead.js` | The run header (`mountRunHead`): name, state chip, spent so far, parent, what changed, Add to Lab, Save as preset. |
 | `static/quick.js` | The Quick view (`renderQuick`) and `mountPanels` / `mountFlow` (the step 02–04 panels shared with Studio). |
@@ -131,6 +132,17 @@ release, applied to the frame or the range), ◀ Prev key / Next key ▶, Reset 
 a bar, expression frames ●; `[` `]` jump between them. No server calls beyond the edit-layer PUTs and two static GETs
 (`/runs/<id>/face-landmarks.json`, `/static/face-connections.json`).
 
+**Words track (Agent 4, `static/track-words.js`).** Select the Words lane: "Transcribe · free, runs locally" (or the fal
+engine "· about $0.03", confirm on that click) with a Singing mode checkbox; each word is a block (click = select and
+jump, double-click = edit its text, drag an edge = timing, snapped to frames, never over a neighbour, one undoable
+commit per drag); panel: the selected word's text and times, Split at playhead, Merge with next, Add word at playhead /
+in range, Delete, Prev / Next, Export subtitles (.srt), words.json, mouth-guidance.json. The current word is drawn as a
+caption on the picture while the track is selected. Step 03 has "Insert dialogue beats" (timed lines appended to the
+prompt textarea, editable; enabled when the run has words); step 04 has "Burn subtitles into final" (off by default,
+free, local; preview + download of the subtitled copy) and the .srt export. New calls: `GET /jobs/{id}/words`,
+`POST /jobs/{id}/words/transcribe`, `GET /jobs/{id}/words/beats`, `GET /jobs/{id}/subtitles.srt`, `GET/POST
+/jobs/{id}/subtitles`. Details: `docs/WORDS.md`.
+
 ## 5. Stage cards (Studio)
 
 `stagecard.js` → `mountStageCard(rack, stageDef, index)` where `stageDef` is one entry of `GET /stages` (`name`,
@@ -150,6 +162,11 @@ a bar, expression frames ●; `[` `]` jump between them. No server calls beyond 
   `confirm_cost=true`. Any param change resets the estimate. A 402 shows a notice with "Run anyway · about $x". After
   the branch the page navigates to the child (`?job=<child>&view=studio`) and polls it.
 - Fix button on a failed strict face stage: "Re-run with lenient gaps · free".
+- Download (Agent 4): one link per output of the report (`/runs/<id>/<file>`), folders as `GET /jobs/{id}/download/<folder>.zip`,
+  plus "Masks as PNGs (mask.zip)" on the mask card. "Import my own…" (depth, mask, face, composite): a file input with the
+  accepted formats and "Import · free" → `POST /jobs/{id}/import` → the page opens the new child; an "imported" chip marks a
+  stage whose tool is an import (the card then shows "Imported file: <name>" instead of the raw params). The run header
+  and the Runs rows show "imported · <stage>" chips. Details: `docs/IMPORTS.md`.
 
 ## 6. Endpoints per view
 
