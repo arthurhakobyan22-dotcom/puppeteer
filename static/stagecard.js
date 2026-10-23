@@ -1,7 +1,7 @@
 // One Studio card per stage: tool dropdown, on/off, params from the schema, output preview, health line, numbers,
 // and "Re-run from here" (estimate first; a paid re-run needs a second click on the button that shows the cost).
-import { api, plain } from './api.js';
-import { $, el, usd, spent, duration, ranges, shortId, setChip, showError, tpl } from './ui.js';
+import { api, plain, send } from './api.js';
+import { $, el, usd, spent, duration, ranges, shortId, setChip, showError, notice, tpl } from './ui.js';
 import { state, navigate } from './state.js';
 
 const PREVIEW = {
@@ -10,12 +10,55 @@ const PREVIEW = {
   prompt: [], generate: ['final-preview.mp4', 'seedance-result.mp4'], finish: ['hd/final-preview.mp4', 'final-preview.mp4'],
 };
 
+// Import my own (Agent 4): stages that accept a file made elsewhere, with the formats (POST /jobs/{id}/import).
+const IMPORT = {
+  depth: ['.mp4,.mov,.webm,.mkv,.m4v,.avi,video/*', 'A depth video, grayscale or coloured (.mp4, .mov, .webm). The earlier mask is kept.'],
+  mask: ['.mp4,.mov,.webm,.mkv,.m4v,.avi,.zip,video/*,application/zip', 'A black-and-white mask video, a .zip of PNG frames, or a video with transparency (ProRes 4444 / PNG in .mov, VP9 .webm with alpha).'],
+  face: ['.mp4,.mov,.webm,.mkv,.m4v,.avi,.json,video/*,application/json', 'An overlay video (black = keep the clip, anything else is drawn over it), or face landmarks .json in the face-landmarks.json schema.'],
+  composite: ['.mp4,.mov,.webm,.mkv,.m4v,.avi,video/*', 'A finished control video; the face mesh is switched off for it and it goes straight to review.'],
+};
+const ZIPPABLE = name => !name.includes('/');
+
+/** Download links: one per output file in the report, folders as a zip (GET /jobs/{id}/download/<folder>.zip). */
+export function downloadLinks(jobId, files, names) {
+  const out = [];
+  for (const name of names) {
+    if (files.has(name)) out.push(el('a', { href: '/runs/' + jobId + '/' + name, download: name.split('/').pop(), text: name + ' ↓' }));
+    else if (ZIPPABLE(name) && [...files].some(f => f.startsWith(name + '/'))) out.push(el('a', { href: '/jobs/' + jobId + '/download/' + name + '.zip', download: '', text: name + '/ (.zip) ↓' }));
+  }
+  return out;
+}
+
 export function mountStageCard(parent, stageDef, index) {
   const node = tpl('tpl-stage-card'); node.id = 'stage-' + stageDef.name; parent.append(node);
   const q = s => $(s, node);
   const toolSelect = q('[data-tool]'), paramsBox = q('[data-params]'), toggle = q('[data-toggle]'), onBox = q('[data-on]'), rerun = q('[data-rerun]');
   const costEl = q('[data-cost]'), fixes = q('[data-fixes]'), preview = q('[data-preview]'), description = q('[data-description]');
   const local = { tool: null, params: {}, touched: false, estimate: null, lastOn: null, initialised: false, chainTool: null, chainParams: {} };
+  const importedChip = el('span', { class: 'chip imported', text: 'imported', hidden: true, title: 'This stage uses a file you imported' }); q('[data-state]').after(importedChip);
+  const downloads = el('div', { class: 'downloads', 'data-downloads': true }); q('[data-numbers]').after(downloads);
+  let importBox = null, importBusy = false;
+  if (IMPORT[stageDef.name]) {
+    const [accept, hint] = IMPORT[stageDef.name];
+    const input = el('input', { type: 'file', accept, 'aria-label': 'File to import into ' + stageDef.label });
+    const go = el('button', { type: 'button', class: 'small', text: 'Import · free', disabled: true });
+    input.onchange = () => { go.disabled = importBusy || !input.files.length; };
+    const doImport = async confirm => {
+      const data = new FormData(); data.set('stage', stageDef.name); data.set('file', input.files[0]); if (confirm) data.set('confirm_cost', 'true');
+      const r = await send('/jobs/' + state.jobId + '/import', data);
+      navigate({ job: r.id, view: 'studio' });
+      notice('Imported "' + input.files[0].name + '" into a new version (this one). It is fitted to the clip; any change is listed as a warning on the ' + stageDef.label + ' card. The run you imported into stays as it was.', { kind: 'ok', key: 'import' });
+    };
+    go.onclick = async () => {
+      if (!input.files.length) return;
+      importBusy = true; go.disabled = true; go.textContent = 'Importing…';
+      try { await doImport(false); }
+      catch (e) { const p = plain(e); showError(e, { key: 'import-' + stageDef.name, actions: p.status === 402 ? [{ label: 'Import anyway · ' + usd(p.body.estimated_cost_usd), run: () => doImport(true) }] : [] }); }
+      finally { importBusy = false; go.textContent = 'Import · free'; go.disabled = !input.files.length; }
+    };
+    importBox = el('details', { class: 'import-own' }, el('summary', { text: 'Import my own…' }), el('span', { class: 'hint', text: hint + ' It is fitted to the clip (frame rate, length, size) and makes a new version; nothing is overwritten.' }), el('div', { class: 'row' }, input, go));
+    q('.controls').append(importBox);
+  }
   q('[data-index]').textContent = String(index + 1).padStart(2, '0'); q('[data-label]').textContent = stageDef.label;
   for (const t of stageDef.tools) toolSelect.append(el('option', { value: t.name, text: t.label + (t.paid ? ' · paid' : '') + (t.experimental ? ' · experimental' : '') }));
   const hasOff = stageDef.tools.some(t => t.name === 'off'); toggle.hidden = !hasOff;
@@ -27,6 +70,10 @@ export function mountStageCard(parent, stageDef, index) {
     const tool = toolOf(local.tool);
     description.textContent = tool ? tool.description : '';
     if (!tool) return;
+    if (tool.imported) {   // the file is chosen with "Import my own…"; its sha256 is never shown as a setting
+      paramsBox.append(el('p', { class: 'hint', text: local.params.name ? 'Imported file: ' + local.params.name : 'Choose the file with "Import my own…" below; this tool needs a file you import.' }));
+      return;
+    }
     for (const [name, spec] of Object.entries(tool.params || {})) {
       const value = local.params[name] !== undefined ? local.params[name] : spec.default;
       if (spec.type === 'bool') {
@@ -53,6 +100,7 @@ export function mountStageCard(parent, stageDef, index) {
 
   function settings() { return { stage: stageDef.name, tool: local.tool, params: local.params }; }
   function refreshRerun() {
+    const picked = toolOf(local.tool), busy = !!(state.job && state.job.state === 'running'); rerun.disabled = busy || !!(picked && picked.imported && !local.params.file);
     const est = local.estimate;
     if (!est) { rerun.textContent = local.touched ? 'Re-run from here with these settings' : 'Re-run from here'; rerun.classList.add('secondary'); return; }
     rerun.classList.remove('secondary');
@@ -138,6 +186,17 @@ export function mountStageCard(parent, stageDef, index) {
     const list = (report && report.warnings) || []; warnings.hidden = !list.length;
     for (const w of list) warnings.append(el('li', { text: w }));
     renderChecklists(report);
+    const tool = toolOf(entry.tool); importedChip.hidden = !(tool && tool.imported);
+    const names = report ? Object.keys(report.outputs || {}) : [];
+    const dkey = state.jobId + '|' + names.join(',') + '|' + names.map(n => (files.has(n) ? 1 : 0)).join('');
+    if (downloads.dataset.key !== dkey) {
+      downloads.dataset.key = dkey;
+      const links = downloadLinks(state.jobId, files, names);
+      if (stageDef.name === 'mask' && [...files].some(f => f.startsWith('clean-masks/'))) links.push(el('a', { href: '/jobs/' + state.jobId + '/download/mask.zip', download: '', text: 'Masks as PNGs (mask.zip) ↓' }));
+      if (stageDef.name === 'face' && files.has('face-landmarks.json') && !names.includes('face-landmarks.json')) links.push(el('a', { href: '/runs/' + state.jobId + '/face-landmarks.json', download: 'face-landmarks.json', text: 'face-landmarks.json ↓' }));
+      downloads.replaceChildren(...(links.length ? [el('span', { class: 'hint', text: 'Download' }), ...links] : []));
+    }
+    if (importBox) importBox.querySelector('button').disabled = importBusy || jobState === 'running' || !importBox.querySelector('input').files.length;
     const errorBox = q('[data-error]');
     if (report && report.error) { errorBox.hidden = false; errorBox.textContent = report.error.message + (report.error.fix ? ' ' + report.error.fix : ''); }
     else errorBox.hidden = true;
@@ -148,7 +207,7 @@ export function mountStageCard(parent, stageDef, index) {
     }
     if (!local.estimate) costEl.textContent = toolOf(local.tool) && toolOf(local.tool).paid ? 'This tool is paid; the estimate shows on the button before anything runs.' : '';
     renderPreview(files, report);
-    rerun.disabled = jobState === 'running';
+    rerun.disabled = jobState === 'running' || !!(toolOf(local.tool) && toolOf(local.tool).imported && !local.params.file);
   }
   return { node, update, stage: stageDef.name };
 }

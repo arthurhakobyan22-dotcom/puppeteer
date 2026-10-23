@@ -37,6 +37,7 @@ export function mountEditor(host, { tabs = [], onViewChosen } = {}) {
   const tabsBox = q('[data-tabs]'), stageView = q('[data-stage]'), caption = q('[data-caption]'), download = q('[data-download]');
   const transport = q('[data-transport]'), panelBox = q('[data-track-panel]'), saveBar = q('[data-savebar]');
   const overlay = el('canvas', { class: 'stage-overlay', 'aria-label': 'Overlay for the selected track' }); stageView.append(overlay);
+  const zipLink = el('a', { download: '', hidden: true, style: 'margin-left:10px', text: 'Masks as PNGs (.zip) ↓' });
 
   const listeners = {};
   const videos = new Map();   // src -> <video>, kept alive so switching views is instant and nothing is downloaded twice
@@ -101,6 +102,8 @@ export function mountEditor(host, { tabs = [], onViewChosen } = {}) {
     const file = view.download || layers[0].file; download.hidden = !file && !layers[0].src;
     download.href = file ? '/runs/' + data.jobId + '/' + file : layers[0].src; download.setAttribute('download', (file || layers[0].src || '').split('/').pop());
     download.textContent = 'Download ' + view.label.toLowerCase() + ' ↓';
+    const masks = /mask/i.test(view.id) && [...data.files].some(f => f.startsWith('clean-masks/'));   // the masks as PNG frames too (GET /jobs/{id}/download/mask.zip)
+    zipLink.hidden = !masks; zipLink.href = '/jobs/' + data.jobId + '/download/mask.zip'; download.after(zipLink);
     placeOverlay(); editor.emit('view', view.id);
   };
   function renderTabs() {

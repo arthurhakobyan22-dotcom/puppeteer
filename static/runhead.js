@@ -4,6 +4,12 @@ import { api } from './api.js';
 import { $, el, spent, when, modeLabel, runLabel, setChip, showError, notice, tpl, shortId } from './ui.js';
 import { state, navigate, setLabRuns, hrefFor } from './state.js';
 
+/** Stages of a chain whose tool is an "Import my own" tool (the registry marks them imported: true). */
+export function importedStages(chain) {
+  const reg = (state.registry && state.registry.stages) || [];
+  return Object.entries(chain || {}).filter(([stage, entry]) => { const s = reg.find(x => x.name === stage); const t = s && s.tools.find(x => x.name === (entry && entry.tool)); return !!(t && t.imported); }).map(([stage]) => stage);
+}
+
 export function mountRunHead(parent, { view }) {
   const node = tpl('tpl-run-head'); parent.append(node);
   const q = s => $(s, node);
@@ -31,7 +37,10 @@ export function mountRunHead(parent, { view }) {
     const parent = q('[data-parent]'), changed = q('[data-changed]');
     if (run.parent) { parent.hidden = false; parent.replaceChildren('Branched from ', el('a', { href: hrefFor({ job: run.parent, view }), 'data-nav': true, text: shortId(run.parent) + '…' })); }
     else parent.hidden = true;
-    if (run.changed) { changed.hidden = false; changed.replaceChildren(el('b', { text: 'What changed: ' }), run.changed); } else changed.hidden = true;
+    const imported = importedStages(run.chain);
+    if (run.changed) { changed.hidden = false; changed.replaceChildren(el('b', { text: 'What changed: ' }), run.changed, ...imported.map(stage => el('span', { class: 'chip imported', style: 'margin-left:6px', text: 'imported · ' + stage }))); }
+    else if (imported.length) { changed.hidden = false; changed.replaceChildren(...imported.map(stage => el('span', { class: 'chip imported', text: 'imported · ' + stage }))); }
+    else changed.hidden = true;
     q('[data-id]').textContent = id;
     actions.replaceChildren();
     if (view === 'quick') actions.append(el('a', { class: 'button small secondary', href: hrefFor({ job: id, view: 'studio' }), 'data-nav': true, text: 'Open in Studio' }));

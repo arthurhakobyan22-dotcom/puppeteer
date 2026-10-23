@@ -24,6 +24,7 @@ export async function renderRuns(container) {
     const branch = $('[data-branch]', node); branch.hidden = !depth;
     const link = $('[data-title]', node); link.textContent = runLabel(r) + suffix(r); link.href = hrefFor({ job: r.id, view: 'quick' });
     setChip($('[data-state]', node), r.state);
+    for (const stage of r.imported || []) $('[data-state]', node).after(el('span', { class: 'chip imported', style: 'margin-left:4px', text: 'imported · ' + stage }));
     $('[data-when]', node).textContent = when(r.created);
     $('[data-changed]', node).textContent = depth || r.changed ? 'What changed: ' + (r.changed || 'nothing recorded') : (r.status || '') + ' · ' + shortId(r.id) + '…';
     $('[data-spent]', node).textContent = 'Spent ' + spent(r.cost_usd_total);
