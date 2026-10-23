@@ -88,7 +88,7 @@ Each track key must be JSON-serialisable and small (no pixel data; pixel results
   Optionally `{rev, label, track, value}` replaces only `layer[track]`.
 - `POST /jobs/{id}/edits/undo` / `.../redo` → the new state (same shape as GET). Undo/redo across all tracks share
   one stack (Cmd+Z undoes the last edit whatever track it was on).
-- `DELETE /jobs/{id}/edits` → discards the session (folder removed). The UI asks first ("Discard N pending edits?").
+- `DELETE /jobs/{id}/edits` → discards the session (its files removed; `saved-*/` records of earlier saves stay — changed by Agent 1). The UI asks first ("Discard N pending edits?").
 - `POST /jobs/{id}/edits/save` `{confirm_cost?}` → **exactly one branch** for the whole session (2.3), then the session
   is closed (moved to `runs/_sessions/<id>/saved-<child id>/` for the record, or removed) and the response is the child
   job like `POST /jobs/{id}/branch`: `{state, id, parent, changed, estimated_cost_usd}`. Nothing pending → 400
@@ -329,3 +329,146 @@ Landmarks: `face-landmarks.json` (`frames[i].faces[0]` = 468/478 `{x, y}` normal
 - [ ] Undo/redo works across mask, mesh and word edits; "Save edits" creates exactly one branch; the parent is unchanged
 - [ ] No raw errors in the UI; no console errors; usable at 380px (timeline scrolls horizontally inside its panel, page itself doesn't)
 - [ ] Commit in logical commits on a new branch and push; tell me the restart command and the link to open the editor
+
+## §A1 notes (Agent 1: edit layer, branch `also=`, editor shell)
+
+### What exists now
+
+| piece | file | notes |
+|---|---|---|
+| Session store, undo/redo, save | `stages/editlayer.py` | `RUNS/_sessions/<id>/` only; `RUNS` is passed in by `app.py` at call time |
+| Track hook stubs | `stages/masktrack.py` (Agent 2 replaces), `stages/meshedit.py` (Agent 3), `stages/words.py` (Agent 4 extends) | imported by `stages/__init__.py`; a later `register_track('mask', …)` replaces the stub |
+| Multi-stage branch, CARRY | `stages/branch.py` | `branch(..., also=None)`, `also_chain()`, `CARRY` |
+| Routes | `app.py` | section "edit layer"; `start_branch()` now calls `run_child()`, which the save shares |
+| Client | `static/editlayer.js` | `edits` singleton |
+| Timeline + track registry | `static/timeline.js` | `registerTrack`, `tracks()`, `createTimeline()` |
+| Editor | `static/editor.js`, `tpl-editor` in `index.html`, CSS block "Timeline editor" in `app.css` | mounted by `review.js` into `[data-editor]` |
+| Track list | `static/tracks.js` (one line per track) + `static/track-placeholders.js` | see "Swapping a placeholder" |
+| Tests | `tests/test_editlayer.py` (9 tests) | suite: 194 passed |
+
+### Server API as implemented
+
+```python
+from stages import editlayer
+editlayer.register_track(name, hooks)     # hooks: an instance or a class (instantiated); same name replaces
+class editlayer.Track:                    # subclass it; every hook is optional
+    label = None        # name in `changed` / `summary` ('face' for the mesh track); defaults to the track name
+    empty = {}          # the track's value in an empty layer (words: None)
+    def count(self, value) -> int
+    def summary(self, value) -> list[str]
+    def check(self, value, session_dir) -> None | str | (message, fix)    # refusal → 400 {message, fix, track}
+    def change(self, value, parent_folder, session_dir) -> None | (stage, tool, params)
+    def materialize(self, value, child_folder, session_dir, parent_folder) -> None
+editlayer.note(runs_root, ident, line)    # one line in the session log.txt (previews, applies, hands passes)
+editlayer.session_dir(runs_root, ident)   # Path of RUNS/_sessions/<id>/ (put track files under a sub-folder, e.g. mask/)
+editlayer.layer_sha(value)                # canonical sha256 of any JSON value (use it in change() params)
+editlayer.load / view / put / step / discard / plan / save   # what the routes call
+```
+
+- `count`/`summary`/`check`/`change`/`materialize` get `value = layer[track]` (the track's `empty` when the stored
+  value is null and `empty` is not None). `materialize` runs **only for tracks with `count > 0`**, after `branch()`
+  and before the child runs. Two tracks asking for the same stage is a plain 400; merge such edits in one track.
+- Session `calls.jsonl`: write lines yourself in the `stages.calls` format (`{time, provider, endpoint, stage, tool,
+  cost_usd, ok}`); they are appended to the child's `calls.jsonl` on save, so the child's `cost_usd_total` includes
+  paid applies made while editing. Paid calls made while editing still need their own cost gate at the moment they run.
+- The session folder is **moved** to `_sessions/<id>/saved-<child id>/` on save, so the child must never reference
+  session files: copy what the tool needs into the child in `materialize()`.
+
+### Endpoints as implemented
+
+`GET /jobs/{id}/edits` (writes nothing; 404 for an unknown run) · `PUT /jobs/{id}/edits` JSON or form
+`{rev, label, layer}` or `{rev, label, track, value}` (form values are JSON strings) → the GET shape; missing `rev`
+→ 400; stale `rev` → 409 `{message, fix, rev}`; unknown track → 400; a layer over 2 MB of JSON → 413 ·
+`POST /jobs/{id}/edits/undo` and `/redo` (optional `rev` → 409 when stale; nothing to undo/redo → 400) ·
+`DELETE /jobs/{id}/edits` → the empty GET shape (removes the live session; `saved-*` records stay) ·
+`POST /jobs/{id}/edits/save {confirm_cost?}` → `{state, status, id, parent, changed, estimated_cost_usd}`; 400 "There are
+no edits to save." / a track's refusal (`track` in the body); 402 with `estimated_cost_usd` through `cost_gate()` when
+the re-run includes a paid stage; 409 when the session changed between planning and saving.
+
+Save details: the branch stage is the earliest `change()` stage, the others go in `also`; no change at all (words
+only, or tracks without a stage change) → `prompt` (nothing re-runs, the child is `done`, status "Ready · review the
+prepared input and create a draft"). The child's `run.json.changed` = the summaries line ("words: 2 words edited",
+tracks joined with " · "); `run.json.edits = {summary, layer_sha, stage, chain_changed, session_rev}` where
+`chain_changed` is the technical `branch()` line. `edit-layer.json` = `{version, run, child, saved, rev, layer_sha,
+summary, changed, stage, chain_changed, layer}`. `GET /jobs` shows `changed` as is for runs with `edits`. A failure
+while materializing removes the half-made child and keeps the session.
+
+### `branch(also=)` and CARRY
+
+`stages.branch(parent, stage, tool, params, runs_root=…, also={'face': {'tool': 'off', 'params': {}}})`: each `also`
+stage must come **after** `stage` (else ValueError); `changed` = the lines joined with " · " (e.g. `composite:
+depth_cutout → original · face: mediapipe_mesh (strict: false, pad: 1.8, max_gap: 6) → off`). Without `also` the
+child is the same as before (tested against the `8f6a192` version of `branch()` for four kinds of change). `CARRY =
+['words.json', 'mouth-guidance.json', 'subtitles.json']` are hard-linked from the parent when present; a writer calls
+`stages.fresh(path)` first (the words stub does).
+
+### Client API as implemented (`static/editlayer.js`)
+
+As in §2.4, plus: `fn(draft)` may **return** a new value (needed when the track's value is null); commits are queued
+in order, and a failed commit rolls back, drops the commits queued after it and reloads; `edits.saveActions[track] =
+problem => [{label, run}]` adds buttons to the notice when that track's `check()` refuses a save (Agent 2: "Apply
+now" / "Save without them"); `edits.discard()`; `edits.busy`; `edits.on('change', fn)` returns an unsubscribe function.
+
+### Editor and timeline as implemented
+
+- `registerTrack(def)` exactly as §3 plus optional `height` (px, default 40) and `markerColor`. `draw(lane, view)`:
+  `view = {pxPerFrame, frames, fps, scrollLeft, width, height, frame, range, dpr, ctx2d, x(frame), frameAt(x)}`;
+  `lane.canvas` is the lane's canvas, already sized to the **visible** width and cleared, `ctx2d` pre-scaled by `dpr`
+  (draw in CSS px; `x(f)` is the left edge of frame `f` in the visible box). The shell then draws the markers
+  (`markers(ctx)`) as small triangles. DOM children you add to a lane must carry `data-tl-item` if they handle their
+  own pointer events (otherwise a drag on them selects a range); position them in `draw()` with `view.x()` (it is
+  called on every scroll / zoom / frame change). `draw` gets no ctx: keep the last ctx from `mount`/`update`.
+- `canvas(ctx2d, box, frame)`: `box = {width, height, dpr}` in **device** pixels of the picture (normalized × width).
+  Called for every visible track, in order, inside `save()/restore()`.
+- `pointer`: the overlay only takes pointer events while a track with `pointer` is selected (otherwise the video's
+  native controls stay clickable); `pt = {x, y, frame}`, x/y 0–1 of the picture.
+- Editor API (`ctx.editor`, also `window.puppeteer.editor`): see the header of `static/editor.js` — `frame`, `frames`,
+  `fps`, `range`, `selected`, `seek`, `step`, `play`, `pause`, `toggle`, `setRange`, `select`, `redraw`, `addView`,
+  `setView`, `view`, `video` (base video of the current view), `layers`, `on(event)` (`frame`, `range`, `select`,
+  `view`, `zoom`, `update`), `pictureBox()`, `overlay`, `timeline`. `addView({id, label, layers: [{file}|{src}, {file,
+  style: {mixBlendMode: 'screen', opacity: '0.6'}}], caption?, download?, available?(ctx), order?})` — layers after the
+  first are stacked above the base, muted, pointer-events none, kept on the same time (also when loading late).
+- Frames and fps come from the prepared clip (`GET /jobs/{id}/mask/frame?i=0` headers), first guessed from the
+  input-doctor report or `face-tracking.json`, last resort the video duration × 24.
+- The base video keeps its native `controls` (volume, fullscreen, scrubbing; the editor follows `seeked`/`play`/`pause`
+  on it). Only the current view's base is audible.
+
+### Swapping a placeholder
+
+`static/tracks.js` has one line per track: replace `registerTrack(maskPlaceholder);` with `import './track-mask.js';`
+(Agent 2), the face line with `import './track-face.js';` (Agent 3), the words line with `import './track-words.js';`
+(Agent 4); the new file calls `registerTrack({id: 'mask', …})`. Keep the ids `mask`, `face`, `words` (the layer keys
+are `mask`, `mesh`, `words`: the face track commits to `'mesh'`). Server side, register your hooks in your own module
+(`stages/masktrack.py`, `stages/meshedit.py`, `stages/words.py`; keep the `register_track` call at import).
+
+### Gotchas for Agents 2–4
+
+- The placeholder mask/mesh hooks **refuse to save** pending edits ("… the mask track is not installed in this
+  version") so nothing is dropped silently; your hooks replace that.
+- The old wand (`static/wand.js`) appends its `.wand-overlay` to `editor.video.parentElement` (`.stage-view`) and
+  lines up exactly with the editor overlay (checked: both 838×480 at the same position). Its frame rounding now uses
+  the editor's convention (`floor(t·fps + 1e-3)`, seeks to the frame centre); nothing else in it changed.
+- Keys are handled on `document` in the capture phase and stop propagation (so a focused `<video>` does not also act
+  on Space/arrows); they are ignored in inputs, textareas, selects and contenteditable; Space on a button outside the
+  editor clicks that button.
+- `requestVideoFrameCallback` and `timeupdate` do not fire while the page is hidden; pausing re-syncs the frame.
+- The browser pane's screenshots sometimes show `seedance-input.mp4` as black although it renders (canvas readback
+  had content); not an app bug.
+- `review.js` still calls every `registerReviewTool` callback after each update with `ctx.video = editor.video`
+  (plus `ctx.editor`).
+
+### Verification (2026-10-23, port 8775, `PUPPETEER_OFFLINE=1`)
+
+`3d2b448ade9e42e8b7083ee35d31242b` = hard-link copy of `85e5…` (status/run.json copied, reconstructed). In Studio and
+Quick: video + Mask (area sparkline, red jump ticks), Face (tracked/filled/missing; 50–61 red) and Words lanes with one
+playhead; ← / → exactly one frame (counter and `video.currentTime` agree), Shift+→ 24 frames, "frame 52 / 195 · 2.17 s";
+zoom −/+ and Ctrl/Cmd+wheel from fit (4.3 px/frame) to 24; drag on the words lane → range 95–136, Esc clears; click on
+the ruler moves the playhead; view switch keeps the frame (also while playing); `[`/`]` on Face jump 10 → 50 → 10;
+Home/End; the old "Fix the mask" wand opens on the editor's frame, follows arrow steps and closes with controls back;
+a word added at the playhead, Cmd+Z / Shift+Cmd+Z undo and redo it; Discard asks first; **Save edits** created exactly
+one child `d8c05b5f888a4a07a129d80ff1aef98e` (runs 49 → 50; words-only → branch at prompt, done, `words.json` in the
+child, review pending) and the page navigated to it; every file of `3d2b…` and of `85e5…` sha256-identical before and
+after. At 380 px: `document.documentElement.scrollWidth` 380, the timeline scrolls inside its box (scrollWidth 1639 in
+a 250 px box). `/?view=runs` (child shows "What changed: words: 1 word edited"), `/?view=lab`, the Quick form and a
+Fast-mode run (`f5a3f11d…`, Face + Words lanes only) render; zero console messages. Session record left under
+`runs/_sessions/3d2b…/saved-d8c05b5f…/`.

@@ -8,7 +8,7 @@ page did still works; it is now split into readable files and has three depths (
 
 | file | what it holds |
 |---|---|
-| `static/index.html` | Markup only: the shell (header with the view switch, `#notices`, `#job-banner`, `#view`) and one `<template>` per panel: `tpl-quick`, `tpl-studio-new`, `tpl-run-head`, `tpl-stage-card`, `tpl-review`, `tpl-draft`, `tpl-final`, `tpl-lab`, `tpl-lab-tile`, `tpl-runs`, `tpl-run-row`. No inline script or style. |
+| `static/index.html` | Markup only: the shell (header with the view switch, `#notices`, `#job-banner`, `#view`) and one `<template>` per panel: `tpl-quick`, `tpl-studio-new`, `tpl-run-head`, `tpl-stage-card`, `tpl-review`, `tpl-editor`, `tpl-draft`, `tpl-final`, `tpl-lab`, `tpl-lab-tile`, `tpl-runs`, `tpl-run-row`. No inline script or style. |
 | `static/app.css` | The light theme (same fonts, colours and card look as before), works from 380 px up. |
 | `static/app.js` | Entry: loads the shared data (`/stages`, `/presets`, `/providers`, `/costs`), wires in-app navigation (`a[data-nav]`, `popstate`), renders the view for the URL. Exposes `window.puppeteer = {state, api, navigate, loadJob, registerReviewTool}`. |
 | `static/state.js` | The `state` object, URL parsing (`?job=`, `&view=`, `&runs=`, `&stage=`), `navigate()` / `render()`, the token + timer registry (see §3). |
@@ -16,6 +16,10 @@ page did still works; it is now split into readable files and has three depths (
 | `static/ui.js` | DOM helpers (`tpl`, `el`, `$`), formatting (`usd`, `spent`, `when`, `ranges`), chips, page notices (`notice`, `showError`), file-input wiring, `videoSeconds(file)`. |
 | `static/jobdata.js` | Loads and polls the job in the URL (`loadJob`, `poll`, `pollHD`), renders the job banner, `fixActions()` for failed jobs. |
 | `static/review.js` | Step 02, the review panel (`mountReview`) and `registerReviewTool` (the mask-wand hook), `trackingLine()`. |
+| `static/editor.js` | The timeline editor inside the review panel (`mountEditor`): view switch, stacked synced videos, overlay canvas, transport, keyboard, track panel, Save bar (`tpl-editor`). |
+| `static/timeline.js` | Track registry (`registerTrack`, `tracks`) and the timeline component (ruler, playhead, range, zoom, lanes, markers). |
+| `static/editlayer.js` | The `edits` client: pending edits (`GET/PUT/DELETE /jobs/{id}/edits`), undo/redo, save as one branch. |
+| `static/tracks.js` | One line per editor track (Mask, Face, Words); `static/track-placeholders.js` holds the placeholders until `track-mask.js` / `track-face.js` / `track-words.js` replace them. |
 | `static/draft.js` | Steps 03 and 04 (`mountDraft`, `mountFinal`): providers, saved references, the paid buttons with their estimate, manual import. |
 | `static/stagecard.js` | One Studio card per stage (`mountStageCard`). |
 | `static/runhead.js` | The run header (`mountRunHead`): name, state chip, spent so far, parent, what changed, Add to Lab, Save as preset. |
@@ -88,6 +92,20 @@ second `<script type="module">` to `index.html`. For a hosted (paid) wand tool, 
 estimate on the button first and send `confirm_cost=true` from that click; on a 402, `showError(e, {actions: [...]})`
 with a "Run anyway · about $x" action (see `costActions` in `draft.js`). A mask edit should be a branch at `mask`
 (`api.branch(id, {stage: 'mask', tool, params, confirm_cost})` then `navigate({job: child, view})`).
+
+### The timeline editor (stage 2, Agent 1)
+
+The viewer of the review panel is now the timeline editor (`static/editor.js`, mounted once into `[data-editor]`;
+contract and APIs in `docs/TIMELINE-SPEC.md` §3 and §A1). The view switch shows the `TABS` present (plus views added by
+tracks with `editor.addView`); every view keeps its `<video>` alive, so switching is instant and keeps the frame. Under
+the picture: the transport (−1 s, ◀ frame, play/pause, frame ▶, +1 s, "frame 52 / 195 · 2.17 s", zoom − + fit), the
+caption and the Download link of the current view, then the timeline (one playhead over the Mask / Face / Words lanes;
+drag = range, click = playhead, click a track name = its tools in the panel below), then the Save bar ("N pending
+edits · Undo · Redo · Discard · Save edits"). Keys: ← → frame, Shift+← → second, Space, Home/End, `[` `]` markers, Esc,
+Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z, Ctrl+Y. The review box, approval, audio downloads and `[data-review-tools]` are
+unchanged; `registerReviewTool` callbacks get `ctx.video` = the editor's base video (and `ctx.editor`). New endpoints
+used: `GET/PUT/DELETE /jobs/{id}/edits`, `POST /jobs/{id}/edits/undo|redo|save`, and `GET /jobs/{id}/mask/frame?i=0`
+(frame count / fps headers).
 
 ## 5. Stage cards (Studio)
 

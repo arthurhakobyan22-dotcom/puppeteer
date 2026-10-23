@@ -153,6 +153,16 @@ recorded. On a hit the outputs are hard-linked in, the report gets `cached_from:
   `depth-composite-silent.mp4` as well so the face tools find their base.
 - `stages.tree(runs_root, summaries)` returns the forest (`children` nested), newest first.
 - Branching a branch inherits the branch's params (`pad: 2.0` stays when `strict` is changed next).
+- `branch(..., also={later_stage: {tool, params}, …})` changes several stages in **one** child (each `also` stage must
+  come after `stage`); `changed` joins the lines with " · ". Without `also` the child is exactly as before.
+- `CARRY` (`words.json`, `mouth-guidance.json`, `subtitles.json`): non-stage artifacts hard-linked from the parent when
+  present; call `fresh()` before rewriting one in the child.
+- **Edit sessions** (`stages/editlayer.py`, timeline editor): pending manual edits of run `<id>` live in
+  `runs/_sessions/<id>/` (never in the run folder; `GET /jobs` and `tree` skip the folder). `POST /jobs/{id}/edits/save`
+  turns the whole session into exactly one branch at the earliest stage a track changes (a words-only session at
+  `prompt`), writes `edit-layer.json` and `run.json.edits` into the child, appends the session `log.txt` /
+  `calls.jsonl` to the child's, then runs the child like `/branch` (shared `run_child()` in `app.py`). Details:
+  `docs/TIMELINE-SPEC.md` §2 and §A1.
 
 ## 7. Offline switch and the calls log (`stages/calls.py`)
 
