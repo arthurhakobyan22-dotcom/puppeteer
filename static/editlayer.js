@@ -33,9 +33,39 @@ function adopt(body) {
 
 const base = () => '/jobs/' + edits.jobId + '/edits';
 
+// ---------------------------------------------------------------- other tabs (no 409 in normal use)
+// The server answers a stale rev with 409 (kept for API clients), and a failed request is logged by the browser. So the
+// page avoids sending one: every tab announces its new rev on a BroadcastChannel and the other tabs of the same run
+// re-read the layer at once; and after the tab was hidden or the window lost focus (another browser may have edited),
+// the next edit first GETs the rev and, when it moved, drops that edit with the same notice instead of PUTting it.
+// A commit made before such a refresh landed is dropped the same way (it was built on the old layer).
+const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('puppeteer-edits') : null;
+const announce = () => { try { if (channel && edits.jobId) channel.postMessage({ jobId: edits.jobId, rev: edits.rev }); } catch { /* best effort */ } };
+const OTHER_TAB = ['Your edits changed in another tab or window, so this edit was not kept.', 'The latest edits were reloaded; make the change again.'];
+function external(body) {   // adopt a layer someone else wrote; each commit built before it (edits.external moved) is dropped (see commit)
+  edits.external++; adopt(body); emit('change');
+}
+async function checkFirst() {   // true when the server rev moved since our last answer (the queue holds none of ours)
+  if (!edits.checkFirst) return false;
+  edits.checkFirst = false;
+  const body = await getJSON(base());
+  if ((body.rev || 0) === edits.rev) return false;
+  external(body); return true;
+}
+function refresh(jobId) {   // queued, so it never lands in the middle of our own PUT
+  edits.queue = edits.queue.then(async () => {
+    if (jobId !== edits.jobId) return;
+    try { const body = await getJSON(base()); if (jobId === edits.jobId && (body.rev || 0) !== edits.rev) external(body); }
+    catch { edits.checkFirst = true; }
+  });
+}
+if (channel) channel.onmessage = e => { const m = e.data || {}; if (m.jobId && m.jobId === edits.jobId && m.rev !== edits.rev) { edits.checkFirst = true; refresh(m.jobId); } };
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if (document.hidden) edits.checkFirst = true; else if (edits.jobId) refresh(edits.jobId); });
+if (typeof window !== 'undefined') window.addEventListener('blur', () => { edits.checkFirst = true; });
+
 export const edits = {
   jobId: null, rev: 0, layer: EMPTY(), pending: { total: 0 }, summary: [], canUndo: false, canRedo: false, undoLabel: '', redoLabel: '', stale: false,
-  loaded: false, busy: false, generation: 0, queue: Promise.resolve(),
+  loaded: false, busy: false, generation: 0, queue: Promise.resolve(), external: 0, checkFirst: false,
   saveActions: {},   // track -> (problem {message, fix, body}) => [{label, run}] shown when that track's check() refuses a save
   saveChecks: {},    // track -> () => null | {message, fix}: the same refusal answered in the page first (no 400 round trip; the server still checks)
 
@@ -60,10 +90,15 @@ export const edits = {
     catch (e) { showError(e, { key: 'edits' }); return Promise.resolve(edits); }
     edits.layer = { ...edits.layer, [track]: value };   // optimistic: tracks redraw at once
     emit('change');
-    const job = edits.jobId;
+    const job = edits.jobId, seen = edits.external;
     edits.queue = edits.queue.then(async () => {
       if (generation !== edits.generation || job !== edits.jobId) return;   // an earlier commit failed or the job changed: dropped
-      try { adopt(await send(base(), { rev: edits.rev, label, track, value }, { method: 'PUT' })); }
+      const stale = seen !== edits.external || await checkFirst().catch(() => false);
+      if (stale) {   // another tab wrote meanwhile: this edit was built on the old layer, so it is not sent (no 409, nothing overwritten)
+        notice(OTHER_TAB[0], { fix: OTHER_TAB[1], key: 'edits', kind: 'warn' });
+        emit('change'); return;
+      }
+      try { adopt(await send(base(), { rev: edits.rev, label, track, value }, { method: 'PUT' })); announce(); }
       catch (e) {
         edits.generation++;   // drop the commits queued after this one; they were built on the failed state
         const p = plain(e);
@@ -80,7 +115,9 @@ export const edits = {
   step(direction) {   // queued like commits, so a fast Cmd+Z Cmd+Z sends the second undo with the rev the first one returned (no 409)
     const run = async () => {
       if (!edits.jobId || (direction === 'undo' ? !edits.canUndo : !edits.canRedo)) return edits;
-      try { adopt(await send(base() + '/' + direction, { rev: edits.rev })); }
+      if (await checkFirst().catch(() => false)) { notice('Your edits changed in another tab or window, so nothing was ' + (direction === 'undo' ? 'undone' : 'redone') + '.', { fix: 'The latest edits were reloaded; ' + direction + ' again if you still want to.', key: 'edits', kind: 'warn' }); return edits; }
+      if (!edits.jobId || (direction === 'undo' ? !edits.canUndo : !edits.canRedo)) return edits;
+      try { adopt(await send(base() + '/' + direction, { rev: edits.rev })); announce(); }
       catch (e) { const p = plain(e); showError(e, { key: 'edits' }); if (p.status === 409) await edits.load(); return edits; }
       emit('change');
       return edits;
@@ -93,7 +130,7 @@ export const edits = {
 
   async discard() {
     await edits.queue;
-    try { adopt(await send(base(), undefined, { method: 'DELETE' })); edits.generation++; }
+    try { adopt(await send(base(), undefined, { method: 'DELETE' })); edits.generation++; announce(); }
     catch (e) { showError(e, { key: 'edits' }); }
     emit('change');
     return edits;
@@ -109,7 +146,7 @@ export const edits = {
     edits.busy = true; emit('change');
     try {
       const r = await send(base() + '/save', confirm ? { confirm_cost: 'true' } : {});
-      edits.busy = false;
+      edits.busy = false; announce();   // the session is closed: other tabs on this run re-read an empty layer
       navigate({ job: r.id, view: state.view === 'studio' ? 'studio' : 'quick' });   // render() clears the notices, so the note comes after
       notice('Your edits were saved as a new version (this one). The run you edited stays as it was; review this version before creating a draft.', { kind: 'ok', key: 'edits' });
       return r;

@@ -87,7 +87,7 @@ export function createTimeline(host, editor) {
       if (!row) {
         const canvas = el('canvas', { class: 'tl-lane-canvas' });
         const lane = el('div', { class: 'tl-lane', dataset: { track: t.id }, style: `height:${t.height}px` }, canvas); lane.canvas = canvas;
-        const label = el('button', { type: 'button', class: 'tl-label', dataset: { track: t.id }, style: `height:${t.height}px`, title: 'Select the ' + t.label + ' track (shows its tools below)', text: t.label, onclick: () => editor.select(editor.selected === t.id ? null : t.id) });
+        const label = el('button', { type: 'button', class: 'tl-label', dataset: { track: t.id }, style: `height:${t.height}px`, title: 'Select the ' + t.label + ' track (shows its tools below)', 'aria-label': t.label + ' track', text: t.label, onclick: () => editor.select(editor.selected === t.id ? null : t.id) });
         row = { track: t, label, lane, canvas, shown: false, mounted: false }; rows.set(t.id, row);
       }
       row.shown = shown; row.label.hidden = !shown; row.lane.hidden = !shown;

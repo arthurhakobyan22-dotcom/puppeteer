@@ -30,6 +30,14 @@ export function el(tag, attrs = {}, ...children) {
   return node;
 }
 
+/** The accessible name of a tool button: its visible label (arrows and other glyphs dropped), so a screen reader and
+ *  voice control say what the eye reads; the long `title` stays as the tooltip / description. A label that is only a
+ *  symbol ("−", "+") takes the first clause of the title instead ("Zoom out"). */
+export function ariaFor(text, title = '') {
+  const words = String(text || '').replace(/[◀▶❚◆●▨↓→←·…]/g, ' ').replace(/\s+/g, ' ').trim();
+  return /[A-Za-z0-9]{2,}/.test(words) ? words : String(title || text || '').split(' (')[0].trim();
+}
+
 export const usd = x => { const n = Number(x || 0); return n < 0.005 ? 'free' : 'about $' + n.toFixed(2); };
 export const spent = x => '$' + Number(x || 0).toFixed(2);
 export const when = iso => { if (!iso) return ''; try { return new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }); } catch { return String(iso); } };
@@ -50,6 +58,13 @@ export function setChip(node, state, text) {
 }
 
 // ---------------------------------------------------------------- notices
+// #notices is a fixed toast stack at the bottom of the viewport (app.css), so a notice raised from anywhere (the
+// editor's Save bar at the bottom of a long page, a track tool, an upload) is visible where the user is. Errors and
+// notices with action buttons stay until dismissed (×, Esc while focused, or an action); "ok" notices fade after
+// 10 s and plain warnings after 16 s, paused while hovered or focused. At most MAX_NOTICES show; the oldest goes.
+
+const MAX_NOTICES = 4;
+const LIFETIME = { ok: 10000, warn: 16000 };
 
 export function clearNotices() { const box = $('#notices'); if (box) box.replaceChildren(); }
 
@@ -58,11 +73,27 @@ export function notice(message, { fix = '', kind = 'error', actions = [], key = 
   const box = $('#notices');
   if (!box) return null;
   if (key) $$('[data-key]', box).filter(n => n.dataset.key === key).forEach(n => n.remove());
+  let timer = 0;
+  const close = () => { clearTimeout(timer); node.remove(); };
   const node = el('div', { class: 'notice ' + kind, role: kind === 'error' ? 'alert' : 'status', dataset: key ? { key } : {} },
     el('div', { class: 'body' }, el('span', { class: 'wrap', text: message }), fix ? el('span', { class: 'fix', text: fix }) : null,
-      actions.length ? el('div', { class: 'actions-inline' }, actions.map(a => el('button', { type: 'button', class: 'small ' + (a.secondary ? 'secondary' : ''), onclick: async () => { try { await a.run(); node.remove(); } catch (e) { showError(e); } }, text: a.label }))) : null),
-    el('button', { type: 'button', class: 'close', 'aria-label': 'Dismiss', onclick: () => node.remove(), text: '×' }));
-  box.prepend(node);
+      actions.length ? el('div', { class: 'actions-inline' }, actions.map(a => el('button', { type: 'button', class: 'small ' + (a.secondary ? 'secondary' : ''), onclick: e => runAction(a, e.currentTarget), text: a.label }))) : null),
+    el('button', { type: 'button', class: 'close', 'aria-label': 'Dismiss', title: 'Dismiss', onclick: close, text: '×' }));
+  async function runAction(a, button) {   // the notice stays (buttons disabled, "…") while the action runs, so a slow Apply shows it is working
+    const buttons = $$('.actions-inline button', node); buttons.forEach(b => { b.disabled = true; }); button.textContent = a.label + '…';
+    try { await a.run(); close(); }
+    catch (e) { buttons.forEach(b => { b.disabled = false; }); button.textContent = a.label; showError(e); }
+  }
+  node.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
+  const life = !actions.length && LIFETIME[kind];
+  if (life) {
+    const arm = () => { clearTimeout(timer); timer = setTimeout(() => { if (!node.matches(':hover') && !node.contains(document.activeElement)) node.remove(); else arm(); }, life); };
+    node.addEventListener('mouseenter', () => clearTimeout(timer)); node.addEventListener('mouseleave', arm);
+    node.addEventListener('focusin', () => clearTimeout(timer)); node.addEventListener('focusout', arm);
+    arm();
+  }
+  box.append(node);   // newest at the bottom, nearest the user's eye in a bottom stack
+  const all = [...box.children]; for (const old of all.slice(0, Math.max(0, all.length - MAX_NOTICES))) old.remove();
   return node;
 }
 

@@ -10,13 +10,13 @@
 //   editor.frame, editor.frames, editor.fps, editor.range ({from, to} inclusive or null), editor.selected (track id)
 //   editor.seek(frame), editor.step(n), editor.play(), editor.pause(), editor.toggle()
 //   editor.setRange(range | null), editor.select(trackId | null), editor.redraw() (lanes + overlay)
-//   editor.addView({id, label, layers: [{file | src, style?}], caption?, download?, available?(ctx), order?}) — a view
+//   editor.addView({id, label, layers: [{file | src, style?}], caption?, download?, downloadLabel?, available?(ctx), order?}) — a view
 //     whose first layer is the base video and the others are stacked over it (e.g. Tint = original + mask video with a
 //     CSS blend style); editor.setView(id); editor.view (id); editor.video (the base <video> of the current view)
 //   editor.on(event, fn) — 'frame', 'range', 'select', 'view', 'zoom', 'update'; editor.ctx() — the track ctx
 //   editor.overlay (the <canvas>), editor.pictureBox() — {left, top, width, height} of the picture inside the stage
 import { api } from './api.js';
-import { $, $$, el, showError, tpl } from './ui.js';
+import { $, $$, el, ariaFor, showError, tpl } from './ui.js';
 import { state } from './state.js';
 import { edits } from './editlayer.js';
 import { createTimeline, tracks } from './timeline.js';
@@ -101,14 +101,21 @@ export function mountEditor(host, { tabs = [], onViewChosen } = {}) {
     caption.textContent = view.caption || view.label;
     const file = view.download || layers[0].file; download.hidden = !file && !layers[0].src;
     download.href = file ? '/runs/' + data.jobId + '/' + file : layers[0].src; download.setAttribute('download', (file || layers[0].src || '').split('/').pop());
-    download.textContent = 'Download ' + view.label.toLowerCase() + ' ↓';
+    download.textContent = (view.downloadLabel || 'Download ' + view.label.toLowerCase()) + ' ↓';   // a stacked view names what the file really is
     const masks = /mask/i.test(view.id) && [...data.files].some(f => f.startsWith('clean-masks/'));   // the masks as PNG frames too (GET /jobs/{id}/download/mask.zip)
     zipLink.hidden = !masks; zipLink.href = '/jobs/' + data.jobId + '/download/mask.zip'; download.after(zipLink);
     placeOverlay(); editor.emit('view', view.id);
   };
+  function preloadViews(views) {   // every view's videos exist (preload=auto, hidden) so a switch is instant; ones no view uses any more go
+    if (!data.jobId) return;
+    const needed = new Set(views.flatMap(v => v.layers.map(srcOf)));
+    for (const [src, v] of videos) if (!needed.has(src) && !(editor.layers || []).includes(v)) { v.pause(); v.removeAttribute('src'); v.load(); v.remove(); videos.delete(src); }
+    for (const src of needed) videoFor(src);
+  }
   function renderTabs() {
-    const views = allViews(); const key = views.map(v => v.id).join('|');
+    const views = allViews(); const key = views.map(v => v.id + ':' + v.layers.map(srcOf).join('+')).join('|');
     if (tabsBox.dataset.key === key) return;
+    preloadViews(views);
     tabsBox.dataset.key = key; tabsBox.replaceChildren();
     for (const v of views) tabsBox.append(el('button', { type: 'button', dataset: { view: v.id, file: v.layers[0].file || '' }, text: v.label, onclick: () => editor.setView(v.id, { chosen: true }) }));
     for (const b of $$('button', tabsBox)) b.classList.toggle('active', b.dataset.view === editor.view);
@@ -238,7 +245,7 @@ export function mountEditor(host, { tabs = [], onViewChosen } = {}) {
   overlay.addEventListener('contextmenu', e => { if (overlay.style.pointerEvents === 'auto') e.preventDefault(); });
 
   // ---------------------------------------------------------------- transport, counter, Save bar
-  const btn = (text, title, onclick, cls = 'small secondary') => el('button', { type: 'button', class: cls, text, title, onclick });
+  const btn = (text, title, onclick, cls = 'small secondary') => el('button', { type: 'button', class: cls, text, title, 'aria-label': ariaFor(text, title), onclick });
   const playButton = btn('▶ Play', 'Play / pause (Space)', () => editor.toggle(), 'small');
   const counter = el('span', { class: 'tr-counter mono', 'aria-live': 'off' });
   const zoomOut = btn('−', 'Zoom out (Ctrl/Cmd + wheel over the timeline)', () => tl.zoom(1 / 1.6)), zoomIn = btn('+', 'Zoom in (Ctrl/Cmd + wheel over the timeline)', () => tl.zoom(1.6));
@@ -253,7 +260,7 @@ export function mountEditor(host, { tabs = [], onViewChosen } = {}) {
     counter.textContent = `frame ${editor.frame} / ${editor.frames} · ${(editor.frame / editor.fps).toFixed(2)} s` + (editor.range ? `  ·  range ${editor.range.from}–${editor.range.to} (${editor.range.to - editor.range.from + 1} frames, Esc clears)` : '');
   }
   function renderTransport() {
-    playButton.textContent = editor.playing ? '❚❚ Pause' : '▶ Play';
+    playButton.textContent = editor.playing ? '❚❚ Pause' : '▶ Play'; playButton.setAttribute('aria-label', editor.playing ? 'Pause' : 'Play');
     zoomIn.disabled = !tl.canZoomIn(); zoomOut.disabled = !tl.canZoomOut(); zoomFit.disabled = tl.fit;
     renderCounter();
   }

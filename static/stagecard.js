@@ -60,7 +60,23 @@ export function mountStageCard(parent, stageDef, index) {
     q('.controls').append(importBox);
   }
   q('[data-index]').textContent = String(index + 1).padStart(2, '0'); q('[data-label]').textContent = stageDef.label;
-  for (const t of stageDef.tools) toolSelect.append(el('option', { value: t.name, text: t.label + (t.paid ? ' · paid' : '') + (t.experimental ? ' · experimental' : '') }));
+  for (const t of stageDef.tools) toolSelect.append(el('option', { value: t.name, dataset: { needs: t.needs || '' }, text: t.label + (t.paid ? ' · paid' : '') + (t.experimental ? ' · experimental' : '') }));
+  // Tools a plain re-run cannot feed (POST /branch refuses them with a plain 400): 'edits' = saved timeline edits under
+  // edit-layer/ (made by "Save edits"), 'import' = a file chosen with "Import my own…". Shown, labelled, but disabled
+  // unless this run already has what they need (a re-run of an edited / imported run is fine).
+  const NEEDS = { edits: ' · from "Save edits" only', import: ' · use "Import my own…"' };
+  function canRun(t, files, entry) {
+    if (!t || !t.needs) return true;
+    if (t.needs === 'import') return entry.tool === t.name && /^[0-9a-f]{64}$/.test(String((entry.params || {}).file || ''));
+    return (t.inputs || []).filter(n => n.startsWith('edit-layer/')).every(n => files.has(n) || [...files].some(f => f.startsWith(n + '/')));
+  }
+  function gateOptions(files, entry) {
+    for (const option of toolSelect.options) {
+      const t = toolOf(option.value); const ok = canRun(t, files, entry);
+      option.disabled = !ok && option.value !== toolSelect.value;
+      option.textContent = t.label + (t.paid ? ' · paid' : '') + (t.experimental ? ' · experimental' : '') + (ok ? '' : NEEDS[t.needs] || '');
+    }
+  }
   const hasOff = stageDef.tools.some(t => t.name === 'off'); toggle.hidden = !hasOff;
   const toolOf = name => stageDef.tools.find(t => t.name === name);
   const firstOn = () => (stageDef.tools.find(t => t.name !== 'off') || stageDef.tools[0]).name;
@@ -70,6 +86,11 @@ export function mountStageCard(parent, stageDef, index) {
     const tool = toolOf(local.tool);
     description.textContent = tool ? tool.description : '';
     if (!tool) return;
+    const entry = ((state.run && state.run.run && state.run.run.chain) || {})[stageDef.name] || {};
+    if (tool.needs === 'edits' && !canRun(tool, state.files || new Set(), entry)) {
+      paramsBox.append(el('p', { class: 'hint', text: 'This tool runs from "Save edits" in the editor (review step 02): make the change on the timeline and save it. A plain re-run has nothing to feed it.' }));
+      return;
+    }
     if (tool.imported) {   // the file is chosen with "Import my own…"; its sha256 is never shown as a setting
       paramsBox.append(el('p', { class: 'hint', text: local.params.name ? 'Imported file: ' + local.params.name : 'Choose the file with "Import my own…" below; this tool needs a file you import.' }));
       return;
@@ -98,9 +119,14 @@ export function mountStageCard(parent, stageDef, index) {
   toolSelect.onchange = () => chooseTool(toolSelect.value);
   onBox.onchange = () => chooseTool(onBox.checked ? (local.lastOn || firstOn()) : 'off');
 
+  function blocked() {   // the picked tool needs saved edits / an import this run does not have
+    const picked = toolOf(local.tool); if (!picked || !picked.needs) return false;
+    if (picked.imported) return !local.params.file;
+    return !canRun(picked, state.files || new Set(), ((state.run && state.run.run && state.run.run.chain) || {})[stageDef.name] || {});
+  }
   function settings() { return { stage: stageDef.name, tool: local.tool, params: local.params }; }
   function refreshRerun() {
-    const picked = toolOf(local.tool), busy = !!(state.job && state.job.state === 'running'); rerun.disabled = busy || !!(picked && picked.imported && !local.params.file);
+    const picked = toolOf(local.tool), busy = !!(state.job && state.job.state === 'running'); rerun.disabled = busy || blocked();
     const est = local.estimate;
     if (!est) { rerun.textContent = local.touched ? 'Re-run from here with these settings' : 'Re-run from here'; rerun.classList.add('secondary'); return; }
     rerun.classList.remove('secondary');
@@ -147,11 +173,12 @@ export function mountStageCard(parent, stageDef, index) {
       return;
     }
     if (!file) { if (preview.dataset.file !== '') { preview.dataset.file = ''; preview.replaceChildren(el('div', { class: 'empty', text: 'No output to preview for this stage.' })); } return; }
-    if (preview.dataset.file === file) return;
-    preview.dataset.file = file;
+    const listed = Object.keys((report && report.outputs) || {}).includes(file);   // the Download row below already links it
+    if (preview.dataset.file === file + (listed ? '|listed' : '')) return;
+    preview.dataset.file = file + (listed ? '|listed' : '');
     const url = base + file;
     const media = /\.(jpg|jpeg|png)$/i.test(file) ? el('img', { src: url, alt: file }) : /\.(wav|mp3)$/i.test(file) ? el('audio', { src: url, controls: true }) : el('video', { src: url, controls: true, playsinline: true, preload: 'metadata' });
-    preview.replaceChildren(media, el('a', { class: 'hint', href: url, download: file.split('/').pop(), text: file + ' ↓' }));
+    preview.replaceChildren(media, ...(listed ? [] : [el('a', { class: 'hint', href: url, download: file.split('/').pop(), text: file + ' ↓' })]));
   }
 
   function update({ active = false } = {}) {
@@ -207,7 +234,8 @@ export function mountStageCard(parent, stageDef, index) {
     }
     if (!local.estimate) costEl.textContent = toolOf(local.tool) && toolOf(local.tool).paid ? 'This tool is paid; the estimate shows on the button before anything runs.' : '';
     renderPreview(files, report);
-    rerun.disabled = jobState === 'running' || !!(toolOf(local.tool) && toolOf(local.tool).imported && !local.params.file);
+    gateOptions(files, entry);
+    rerun.disabled = jobState === 'running' || blocked();
   }
   return { node, update, stage: stageDef.name };
 }

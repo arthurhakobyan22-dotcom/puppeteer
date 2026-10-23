@@ -121,9 +121,9 @@ async function apply(w, confirm) {
   w.busy = true; renderToolbar(w);
   try {
     const r = await send('/jobs/' + w.jobId + '/mask/apply', body);
-    notice('Mask fix started as a new branch run; the review opens there once the composite is rebuilt.', { kind: 'ok', key: 'wand' });
     close(w);
-    navigate({ job: r.id, view: state.view === 'studio' ? 'studio' : 'quick' });
+    navigate({ job: r.id, view: state.view === 'studio' ? 'studio' : 'quick' });   // render() clears the notices, so the note comes after
+    notice('Mask fix started as a new branch run; the review opens there once the composite is rebuilt.', { kind: 'ok', key: 'wand' });
   } catch (e) {
     const p = plain(e);
     showError(e, { key: 'wand', actions: p.status === 402 ? [{ label: 'Run anyway · ' + usd(p.body.estimated_cost_usd), run: () => apply(w, true) }] : [] });
@@ -247,11 +247,28 @@ function mount(box, ctx) {
       el('span', { class: 'hint', 'data-wand-hint': true, text: 'Pause the video on a frame, then click + on a missed region or − on spill. The fix is propagated through the clip and becomes a new branch run; this run stays as it is.' })),
     el('div', { class: 'wand-bar', 'data-wand-bar': true, hidden: true }));
   box.append(node);
-  $('[data-wand-open]', node).onclick = () => { if (wand.open) close(wand); else open(wand, ctx.video); };
+  $('[data-wand-open]', node).onclick = () => {
+    if (wand.open) { close(wand); return; }
+    const ed = ctx.editor;   // the wand works on the plain picture: leave a track's tools / the Mesh edit view first
+    if (ed && ed.selected) ed.select(null);
+    if (ed && ed.view === 'mesh-edit') ed.setView('composite.mp4');
+    open(wand, ed && ed.video ? ed.video : ctx.video);
+  };
   return node;
 }
 
+// The classic wand lays its frame image over the editor's picture; a timeline track (its own overlay and handles) or
+// the Mesh edit view must never sit under it, so selecting a track or switching to that view closes the wand.
+const hooked = new WeakSet();
+function hookEditor(editor) {
+  if (!editor || hooked.has(editor)) return;
+  hooked.add(editor);
+  editor.on('select', id => { if (id && wand && wand.open) close(wand); });
+  editor.on('view', id => { if (id === 'mesh-edit' && wand && wand.open) close(wand); });
+}
+
 registerReviewTool((box, ctx) => {
+  hookEditor(ctx.editor);
   const files = ctx.files || new Set();
   const depthRun = files.has('mask.mp4') && ctx.mode !== 'face_mesh' && files.has('original.mp4');
   const running = state.job && state.job.state === 'running';

@@ -9,7 +9,7 @@
 // baked mesh (depth composite, or the original in Fast mode) so only the live edited mesh is on screen; selecting the
 // track switches to it, leaving the track switches back.
 import { getJSON } from './api.js';
-import { el, showError } from './ui.js';
+import { el, ariaFor, showError } from './ui.js';
 import { registerTrack } from './timeline.js';
 import { EXPR, RANGES, IDENTITY, normalize, transformAt, editFrame, editPoints, centroid, offSet, sortedKeys, exprRuns, mergeRanges, subtractRange, isIdentity } from './meshedit.js';
 
@@ -92,7 +92,7 @@ function reset(ctx, t, what) {
 // ---------------------------------------------------------------- the Mesh edit view (base clip without the baked mesh)
 function syncView(ctx) {
   const file = baseFile(ctx);
-  ctx.editor.addView({ id: VIEW, label: 'Mesh edit', order: 15, layers: [{ file }], download: file, available: c => c.files.has('face-landmarks.json') && c.files.has(baseFile(c)),
+  ctx.editor.addView({ id: VIEW, label: 'Mesh edit', order: 15, layers: [{ file }], download: file, downloadLabel: file === 'original.mp4' ? 'Download the original (no mesh)' : 'Download the depth composite (no mesh)', available: c => c.files.has('face-landmarks.json') && c.files.has(baseFile(c)),
     caption: (file === 'original.mp4' ? 'Original frames' : 'Depth composite') + ' without the baked mesh · the edited mesh is drawn live on top' });
 }
 function onSelect(id) {
@@ -103,12 +103,12 @@ function onSelect(id) {
 }
 
 // ---------------------------------------------------------------- panel
-const button = (text, title, onclick, cls = 'small secondary', disabled = false) => el('button', { type: 'button', class: cls, text, title, onclick, disabled });
+const button = (text, title, onclick, cls = 'small secondary', disabled = false) => el('button', { type: 'button', class: cls, text, title, 'aria-label': ariaFor(text, title), onclick, disabled });
 function render() {
   const ctx = st.ctx, box = st.panel; if (!ctx || !box) return;
   const ed = ctx.editor, f = ed.frame, can = editable(ctx), n = norm(ctx), t = target(ctx), off = offSet(n.off), ks = sortedKeys(n.keys);
   const face = can ? faceAt(ctx, f, n) : null, key = n.keys.get(f), cur = transformAt(n.keys, f) || { ...IDENTITY };
-  const where = !can ? '' : off.has(f) ? 'Mesh off on this frame (the base clip only).' : !face || !face.points ? `No face on frame ${f} (${(frames()[f] || {}).status || 'missing'}); nothing to move here.` :
+  const where = !can ? '' : off.has(f) ? 'Mesh off on this frame (the base clip only).' + (key ? ` ◆ Transform key on frame ${f} (it still blends into the frames around it).` : '') : !face || !face.points ? `No face on frame ${f} (${(frames()[f] || {}).status || 'missing'}), so there are no handles here. ` + (key ? `◆ Transform key on frame ${f}: it blends into the tracked frames around it.` : 'You can still place a key here with the fields or "Set key here"; it blends into the tracked frames around it.') :
     key ? `◆ Transform key on frame ${f}.` : transformAt(n.keys, f) ? `Blended between keys ${ks.filter(k => k < f).pop()} and ${ks.find(k => k > f)} (ease-in-out).` : 'No correction on this frame.';
   const prevKey = [...ks].reverse().find(k => k < f), nextKey = ks.find(k => k > f);
   const help = el('p', { class: 'hint', text: !ctx.files.has('face-landmarks.json') ? 'This run has no face landmarks, so there is no mesh to edit.' : st.base && st.base.failed ? 'The face landmarks could not be loaded.' : !st.base ? 'Loading the face landmarks…' : running(ctx) ? 'The run is still preparing; mesh edits open when it finishes.' :
@@ -119,12 +119,13 @@ function render() {
     button('Mesh on', 'Draw the mesh again on ' + t.text, () => meshOff(ctx, true), 'small secondary', !can || ![...Array(t.to - t.from + 1)].some((_, i) => off.has(t.from + i))),
     n.off.length ? el('span', { class: 'hint', text: 'off: ' + n.off.map(([a, b]) => (a === b ? a : a + '–' + b)).join(', ') }) : null);
   const field = (k, label, step, title) => {
-    const i = el('input', { type: 'number', step: String(step), 'aria-label': label, title, class: 'ft-num', style: 'width:76px;padding:5px 6px', disabled: !can || !face || !face.points });
+    const i = el('input', { type: 'number', step: String(step), 'aria-label': label, title, class: 'ft-num', style: 'width:76px;padding:5px 6px', disabled: !can });   // any frame, faceless too: a key there blends into its tracked neighbours
     i.value = String(k === 'scale' ? round(cur.scale, 3) : k === 'rot' ? round(cur.rot, 1) : round(cur[k], 4));
     i.onchange = () => { const v = Number(i.value); if (!Number.isFinite(v)) return; setKey(ctx, f, { ...cur, [k]: v }, `Set ${label} on frame ${f}`); };
     return el('label', { class: 'wand-inline' }, label + ' ', i);
   };
-  const tRow = el('div', { class: 'mt-row ft-transform' }, field('dx', 'dx', 0.005, 'Shift right, in frame widths'), field('dy', 'dy', 0.005, 'Shift down, in frame heights'), field('scale', 'scale', 0.01, 'Size factor'), field('rot', 'rot °', 0.5, 'Degrees, clockwise'));
+  const tRow = el('div', { class: 'mt-row ft-transform' }, field('dx', 'dx', 0.005, 'Shift right, in frame widths'), field('dy', 'dy', 0.005, 'Shift down, in frame heights'), field('scale', 'scale', 0.01, 'Size factor'), field('rot', 'rot °', 0.5, 'Degrees, clockwise'),
+    button('Set key here', key ? `Frame ${f} already has a key; change the fields to edit it` : `Place a transform key on frame ${f} with the values shown (the current blend, or no correction), so later changes start from it`, () => setKey(ctx, f, cur, `Set a transform key on frame ${f}`), 'small secondary', !can || !!key));
   const sliders = el('div', { class: 'ft-sliders' }, SLIDERS.map(([name, label]) => {
     const [lo, hi] = RANGES[name], e = n.expr.get(f) || {}, v = st.exprDraft && st.exprDraft.name === name ? st.exprDraft.value : e[name] || 0;
     const out = el('output', { class: 'mono', text: v.toFixed(2) });

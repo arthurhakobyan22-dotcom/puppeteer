@@ -8,7 +8,7 @@
 // a neighbour, at least one frame; one commit per drag). "Transcribe" runs the free local Whisper (or the paid fal
 // fallback with its estimate on the button) through POST /jobs/{id}/words/transcribe.
 import { api, getJSON, send, plain } from './api.js';
-import { el, notice, showError, usd } from './ui.js';
+import { el, ariaFor, notice, showError, usd } from './ui.js';
 import { registerTrack } from './timeline.js';
 
 const st = { jobId: null, ctx: null, panel: null, layerBox: null, info: null, infoKey: null, selected: null, drag: null, editing: null, adding: null, busy: false, engine: 'local', singing: null, blocksKey: '', status: '' };
@@ -26,7 +26,7 @@ function fileWords() { return st.info && st.info.source === 'words.json' ? st.in
 function words(ctx) {
   const v = layerValue(ctx);
   const list = v ? v.words : fileWords().map((w, i) => ({ id: 'f' + i, text: w.text, start: w.start, end: w.end }));
-  return list.filter(w => w && String(w.text || '').trim()).map(w => ({ id: String(w.id), text: String(w.text), start: Number(w.start) || 0, end: Number(w.end) || 0 })).sort((a, b) => a.start - b.start);
+  return list.filter(w => w && String(w.text || '').trim()).map(w => ({ id: String(w.id), text: String(w.text), start: Number(w.start) || 0, end: Number(w.end) || 0, ...(w.split_of ? { split_of: String(w.split_of), split_sep: w.split_sep === '' ? '' : ' ' } : {}) })).sort((a, b) => a.start - b.start);
 }
 const singing = ctx => { const v = layerValue(ctx); return st.singing != null ? st.singing : v ? !!v.singing : !!(st.info && st.info.meta && st.info.meta.singing); };
 
@@ -44,12 +44,14 @@ async function loadInfo(ctx, force = false) {
 }
 
 // ---------------------------------------------------------------- edits (one commit each)
-function commitWords(ctx, label, fn, touched = []) {
+// `edited` = ids of the words this session changed (the Save bar's "n words edited"): `touched` are added, `dropped`
+// removed (a word merged into its neighbour is not a separate edit: the merged word is). A deleted word stays listed.
+function commitWords(ctx, label, fn, touched = [], dropped = []) {
   const base = words(ctx).map(w => ({ ...w }));
   return ctx.edits.commit(label, 'words', d => {
     const v = d && typeof d === 'object' && Array.isArray(d.words) ? d : { words: base, singing: singing(ctx), edited: [] };
     v.words = fn(v.words.map(w => ({ ...w }))).filter(Boolean).sort((a, b) => a.start - b.start);
-    v.edited = [...new Set([...(Array.isArray(v.edited) ? v.edited : []), ...touched])];
+    v.edited = [...new Set([...(Array.isArray(v.edited) ? v.edited : []), ...touched])].filter(id => !dropped.includes(id));
     return v;
   });
 }
@@ -79,19 +81,23 @@ function split(ctx) {
   if (!w) { notice('Put the playhead inside a word to split it.', { kind: 'warn', fix: 'Click a word block, step to the frame where the second part starts, then Split.', key: 'words' }); return; }
   const at = Number((ctx.editor.frame / fps(ctx)).toFixed(4)), one = 1 / fps(ctx);
   if (at - w.start < one - 1e-6 || w.end - at < one - 1e-6) { notice('The split point must leave at least one frame on each side.', { kind: 'warn', fix: 'Step the playhead one frame further into the word, then Split.', key: 'words' }); return; }
-  const r = (at - w.start) / (w.end - w.start), text = w.text; let a, b;
+  const r = (at - w.start) / (w.end - w.start), text = w.text; let a, b, sep = ' ';
   const spaces = [...text.matchAll(/ /g)].map(m => m.index);
   if (spaces.length) { const cut = spaces.reduce((best, i) => (Math.abs(i / text.length - r) < Math.abs(best / text.length - r) ? i : best), spaces[0]); a = text.slice(0, cut); b = text.slice(cut + 1); }
-  else if (text.length > 1) { const cut = Math.min(text.length - 1, Math.max(1, Math.round(text.length * r))); a = text.slice(0, cut); b = text.slice(cut); }
+  else if (text.length > 1) { const cut = Math.min(text.length - 1, Math.max(1, Math.round(text.length * r))); a = text.slice(0, cut); b = text.slice(cut); sep = ''; }
   else { a = text; b = text; }
-  const id2 = uid();
-  commitWords(ctx, `Split "${w.text}" at ${fmt(at)} s`, list2 => list2.flatMap(x => (x.id === w.id ? [{ ...x, text: a, end: at }, { id: id2, text: b, start: at, end: w.end }] : [x])), [w.id, id2]);
+  // The right part remembers what the split removed (split_of = the word both parts came from, split_sep = '' inside a
+  // word, ' ' at a space), so "Merge with next" puts the word back together exactly: "and" → "a" + "nd" → "and".
+  const id2 = uid(), root = w.split_of || w.id;
+  commitWords(ctx, `Split "${w.text}" at ${fmt(at)} s`, list2 => list2.flatMap(x => (x.id === w.id ? [{ ...x, text: a, end: at, split_of: x.split_of || root }, { id: id2, text: b, start: at, end: w.end, split_of: root, split_sep: sep }] : [x])), [w.id, id2]);
   st.selected = id2;
 }
 function merge(ctx) {
   const list = words(ctx), { w, next } = neighbours(list, st.selected);
   if (!w || !next) { notice(w ? 'This is the last word; there is nothing to merge it with.' : 'Select a word first (click its block).', { kind: 'warn', fix: 'Click the first of the two words, then Merge with next.', key: 'words' }); return; }
-  commitWords(ctx, `Merge "${w.text}" + "${next.text}"`, list2 => list2.filter(x => x.id !== next.id).map(x => (x.id === w.id ? { ...x, text: x.text + ' ' + next.text, end: next.end } : x)), [w.id, next.id]);
+  // Rule: two parts of one split word join with what the split removed (nothing inside a word); any other pair joins with a space.
+  const sep = next.split_of && next.split_of === (w.split_of || w.id) ? (next.split_sep === '' ? '' : ' ') : ' ';
+  commitWords(ctx, `Merge "${w.text}" + "${next.text}"`, list2 => list2.filter(x => x.id !== next.id).map(x => (x.id === w.id ? { ...x, text: x.text + sep + next.text, end: next.end } : x)), [w.id], [next.id]);
 }
 /** Where a new word would go: the selected range (clipped to the gap it starts in) or the playhead (up to 0.4 s, until the next word). */
 function slotForAdd(ctx) {
@@ -222,7 +228,7 @@ function onBlockDown(e, id) {
 }
 
 // ---------------------------------------------------------------- panel
-const button = (text, title, onclick, cls = 'small secondary', disabled = false) => el('button', { type: 'button', class: cls, text, title, onclick, disabled });
+const button = (text, title, onclick, cls = 'small secondary', disabled = false) => el('button', { type: 'button', class: cls, text, title, 'aria-label': ariaFor(text, title), onclick, disabled });
 function renderTimes(d) { const out = st.panel && st.panel.querySelector('[data-times]'); if (out) out.textContent = `${fmt(d.start)}–${fmt(d.end)} s (frames ${frameOf(d.start, st.ctx)}–${Math.max(frameOf(d.start, st.ctx), Math.ceil(d.end * fps(st.ctx) - 1e-3) - 1)})`; }
 function render() {
   const ctx = st.ctx, box = st.panel; if (!ctx || !box) return;

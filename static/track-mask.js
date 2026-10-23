@@ -9,7 +9,7 @@
 // pass on the flagged frames or the selected range. Views: Mask (B/W; the session mask once applied), Composite, Tint.
 // Undo / redo / save go through the shared edit layer; the old "Fix the mask" wand (static/wand.js) still works.
 import { send, getJSON, plain } from './api.js';
-import { el, usd, showError } from './ui.js';
+import { el, ariaFor, usd, showError } from './ui.js';
 import { registerTrack } from './timeline.js';
 
 const TOOLS = [['local_propagate', 'Local propagation · free', false], ['sam3_points_fal', 'SAM 3 on fal · paid', true], ['sam2_points_replicate', 'SAM 2 on Replicate · paid', true]];
@@ -46,14 +46,14 @@ function tintFilter() {   // white mask → green, black → nothing (screen ble
 // ---------------------------------------------------------------- views: Mask (B/W, session aware) and Tint
 function syncViews(ctx) {
   const key = resultKey(ctx) || '', id = ctx.jobId + '|' + key;
-  if (st.viewKey === id) return;
-  st.viewKey = id; tintFilter();
+  if (st.viewKey === id && st.viewEditor === ctx.editor) return;   // a re-render of the same run mounts a new editor: add the views to it again
+  st.viewKey = id; st.viewEditor = ctx.editor; tintFilter();
   const session = key ? sessionPath(ctx.jobId, key) : null;
   const mask = session ? { src: '/runs/' + session } : { file: 'mask.mp4' };
   const download = session ? '../' + session : 'mask.mp4';
   ctx.editor.addView({ id: 'mask.mp4', label: 'Mask', order: 30, layers: [mask], download, available: c => c.files.has('mask.mp4') || !!key,
     caption: session ? 'Mask with your applied fixes (B/W) · not saved yet' : 'Full subject mask' });
-  ctx.editor.addView({ id: 'mask-tint', label: 'Tint', order: 45, layers: [{ file: 'original.mp4' }, { ...mask, style: TINT }], download, available: c => c.files.has('original.mp4') && (c.files.has('mask.mp4') || !!key),
+  ctx.editor.addView({ id: 'mask-tint', label: 'Tint', order: 45, layers: [{ file: 'original.mp4' }, { ...mask, style: TINT }], download, downloadLabel: session ? 'Download the edited mask (B/W video)' : 'Download the mask (B/W video)', available: c => c.files.has('original.mp4') && (c.files.has('mask.mp4') || !!key),
     caption: session ? 'Original with your edited mask tinted green · not saved yet' : 'Original with the mask tinted green' });
   if (MASK_VIEWS.includes(ctx.editor.view)) ctx.editor.setView(ctx.editor.view);
 }
@@ -172,7 +172,7 @@ async function quietSave(work) {   // "Apply now" / "Save without them": the sav
 }
 
 // ---------------------------------------------------------------- panel
-const button = (text, title, onclick, cls = 'small secondary', disabled = false) => el('button', { type: 'button', class: cls, text, title, onclick, disabled });
+const button = (text, title, onclick, cls = 'small secondary', disabled = false) => el('button', { type: 'button', class: cls, text, title, 'aria-label': ariaFor(text, title), onclick, disabled });
 function render() {
   const ctx = st.ctx, box = st.panel; if (!ctx || !box) return;
   const ed = ctx.editor, can = editable(ctx), busy = !!st.busy, { points, strokes, applied } = pending(ctx), n = points.length + strokes.length;
@@ -249,11 +249,12 @@ registerTrack({
     (ctx.edits.saveChecks = ctx.edits.saveChecks || {}).mask = () => {   // same wording as MaskTrack.check() on the server
       const { points, strokes } = pending(st.ctx); if (!points.length && !strokes.length) return null;
       const what = [points.length ? plural(points.length, 'mask click') : '', strokes.length ? plural(strokes.length, 'brush stroke') : ''].filter(Boolean).join(' and ');
-      return { message: `${what} ${points.length + strokes.length === 1 ? 'is' : 'are'} not applied yet. Apply them to the clip first, or remove them.`, fix: 'Use "Apply now" to follow them through the clip, or "Save without them" to drop them.' };
+      const one = points.length + strokes.length === 1, them = one ? 'it' : 'them';
+      return { message: `${what} ${one ? 'is' : 'are'} not applied yet. Apply ${them} to the clip first, or remove ${them}.`, fix: `Use "Apply now" to follow ${them} through the clip, or "Save without ${them}" to drop ${them}.` };
     };
     ctx.edits.saveActions.mask = () => [
       { label: 'Apply now', run: () => quietSave(async () => (await apply(st.ctx, 'full', { tool: 'local_propagate' })) && st.ctx.edits.save()) },
-      { label: 'Save without them', secondary: true, run: () => quietSave(async () => { await commitMask(st.ctx, 'Drop the unapplied mask fixes', v => { v.points = []; v.strokes = []; }); await st.ctx.edits.queue; return st.ctx.edits.save(); }) },
+      { label: pending(st.ctx).points.length + pending(st.ctx).strokes.length === 1 ? 'Save without it' : 'Save without them', secondary: true, run: () => quietSave(async () => { await commitMask(st.ctx, 'Drop the unapplied mask fixes', v => { v.points = []; v.strokes = []; }); await st.ctx.edits.queue; return st.ctx.edits.save(); }) },
     ];
     ctx.editor.on('range', () => render());
     syncViews(ctx); loadProblems(ctx); render();
