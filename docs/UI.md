@@ -107,6 +107,17 @@ unchanged; `registerReviewTool` callbacks get `ctx.video` = the editor's base vi
 used: `GET/PUT/DELETE /jobs/{id}/edits`, `POST /jobs/{id}/edits/undo|redo|save`, and `GET /jobs/{id}/mask/frame?i=0`
 (frame count / fps headers).
 
+**Mask track (Agent 2, `static/track-mask.js`).** Select the Mask lane: a click on the picture adds a pending + fix
+(Alt-click, right-click or "− exclude" = −; "Brush" paints / erases with a radius and "on N frames from here"), shown
+at once on that frame (tint + outline; markers on the lane, `[` `]` jump). The panel lists the pending fixes (frame,
+type, ✕, click to jump; Undo last, Clear all), "Apply to clip · quick preview · free" and "Apply at full quality"
+(paid tools show "Apply with SAM 3 on fal · about $x" and send `confirm_cost=true` from that click), then "Accept ·
+full quality" after a quick Apply; problem ticks (red bars + shaded spans over the area sparkline, which turns green
+once the session mask differs), Prev / Next tick, "Grab hands on flagged frames · free" / "on <range>"; view buttons
+B/W · Composite · Tint (Tint = original + the mask video with `mix-blend-mode: screen` and an SVG colour-matrix
+filter `#mask-tint`; the Mask tab follows the session mask). A pending fix blocks "Save edits" with "Apply now" /
+"Save without them". New calls: `POST /jobs/{id}/edits/mask/preview|apply|hands`, `GET /jobs/{id}/mask/problems`.
+
 ## 5. Stage cards (Studio)
 
 `stagecard.js` → `mountStageCard(rack, stageDef, index)` where `stageDef` is one entry of `GET /stages` (`name`,

@@ -188,3 +188,23 @@ shoulder at frame 60 → 5–10 % of the frame added on 181 frames), `7a8e463b�
 left-shoulder fragment → 6,277 px removed on frame 60, 23 frames), `8f6e9537…` (brush stroke painted on frames
 24–28). `431506e4…` is the fixture upload prepared through the Quick route with the Talking head preset (free): its
 input-doctor card shows the seven checks and the fps fix; the strict face rule fails it as before.
+
+## The batch wand on the timeline (stage 2, Agent 2)
+
+The editor's **Mask track** (`static/track-mask.js`, server `stages/masktrack.py`) is the wand without a branch per
+click. Clicks (+ / Alt-click −) and brush strokes are pending fixes in the edit layer; each previews on its own frame
+with the same free seed step (`wand.selections()` → `wand.preview_png(…, strokes, out_dir, base_masks,
+transparent=True)`, drawn over the current session mask; ~0.1 s). Nothing propagates until **Apply to clip**
+(`POST /jobs/{id}/edits/mask/apply`), which sends every pending click of every frame to **one** `local_propagate`
+call (the list was already one pass: the clip is decoded once and each edit propagated in turn) or, for a hosted tool
+at full quality, one call per click type as before (`HostedWand.regions` on links in the session's `mask/work/`, so
+`record_call` logs to the session's `calls.jsonl`). Quick = working size 240 px, full = 480 px (`work_side`). The
+result is a full mask set in `runs/_sessions/<id>/mask/results/<key>/` with a B/W `mask.mp4`; Accept · full quality
+re-runs the same fixes and replaces the entry; undo goes back to the previous result (kept by key). **Grab hands**
+(`POST …/edits/mask/hands`) runs `hands_worker.py` (MediaPipe Hand Landmarker in `.venv-face`) on the flagged frames
+or a range and ORs hull ∩ depth-flood regions into the current mask on those frames only. **Save edits** makes one
+child whose mask stage is the free `edit_layer` tool (copies `edit-layer/mask/` into `raw-masks/` + `clean-masks/`,
+writes `sam-report.json` + `wand` and `mask-edits.json` like the tools above). The classic wand (this document's
+"Implementation" section) is unchanged and still reachable under the editor ("Fix the mask"; the track panel links
+to it as "Classic wand (one version per apply)"). Endpoints, layer schema, thresholds and timings:
+docs/TIMELINE-SPEC.md §A2.

@@ -182,7 +182,9 @@ Otherwise `record_call` appends `{time, provider, endpoint, stage, tool, cost_us
 runner's context when the caller does not pass them; `cost_usd` from `stages/costs.py` (clip length from
 `upload.mp4`). `ok: true` means the request was sent; a failure afterwards is in `log.txt`. The run's
 `cost_usd_total` and each report's `cost_usd` are sums of these lines. "Zero Replicate calls" = no
-`calls.jsonl` in the child (the integration test asserts exactly that on the real run).
+`calls.jsonl` in the child (the integration test asserts exactly that on the real run). A call made while editing
+(a path under `runs/_sessions/<id>/…`, e.g. a paid mask Apply on the timeline) goes to that session's `calls.jsonl`
+instead (`calls.session_folder_of`), never into the run folder; the session's lines are appended to the child's on save.
 
 ## 8. Costs and the cost gate (`stages/costs.py`, `app.py`)
 
@@ -345,7 +347,8 @@ Details in `docs/INPUT-DOCTOR.md` and the "Implementation" section of `docs/MASK
   landmarks back with `mesh_tracking.map_landmarks`. `face-tracking.json` says which file was tracked
   (`tracking_source`).
 - **Mask stage tools**: `sam3_replicate` (default, unchanged), `local_propagate` (free), `brush` (free),
-  `sam3_points_fal` (paid), `sam2_points_replicate` (paid), `off`. The wand tools edit an existing mask and are
+  `sam3_points_fal` (paid), `sam2_points_replicate` (paid), `edit_layer` (free: the timeline editor's saved mask,
+  copied from `edit-layer/mask/` by the mask track's save hook; docs/TIMELINE-SPEC.md §A2), `off`. The wand tools edit an existing mask and are
   meant to run as a branch at `mask`; they read the base masks from `params.base_run` (else `run.json.parent`),
   so the base run id is part of the cache key. They write `raw-masks/`, `clean-masks/`, `sam-report.json` (+ `wand`
   section), `mask-edits.json`; the Replicate one also `sam-attempts.json` / `sam-raw-request.json`, the fal one

@@ -472,3 +472,117 @@ after. At 380 px: `document.documentElement.scrollWidth` 380, the timeline scrol
 a 250 px box). `/?view=runs` (child shows "What changed: words: 1 word edited"), `/?view=lab`, the Quick form and a
 Fast-mode run (`f5a3f11d…`, Face + Words lanes only) render; zero console messages. Session record left under
 `runs/_sessions/3d2b…/saved-d8c05b5f…/`.
+
+## §A2 notes (Agent 2: mask track)
+
+### What exists now
+
+| piece | file | notes |
+|---|---|---|
+| Track hooks, Apply, Grab hands, problem ticks, previews | `stages/masktrack.py` | replaces the stub; `register_track('mask', MaskTrack)` at import |
+| `edit_layer` mask tool | `stages/mask.py` (`EditLayerMask`, a `WandTool`) | free; registered after the other wand tools, so `sam3_replicate` stays first/default |
+| Hands worker | `hands_worker.py` (runs in `.venv-face`) | MediaPipe Hand Landmarker, IMAGE mode, ≤ 2 hands, confidences 0.3; model `models/hand_landmarker.task` fetched on first use (7.8 MB, done once on 2026-10-23) |
+| Wand additions (additive keywords) | `stages/wand.py` | `local_propagate(…, work_side=None, fast_decode=False)`, `work_scale(h, w, side=None)`, `decode_video(…, fast=False)`, `selections()`, `preview_png(…, strokes=(), out_dir=None, base_masks=None, transparent=False)`; defaults behave exactly as before |
+| Session call log | `stages/calls.py` | `session_folder_of(path)`; `record_call` on a path under `_sessions/<id>/` writes that session's `calls.jsonl` (offline still raises first) |
+| Routes | `app.py` section "mask track of the edit layer" | below |
+| Client | `static/track-mask.js` (swapped in `static/tracks.js`), CSS block "Mask track panel" in `app.css` | `maskPlaceholder` stays exported, unused |
+| Edit-layer client addition | `static/editlayer.js` | `edits.saveChecks[track] = () => null | {message, fix}`: a known refusal is shown with the track's `saveActions` without a 400 round trip (no console error); the server still checks |
+| Tests | `tests/test_mask_track.py` (16) | suite: 210 passed (`test_editlayer` now expects the real track's refusal wording) |
+
+### Endpoints as implemented
+
+- `POST /jobs/{id}/edits/mask/preview` `{frame | time, points?, strokes?}` → `{url: /runs/_sessions/<id>/mask/previews/preview-<frame>-<hash>.png, frame, frames, fps, width, height, selections: [{mode, fraction, already_in_mask}], points_on_frame, strokes_on_frame, server_seconds}`. Transparent RGBA: tints (include green, exclude red) + the outline of the **current session mask**. Without `points`/`strokes` the session's pending ones are used (the client sends its optimistic ones so a preview never waits for the PUT). One `mask preview: …` line in the session log. The old `/mask/preview` is unchanged (still `wand-preview/` in the run).
+- `POST /jobs/{id}/edits/mask/apply` `{quality: quick|full, tool: local_propagate|sam3_points_fal|sam2_points_replicate, replace?: <applied id>, rev?, confirm_cost?, estimate_only?}` → the GET `/edits` shape + `apply: {entry, result, video, frames_changed, quality, tool, seconds, reused, estimated_cost_usd, intended_tool}`. Plain 400s (nothing pending, unknown tool, not the latest entry, no depth), 409 stale `rev`, 402 for a paid full Apply without `confirm_cost`, 400 with `OfflineError.fix` when offline. `estimate_only` answers `{tool, estimated_cost_usd, free}` and runs nothing (the client shows it on the button).
+- `POST /jobs/{id}/edits/mask/hands` `{source: problems | range, from?, to?, rev?}` → GET shape + `hands: {entry, result, video, frames, hands_on, frames_changed, changed, seconds}`.
+- `GET /jobs/{id}/mask/problems` → `{id, frames: [{frame, kind: jump|limb, note, span: [a, b]}], areas, flagged, median, source: session|report|masks, result, thresholds}`. Session-aware; writes nothing in the run (session results cache `problems.json` in their own folder; run masks are cached in memory).
+
+### Layer schema as implemented (`layer.mask`)
+
+```json
+{"points":  [{"id":"p…","frame":40,"x":0.55,"y":0.45,"label":1,"t":1792781691626}],
+ "strokes": [{"id":"s…","frame_from":100,"frame_to":104,"mode":"paint","points":[[0.7,0.4],…],"radius":0.03,"t":…}],
+ "applied": [{"id":"a…","kind":"fix","tool":"local_propagate","quality":"quick","points":[…],"strokes":[…],"base":null,
+              "result":"<24 hex>","frames_changed":95,"notes":[…],"intended_tool":"sam3_points_fal"?},
+             {"id":"h…","kind":"hands","tool":"mediapipe_hands","quality":"full","frames":[…],"hands_on":[…],"base":"<prev>","result":"<24 hex>","frames_changed":3,"source":"problems"}]}
+```
+
+`applied` is one chronological chain; each entry's `result` is a full mask set built on `base` (the previous entry's
+result, or the run's masks when null). Current mask = `applied[-1].result`. Undo/redo just move along the layer
+history; results stay on disk under `runs/_sessions/<id>/mask/results/<key>/` (`mask_00000.png …`, `mask.mp4` B/W,
+`areas.json`, `problems.json`), `key` = sha256 of (run, base, kind, fixes, quality, tool)[:24], so the same Apply on
+the same base is never computed twice (`reused: true`). **Spec change:** the B/W session video is
+`mask/results/<key>/mask.mp4` (one per result, so undo swaps back to an already loaded `<video>` instantly) instead
+of a single `mask/session-mask.mp4`. Hosted tools and the hands worker run in `mask/work/` (symlinks to the run's
+clips), so their records and call lines land in the session.
+
+Grab hands ordering: a hands pass is applied at once to the current mask; pending clicks stay pending and are applied
+on top at the next Apply ("hands before manual clicks", and a − click can still remove a wrong hand region). Accept ·
+full quality works on the latest applied fix only (else a plain 400: undo the later steps first); it reuses that
+entry's own points/strokes and base and replaces it (one undo step back to the quick one). A quick Apply with a paid
+tool runs the free local algorithm and records `intended_tool`; Accept then carries that tool's estimate + `confirm_cost`.
+
+Save hook: `count` = pending points + strokes + applied entries; `summary` = "5 clicks on frames 40–60 applied, 1
+brush stroke, hands added on 3 frames[, quick quality]" (pending: "N clicks on frames a–b not applied"); `check` refuses
+pending points/strokes ("1 brush stroke is not applied yet. Apply them to the clip first, or remove them." + fix);
+`change` → `('mask', 'edit_layer', {layer_sha, base_run, result})` only when something is applied; `materialize`
+copies the result PNGs to `child/edit-layer/mask/` + `child/edit-layer/mask.json` (`{result, base_run, summary,
+fixes}`). The tool's inputs include `edit-layer/mask`, so its cache key covers the pixels.
+
+### Thresholds (problem ticks, Grab hands)
+
+- **jump**: |area[i] − area[i−1]| > 12 % of the median area (areas = `mask_pixels` of `mask-cleanup-report.json` when
+  it matches the run's masks, else counted from the PNGs; session results from `areas.json`). A drop paired with the
+  next rise within 24 frames flags the frames in between; an unpaired rise flags the 8 frames before it (the part was
+  probably missing just before it appears), an unpaired drop the 8 frames after it.
+- **limb**: connected components (8-connected) on masks downscaled 4×, parts ≥ 0.2 % of the frame, every part but the
+  largest; it "vanished" at frame i when < 20 % of it is still covered by frame i's mask dilated 2 px (at ¼ size);
+  parts touching the picture edge are skipped (they may have left the frame); the span runs to its return within 24
+  frames (else 3 frames).
+- `flagged` = the union of the spans = what "Grab hands on flagged frames" looks at.
+- Hand region: convex hull of the 21 landmarks at work size (480 px), grown by 35 % of the hand size, cut by a depth
+  flood (tolerance 20) from every landmark; the plain hull is added back when the depth rule keeps < 50 % of it;
+  closed 5×5; OR-ed into the current mask on flagged frames only.
+
+### Measured (fixture copy, 960×550, 195 frames, offline, port 8776)
+
+- Preview per click (browser, click → overlay drawn): 0.08–0.17 s; server 0.03–0.07 s. Synthetic test: < 2 s asserted.
+- Apply 5 points on 3 frames: quick 2.0–2.2 s (95–109 frames changed), Accept · full 2.9–3.2 s. Most of it is writing
+  195 PNGs + encoding the B/W video (~1 s); decoding uses FFmpeg's scaler (`fast_decode`, 0.15 s vs 0.56 s with
+  OpenCV INTER_AREA).
+- Grab hands on 18 flagged frames: 2.9–3.3 s (worker start included); hands found on 168–170, exactly those frames changed.
+- View switch B/W ↔ Composite ↔ Tint: 1.7–5.8 ms synchronous `setView`, base `readyState` 4, frame kept, no new
+  request after the first load of each file (the pane was hidden, so rAF-based timing is not meaningful there).
+- Problems: 0.45 s first call on the fixture, then cached (2 ms).
+
+### Verification (2026-10-23, port 8776, `PUPPETEER_OFFLINE=1`)
+
+`7d0a5cb914b4452aa3830458eebb0bbf` = hard-link copy of `85e5…` (status/run.json copied, reconstructed). In Studio:
+5 real clicks on frames 40, 40, 52, 52 (Alt-click −), 60 → each previewed on its frame (0.08–0.17 s), session log had 5
+`mask preview` lines and no propagation line, run count unchanged; "Apply to clip · quick preview" → exactly one line
+`mask propagation: 5 points on 3 frames, quick, local_propagate → 95 frames changed`, the page switched to Tint with
+the session mask (sparkline turns green); Accept · full quality replaced the entry; Prev/Next tick and `[`/`]` jump
+48 ↔ 176; Grab hands on flagged frames changed exactly frames 168–170; a brush drag added a pending stroke; Cmd+Z ×2
+/ Shift+Cmd+Z ×2 undid/redid the stroke and the hands pass (the Tint layer swapped back to the previous result's
+video instantly); Save edits → page-side "not applied yet" notice with Apply now / Save without them → "Apply now"
+created exactly one child `499413329e1142d394713256823db33a` (mask `edit_layer`, composite + face re-run, its 195
+clean-masks byte-identical to the session result, its `mask.mp4` agrees with them, no `calls.jsonl`); a second
+flow in Quick made `c3f93cf88d99496593f05563d1a94b55`. `85e5…` and `7d0a…` sha256-identical before/after. A paid
+Apply ("Apply with SAM 3 on fal · about $0.06") offline → plain notice, nothing logged. At 380 px
+`scrollWidth` 380. Old "Fix the mask" wand opened, previewed a click and closed with controls back. Session records:
+`runs/_sessions/7d0a…/saved-4994…/`, `saved-c3f9…/`. Console: only the expected 4xx of deliberate refusals (offline paid
+Apply, and two from the pre-fix run of the save race described below).
+
+### Gotchas for Agents 3–4
+
+- **Save right after a server-side commit**: the session folder is moved on save, so anything the page loads from
+  `/runs/_sessions/<id>/…` after that 404s. The mask track pauses its view/problem loads during "Apply now" / "Save
+  without them" (`quietSave`); do the same if your track serves session files.
+- Use `edits.saveChecks[track]` for refusals the page can predict; a 400 from fetch is a console error.
+- A server-side commit (`editlayer.put` from a route) changes the layer under the client: call `edits.load()` after it
+  (the mask track does after Apply / Grab hands). Pass `rev` from `edits.rev` (after `await edits.queue`).
+- `editor.addView({id: 'mask.mp4', …, order: 30})` overrides the built-in Mask tab (same id) — that is how the B/W view
+  follows the session; a `download` of `'../_sessions/…'` resolves to the session file under `/runs/`.
+- The browser serves `static/*.js` from memory cache across reloads; after editing a module, `fetch(url, {cache:
+  'reload'})` it once before `location.reload()` or you test a mix of old and new modules.
+- `replaceChildren(...)` prints `null` as text; filter children first (the `el()` helper skips nulls, the DOM API does not).
+- The track uses `onFrame` only while paused (no DOM work per frame during playback).
