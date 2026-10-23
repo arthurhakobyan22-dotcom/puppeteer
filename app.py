@@ -142,7 +142,7 @@ def plain_status(text):
 def plain_changed(folder,run):
     """`run.json.changed` in words. Branches made before 2026-10-23 stored list params as raw JSON; rebuild the line from the chains."""
     changed=run.get('changed')
-    if not changed or not run.get('parent') or ('[' not in changed and 'base_run' not in changed):return changed
+    if not changed or not run.get('parent') or run.get('edits') or ('[' not in changed and 'base_run' not in changed):return changed   # a saved edit session's line is already in words
     try:
         stage=changed.split(':',1)[0].strip();parent=stages.load_run(RUNS/run['parent']) or {}
         if not parent:parent={'chain':stages.reconstruct(RUNS/run['parent'])[0].get('chain',{})}
@@ -411,10 +411,14 @@ async def branch_job(ident:str,request:Request):
 
 def start_branch(folder,stage,tool,params,estimate):
     """Create the child run and run it from `stage` in a background thread (shared by /branch and the mask wand's /mask/apply)."""
-    ident=folder.name
     try:child,chain_data,changed=stages.branch(folder,stage,tool,params,runs_root=RUNS)
     except (ValueError,OSError) as e:return fail(400,'The branch could not be created: '+str(e),'Check that the parent run still has its files, then try again.')
-    cid=child.name;jobs[cid]={'state':'running','status':'Branched from '+ident+' · '+changed,'id':cid,'parent':ident,'changed':changed,'estimated_cost_usd':estimate}
+    return run_child(folder,child,chain_data,stage,changed,estimate)
+
+def run_child(folder,child,chain_data,stage,changed,estimate,lead='Branched from '):
+    """Run an already created child from `stage` in a background thread (start_branch and the edit layer's save share it)."""
+    ident=folder.name
+    cid=child.name;jobs[cid]={'state':'running','status':lead+ident+' · '+changed,'id':cid,'parent':ident,'changed':changed,'estimated_cost_usd':estimate}
     write_status(child,jobs[cid])
     def work():
         try:
@@ -425,6 +429,63 @@ def start_branch(folder,stage,tool,params,estimate):
         write_status(child,jobs[cid])
     threading.Thread(target=work,daemon=True).start()
     return jobs[cid]
+
+# ---------------------------------------------------------------- edit layer: pending manual edits (RUNS/_sessions/<id>/), undo/redo, save as one branch
+
+def edit_fail(e):
+    return fail(e.status,str(e),e.fix,**e.extra)
+
+def json_field(value,form):
+    """A layer / value sent as a JSON string in a form body becomes the object; JSON bodies arrive parsed already."""
+    if form and isinstance(value,str):
+        try:return json.loads(value)
+        except ValueError:return value
+    return value
+
+@app.get('/jobs/{ident}/edits')
+def get_edits(ident:str):
+    """The pending edit layer of a run: {run, rev, layer, can_undo, can_redo, undo_label, redo_label, pending, summary, stale}. Writes nothing."""
+    return stages.editlayer.view(RUNS,ident,hd_folder(ident))
+
+@app.put('/jobs/{ident}/edits')
+async def put_edits(ident:str,request:Request):
+    """Replace the layer `{rev, label, layer}` or one track `{rev, label, track, value}`; 409 with the current rev when `rev` is stale."""
+    folder=hd_folder(ident);data=await body_fields(request);form='json' not in request.headers.get('content-type','')
+    try:return stages.editlayer.put(RUNS,ident,folder,data.get('rev'),data.get('label'),layer=json_field(data.get('layer'),form),track=data.get('track'),value=json_field(data.get('value'),form))
+    except stages.editlayer.EditError as e:return edit_fail(e)
+
+@app.delete('/jobs/{ident}/edits')
+def delete_edits(ident:str):
+    """Discard the pending edits of a run (the UI asks first)."""
+    folder=hd_folder(ident);stages.editlayer.discard(RUNS,ident)
+    return stages.editlayer.view(RUNS,ident,folder)
+
+@app.post('/jobs/{ident}/edits/undo')
+async def undo_edits(ident:str,request:Request):
+    folder=hd_folder(ident);data=await body_fields(request)
+    try:return stages.editlayer.step(RUNS,ident,folder,'undo',data.get('rev'))
+    except stages.editlayer.EditError as e:return edit_fail(e)
+
+@app.post('/jobs/{ident}/edits/redo')
+async def redo_edits(ident:str,request:Request):
+    folder=hd_folder(ident);data=await body_fields(request)
+    try:return stages.editlayer.step(RUNS,ident,folder,'redo',data.get('rev'))
+    except stages.editlayer.EditError as e:return edit_fail(e)
+
+@app.post('/jobs/{ident}/edits/save')
+async def save_edits(ident:str,request:Request):
+    """Save every pending edit as exactly one new branch run (`{confirm_cost?}`), then close the session. Returns the child job like /branch."""
+    folder=hd_folder(ident);data=await body_fields(request)
+    try:planned=stages.editlayer.plan(folder,RUNS)
+    except stages.editlayer.EditError as e:return edit_fail(e)
+    except ValueError as e:return fail(400,'The edits could not be prepared for saving: '+str(e),'Check that this run still has its files, then try again.')
+    estimate,paid=estimate_stages(planned['chain'],stages.costs.clip_seconds(folder),rerun_stages(planned['stage']))
+    refused=cost_gate(estimate,data.get('confirm_cost'),legacy=False,folder=folder,what='Saving these edits')
+    if refused is not None:return refused
+    try:child,chain_data,changed,stage=stages.editlayer.save(folder,RUNS,planned)
+    except stages.editlayer.EditError as e:return edit_fail(e)
+    except (ValueError,OSError) as e:return fail(400,'The new version could not be created: '+str(e),'Check that this run still has its files, then try again; your edits are kept.')
+    return run_child(folder,child,chain_data,stage,changed,estimate,lead='Saved edits from ')
 
 # ---------------------------------------------------------------- mask wand: preview a click, apply edits as a branch at the mask stage, one frame with the outline
 

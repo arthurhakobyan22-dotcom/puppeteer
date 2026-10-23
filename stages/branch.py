@@ -14,6 +14,7 @@ from .presets import normalize_chain,mode_for_chain,describe_chain
 from . import cache
 
 COPY_NOT_LINK={'audio-manifest.json'}   # rewritten in place by later steps, so the child needs its own copy
+CARRY=['words.json','mouth-guidance.json','subtitles.json']   # non-stage artifacts a child inherits when the parent has them (Agent 4 extends); a writer calls fresh() first
 
 def parent_state(parent):
     """The parent's run.json and reports, reconstructed in memory for legacy runs (the parent is never written)."""
@@ -64,11 +65,22 @@ def changed_chain(run_chain,stage,tool=None,params=None):
     chain[stage]={'tool':new_tool.name,'params':new_tool.normalize_params({**base,**(params or {})})}
     return chain,describe_change(stage,old,chain[stage])
 
-def branch(parent,stage,tool=None,params=None,runs_root=None,preset=None):
-    """Create the child folder and its run.json; returns (child_folder, chain, changed). Nothing runs yet."""
+def also_chain(chain,stage,changed,also):
+    """Apply the extra stage changes of a multi-stage branch on top of `chain`; every one must come after `stage`."""
+    lines=[changed]
+    for other,entry in (also or {}).items():
+        if other not in STAGES:raise ValueError(f'Unknown stage {other!r}; stages are: '+', '.join(STAGES))
+        if STAGES.index(other)<=STAGES.index(stage):raise ValueError(f'The {other} change must come after the {stage} stage; branch at the earliest stage that changes.')
+        entry=entry or {};chain,line=changed_chain(chain,other,entry.get('tool'),entry.get('params'));lines.append(line)
+    return chain,' · '.join(lines)
+
+def branch(parent,stage,tool=None,params=None,runs_root=None,preset=None,also=None):
+    """Create the child folder and its run.json; returns (child_folder, chain, changed). Nothing runs yet.
+    `also` = {later_stage: {tool, params}, …} changes more stages in the same child (one branch); `changed` lists all."""
     parent=Path(parent);runs_root=Path(runs_root) if runs_root else parent.parent
     run,reports=parent_state(parent)
     chain,changed=changed_chain(run['chain'],stage,tool,params)
+    if also:chain,changed=also_chain(chain,stage,changed,also)
     ident=uuid.uuid4().hex;child=runs_root/ident;child.mkdir(parents=True)
     if (parent/'upload.mp4').exists():link_artifact(parent/'upload.mp4',child/'upload.mp4')
     index=STAGES.index(stage)
@@ -87,6 +99,8 @@ def branch(parent,stage,tool=None,params=None,runs_root=None,preset=None):
             if outputs[name] is None:outputs[name]=cache.artifact_hash(child/name)
         write_report(child,earlier,{**report,'outputs':outputs,'cached_from':parent.name,'state':'cached' if report.get('state')!='off' else 'off','health':(report.get('health') or '')})
     if index>STAGES.index('audio') and (parent/'audio-manifest.json').exists() and not (child/'audio-manifest.json').exists():shutil.copy2(parent/'audio-manifest.json',child/'audio-manifest.json')
+    for name in CARRY:
+        if (parent/name).exists() and not (child/name).exists():link_artifact(parent/name,child/name)
     mode=mode_for_chain(chain);child_run=new_run(child,chain,mode,parent=parent.name,changed=changed,preset=preset)
     for earlier in STAGES[:index]:
         report=reports.get(earlier) or {}
