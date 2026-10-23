@@ -111,7 +111,8 @@ class SaveTests(Base):
         self.assertEqual(job['status'],'Ready · review the prepared input and create a draft')
         words=json.loads((child/'words.json').read_text());self.assertEqual([w['text'] for w in words['words']],['hello','there']);self.assertEqual(words['engine'],'mlx')
         self.assertNotEqual((child/'words.json').stat().st_ino,(self.parent/'words.json').stat().st_ino);self.assertEqual(json.loads((self.parent/'words.json').read_text())['words'][0]['text'],'helo')
-        self.assertEqual((child/'mouth-guidance.json').stat().st_ino,(self.parent/'mouth-guidance.json').stat().st_ino)   # CARRY: linked when present
+        self.assertNotEqual((child/'mouth-guidance.json').stat().st_ino,(self.parent/'mouth-guidance.json').stat().st_ino)   # CARRY links it, then the words track rewrites it for the edited words (Agent 4; fresh() first)
+        self.assertEqual((self.parent/'mouth-guidance.json').read_text(),'{}');self.assertEqual([w['text'] for w in json.loads((child/'mouth-guidance.json').read_text())['words']],['hello','there'])
         for name in ['seedance-input.mp4','composite-silent.mp4','original.mp4','face-landmarks.json']:self.assertEqual((child/name).stat().st_ino,(self.parent/name).stat().st_ino,name)
         run=json.loads((child/'run.json').read_text());self.assertEqual((run['parent'],run['changed'],run['state']),(HEX,'words: 2 words edited','done'))
         record=json.loads((child/'edit-layer.json').read_text());self.assertEqual(run['edits']['layer_sha'],record['layer_sha']);self.assertEqual(run['edits']['summary'],['words: 2 words edited']);self.assertEqual(record['layer']['words']['edited'],['w1','w2'])

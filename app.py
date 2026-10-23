@@ -3,6 +3,8 @@ import threading,uuid,shutil,json
 from fastapi import FastAPI,UploadFile,File,Form,HTTPException,Request
 from fastapi.responses import FileResponse,JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
+import re
 from pipeline import run
 import stages
 ROOT=Path(__file__).resolve().parent
@@ -167,7 +169,8 @@ def run_summary(folder):
     return {'id':ident,'mode':mode,'state':status.get('state','unknown'),'status':plain_status(str(status.get('status',''))[:200]),
             'created':run.get('created') or datetime.datetime.fromtimestamp(stamp).astimezone().isoformat(timespec='minutes'),
             'reviewed':(folder/'mask-review.json').exists(),'draft':(folder/'final-preview.mp4').exists(),'final':(folder/'hd/final-preview.mp4').exists(),'request':(folder/'seedance-response.json').exists(),
-            'parent':run.get('parent'),'changed':plain_changed(folder,run),'preset':run.get('preset'),'cost_usd_total':stages.total_cost(folder),'fix':status.get('fix')}
+            'parent':run.get('parent'),'changed':plain_changed(folder,run),'preset':run.get('preset'),'cost_usd_total':stages.total_cost(folder),'fix':status.get('fix'),
+            'imported':stages.imports.imported_stages(run.get('chain'))}
 
 def run_folders():
     return [f for f in RUNS.iterdir() if f.is_dir() and len(f.name)==32 and all(c in '0123456789abcdef' for c in f.name)]
@@ -423,6 +426,8 @@ def run_child(folder,child,chain_data,stage,changed,estimate,lead='Branched from
     def work():
         try:
             stages.run_branch(child,chain_data,stage,lambda s:jobs[cid].update(status=s))
+            try:stages.words.refresh_guidance(child)   # the face stage may have re-run: mouth guidance follows the child's own tracking
+            except Exception as e:stages.runner.log(child,f'mouth guidance not refreshed: {type(e).__name__}: {e}')
             jobs[cid].update(state='done',status='Preparation complete · input review required' if stage in stages.PREP_STAGES else 'Ready · review the prepared input and create a draft')
         except Exception as e:
             message,fix=stages.runner.plain_error(e);jobs[cid].update(state='error',status=message,fix=fix)
@@ -657,6 +662,152 @@ async def post_preset(request:Request):
     try:preset=stages.save_preset(name,data.get('description') or '',chain,source_run=job)
     except ValueError as e:return fail(400,str(e),'Choose a name that is not one of the built-in presets.')
     return {'preset':preset}
+
+# ---------------------------------------------------------------- words track: transcription, beats, subtitles (stages/words.py, stages/subtitles.py)
+
+def words_fail(e):
+    """Plain errors for the words / subtitles / import routes."""
+    if isinstance(e,stages.OfflineError):return fail(400,str(e),e.fix)
+    return fail(getattr(e,'status',400),str(e),getattr(e,'fix','Try again.'))
+
+def engines_info(folder,seconds):
+    out=[]
+    for name,spec in stages.words.ENGINES.items():
+        problem=stages.words.local_ready() if name=='local' else None
+        estimate=stages.costs.price_for('words_fal',seconds) if spec['paid'] else 0.0
+        out.append({'name':name,'label':spec['label'],'paid':spec['paid'],'note':spec['note'],'estimated_cost_usd':estimate,'ready':problem is None,
+                    'problem':({'message':problem[0],'fix':problem[1]} if problem else None),'offline_blocked':spec['paid'] and stages.offline()})
+    return out
+
+@app.get('/jobs/{ident}/words')
+def get_words(ident:str):
+    """The words the run has right now (pending edits first, else words.json), and the transcription engines with their state and price."""
+    folder=hd_folder(ident);words,source,meta=stages.words.current(folder,RUNS);frames,fps,seconds=stages.words.clip_info(folder)
+    return {'id':ident,'words':words,'source':source,'meta':meta,'words_file':(folder/'words.json').exists(),'guidance_file':(folder/'mouth-guidance.json').exists(),
+            'frames':frames,'fps':fps,'seconds':round(seconds or 0,3),'engines':engines_info(folder,seconds),'default_engine':'local','has_audio':stages.words.audio_source(folder) is not None}
+
+@app.post('/jobs/{ident}/words/transcribe')
+async def transcribe_words(ident:str,request:Request):
+    """Transcribe the run's audio word by word: `engine` (local = free mlx-whisper | fal = paid), `singing`, `language`,
+    `confirm_cost` (fal only), `estimate_only`. Cached by audio sha256; writes words.json + mouth-guidance.json into the
+    run only when it has none. Returns {words, engine, cached, written, seconds, …}."""
+    folder=hd_folder(ident);data=await body_fields(request)
+    engine=str(data.get('engine') or 'local').strip().lower();singing=truthy(data.get('singing'));language=str(data.get('language') or '').strip() or None
+    if engine not in stages.words.ENGINES:return fail(400,f'Unknown transcription engine {engine!r}.','Use local (free, on this Mac) or fal (paid).')
+    if language and not re.fullmatch(r'[a-z]{2,3}',language):return fail(400,'The language must be a short code such as en or es.','Leave it empty to detect the language.')
+    def work():
+        prepared=stages.words.prepare(folder)
+        cached=stages.words.cache_file(RUNS,prepared[2],engine,singing).exists()
+        estimate=0.0 if cached or engine!='fal' else stages.costs.price_for('words_fal',prepared[3])
+        return prepared,cached,estimate
+    try:prepared,cached,estimate=await run_in_threadpool(work)
+    except stages.words.WordsError as e:return words_fail(e)
+    if truthy(data.get('estimate_only')):return {'id':ident,'engine':engine,'estimated_cost_usd':estimate,'free':estimate<=0,'cached':cached}
+    refused=cost_gate(estimate,data.get('confirm_cost'),legacy=False,folder=folder,what='Transcribing with '+stages.words.ENGINES[engine]['label'])
+    if refused is not None:return refused
+    try:result=await run_in_threadpool(stages.words.transcribe,folder,RUNS,engine,singing,language,prepared)
+    except (stages.words.WordsError,stages.OfflineError) as e:return words_fail(e)
+    except Exception as e:
+        print(f'transcription failed for {ident}: {type(e).__name__}: {e}',flush=True)
+        message=str(e) if 'FAL_KEY' in str(e) else 'The transcription could not be finished.'
+        return fail(502 if engine=='fal' else 500,message,'Add FAL_KEY to .env and restart the app.' if 'FAL_KEY' in str(e) else 'Try again; if it happens again, run bash setup-words.sh to repair the local install.')
+    d=result['data']
+    return {'id':ident,'engine':engine,'engine_label':stages.words.ENGINES[engine]['label'],'engine_name':d.get('engine'),'language':d.get('language'),'singing':d.get('singing'),'words':d['words'],
+            'cached':result['cached'],'written':result['written'],'guidance_written':result['guidance_written'],'seconds':result['seconds'],'transcribe_seconds':d.get('seconds'),
+            'source':result['source'],'estimated_cost_usd':estimate,'words_file':(folder/'words.json').exists()}
+
+@app.get('/jobs/{ident}/words/beats')
+def words_beats(ident:str,pause:float=stages.words.PAUSE):
+    """Dialogue beats for the prompt from the run's words (pending edits first): {text, lines, source}. Writes nothing."""
+    folder=hd_folder(ident);words,source,_=stages.words.current(folder,RUNS)
+    if not words:return fail(404,'This run has no transcript yet, so there are no dialogue beats.','Open the Words track in step 02 and click Transcribe (free), then insert the beats again.')
+    return {'id':ident,'source':source,'lines':stages.words.beats(words,max(0.1,min(3.0,pause))),'text':stages.words.beats_text(words,max(0.1,min(3.0,pause))),'words':len(words)}
+
+@app.get('/jobs/{ident}/subtitles.srt')
+def subtitles_srt(ident:str):
+    """The run's words (pending edits first) as an SRT file download."""
+    from fastapi.responses import Response
+    folder=hd_folder(ident);words,source,_=stages.words.current(folder,RUNS)
+    if not words:return fail(404,'This run has no transcript yet, so there are no subtitles to export.','Open the Words track in step 02 and click Transcribe (free), then export again.')
+    return Response(content=stages.subtitles.srt(stages.subtitles.cues(words,stages.subtitles.clip_seconds(folder))).encode('utf-8'),media_type='application/x-subrip',headers={'Content-Disposition':f'attachment; filename="{ident[:8]}-subtitles.srt"','Cache-Control':'no-store'})
+
+@app.get('/jobs/{ident}/subtitles')
+def get_subtitles(ident:str):
+    """The finish step's burn-in toggle: {burn (off by default), words, cues, up_to_date, finals: [{final, subtitled, exists, url}]}."""
+    return stages.subtitles.state(hd_folder(ident),RUNS)
+
+@app.post('/jobs/{ident}/subtitles')
+async def post_subtitles(ident:str,request:Request):
+    """`burn` true burns the words into every final preview of the run (free, local: final-preview-subtitled.mp4, hd/… when present); false turns it off."""
+    folder=hd_folder(ident);data=await body_fields(request)
+    try:return await run_in_threadpool(stages.subtitles.set_burn,folder,RUNS,truthy(data.get('burn')))
+    except stages.words.WordsError as e:return words_fail(e)
+    except Exception as e:
+        print(f'subtitle burn-in failed for {ident}: {type(e).__name__}: {e}',flush=True)
+        return fail(500,'The subtitles could not be burned into the final.','Try again; the untouched final is still there.')
+
+# ---------------------------------------------------------------- downloads: folder artifacts as a zip
+
+ZIP_ALIASES={'mask':('clean-masks','raw-masks'),'masks':('clean-masks','raw-masks')}
+ZIP_ALWAYS={'clean-masks','raw-masks','edit-layer','stages'}
+
+def folder_artifacts(folder):
+    """Top-level folders this run's reports list as outputs (plus the mask folders, edit-layer/ and stages/)."""
+    names=set(ZIP_ALWAYS)
+    for report in stages.all_reports(folder).values():
+        for name in (report.get('outputs') or {}):
+            if '/' not in name:names.add(name)
+    return names
+
+@app.get('/jobs/{ident}/download/{name}')
+def download_zip(ident:str,name:str):
+    """A known folder artifact of the run as a zip (`mask.zip` = the clean masks as PNGs). Only top-level folders the run lists; no paths."""
+    import io,zipfile
+    from fastapi.responses import Response
+    folder=hd_folder(ident)
+    art=name[:-4] if name.endswith('.zip') else ''
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,80}',art):return fail(400,'That download is not allowed.','Use a Download link from the app, for example mask.zip.')
+    known=folder_artifacts(folder);choices=ZIP_ALIASES.get(art,(art,))
+    target=next((folder/c for c in choices if (c in known or art in ZIP_ALIASES) and (folder/c).is_dir() and not (folder/c).is_symlink()),None)
+    if target is None or folder.resolve() not in target.resolve().parents:return fail(404,f'This run has no {art} folder to download.','Open a run that has it (masks exist in depth runs), or download single files from the stage cards.')
+    buffer=io.BytesIO()
+    with zipfile.ZipFile(buffer,'w',zipfile.ZIP_DEFLATED) as z:
+        for path in sorted(target.rglob('*')):
+            if path.is_file() and not path.is_symlink() and folder.resolve() in path.resolve().parents:z.write(path,f'{art}/{path.relative_to(target).as_posix()}')
+    return Response(content=buffer.getvalue(),media_type='application/zip',headers={'Content-Disposition':f'attachment; filename="{ident[:8]}-{art}.zip"','Cache-Control':'no-store'})
+
+# ---------------------------------------------------------------- Import my own (stages/imports.py): an uploaded file becomes a branch at its stage
+
+@app.post('/jobs/{ident}/import')
+def import_own(ident:str,stage:str=Form(''),file:UploadFile|None=File(None),confirm_cost:str|None=Form(None)):
+    """Multipart `stage` (depth | mask | face | composite), `file`, `confirm_cost?` → stored as runs/_imports/<sha256>.<ext>, then a
+    branch at that stage with the import tool (fitted to the clip; mismatches are warnings). Returns the child job like /branch."""
+    from stages import imports
+    folder=hd_folder(ident);stage=(stage or '').strip()
+    if stage not in imports.ACCEPT:return fail(400,f'Imports go into the depth, mask, face or composite stage, not {stage!r}.','Send stage=depth, mask, face or composite.')
+    if file is None or not (file.filename or '').strip():return fail(400,'No file was sent.',f'Choose the file to import first. {imports.HINT[stage]}.')
+    if (job_status(ident) or {}).get('state')=='running':return fail(409,'This run is still preparing.','Wait until it finishes, then import.')
+    from stages.branch import also_chain
+    try:sha,ext,path,size=imports.store(file.file,file.filename,RUNS,stage)
+    except imports.ImportError_ as e:return fail(e.status,str(e),e.fix)
+    try:imports.check_readable(path,ext,stage)
+    except imports.ImportError_ as e:
+        path.unlink(missing_ok=True);(path.parent/f'{sha}.json').unlink(missing_ok=True)   # an unreadable file is not kept
+        return fail(e.status,str(e),e.fix)
+    try:
+        stage,tool,params,also,changed=imports.plan(folder,stage,sha,ext,Path(file.filename).name[:120])
+        chain,_=stages.changed_chain(stages.run_info(folder)['run']['chain'],stage,tool,params)
+        if also:chain,_=also_chain(chain,stage,'',also)
+    except imports.ImportError_ as e:return fail(e.status,str(e),e.fix)
+    except ValueError as e:return fail(400,'The import could not be prepared: '+str(e),'Check that this run still has its files, then try again.')
+    estimate,paid=estimate_stages(chain,stages.costs.clip_seconds(folder),rerun_stages(stage))
+    refused=cost_gate(estimate,confirm_cost,legacy=False,folder=folder,what=f'Importing into the {stage} stage')
+    if refused is not None:return refused
+    try:child,chain_data,chain_changed=stages.branch(folder,stage,tool,params,runs_root=RUNS,also=also or None)
+    except (ValueError,OSError) as e:return fail(400,'The branch could not be created: '+str(e),'Check that the parent run still has its files, then try again.')
+    run=stages.load_run(child);run.update(changed=changed,imported=imports.imported_stages(chain_data),import_info={'stage':stage,'file':sha,'name':params['name'],'size':size,'chain_changed':chain_changed});stages.save_run(child,run)
+    stages.runner.log(child,f'imported {params["name"]} ({size} bytes, sha256 {sha}) into the {stage} stage')
+    return run_child(folder,child,chain_data,stage,changed,estimate,lead='Imported into a branch of ')
 
 def resume_saved_generations():
     """Resume collection only: never requeue a paid prediction on restart."""

@@ -22,6 +22,7 @@ class Tool:
     label=''                 # plain words for the UI: "SAM 3 on Replicate"
     paid=False
     experimental=False
+    imported=False           # True for the "Import my own" tools (stages/imports.py): the UI labels their output "imported"
     description=''           # one plain sentence for the UI
     params={}                # name -> {'type': 'bool'|'number'|'string'|'choice', 'default': ..., 'label': ..., 'choices': [...]}
     outputs=()               # artifact names (files or folders) this tool writes into the run folder
@@ -49,7 +50,7 @@ class Tool:
         raise NotImplementedError
 
     def describe(self):
-        return {'name':self.name,'stage':self.stage,'label':self.label,'paid':self.paid,'experimental':self.experimental,'description':self.description,
+        return {'name':self.name,'stage':self.stage,'label':self.label,'paid':self.paid,'experimental':self.experimental,'description':self.description,'imported':self.imported,
                 'params':{k:{**v,'default':v.get('default')} for k,v in self.params.items()},'outputs':list(self.outputs),'inputs':list(self.inputs)}
 
 class OffTool(Tool):

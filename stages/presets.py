@@ -42,6 +42,7 @@ def normalize_chain(chain):
     return out
 
 def mode_for_chain(chain):
+    if (chain.get('composite') or {}).get('tool')=='import_control':return 'original'   # an imported control video is the prepared clip itself (no depth, mask or mesh to review)
     depth_on=(chain.get('depth') or {}).get('tool','off')!='off' or (chain.get('composite') or {}).get('tool')=='depth_cutout'
     mesh_on=(chain.get('face') or {}).get('tool','off')!='off'
     return 'depth_mesh' if depth_on and mesh_on else 'depth' if depth_on else 'face_mesh' if mesh_on else 'original'
@@ -59,7 +60,10 @@ def describe_chain(chain):
     for stage in STAGES:
         entry=chain.get(stage) or {};params=entry.get('params') or {}
         shown=', '.join(f'{k}: {v}' for k,v in params.items() if v not in (None,'',[],{}) and not (stage=='prompt'))
-        parts.append(f"{stage}: {entry.get('tool','off')}"+(f' ({shown})' if shown else ''))
+        try:imported=getattr(get_tool(stage,entry.get('tool','off')),'imported',False)
+        except ValueError:imported=False
+        if imported:shown=', '.join(f'{k}: {v}' for k,v in params.items() if k=='name' and v)   # the file name only, never the sha
+        parts.append(f"{stage}: {entry.get('tool','off')}"+(f' ({shown})' if shown else '')+(' · imported' if imported else ''))
     return parts
 
 BUILTIN=[

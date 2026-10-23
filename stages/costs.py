@@ -17,6 +17,7 @@ SAM3_SECONDS_PER_FRAME=0.35     # SAM 3 tracking on an L40S (gener8-sam3 readme 
 # tool name -> pricing model:
 #   usd_flat                        a fixed estimate (Replicate's listed average per run, or 0 for free tools)
 #   usd_per_clip_second             billed per second of the clip (fal Seedance output pricing)
+#   usd_per_started_minute          billed per minute of audio, every started minute counted (speech-to-text)
 #   gpu + usd_per_gpu_second + gpu_seconds_per_frame   billed per GPU second, runtime proportional to the frame count
 PRICES={
     'depth_anything_replicate':{'provider':'replicate','endpoint':'lucataco/depth-anything-video','gpu':'Nvidia T4','usd_per_gpu_second':GPU_USD_PER_SECOND['Nvidia T4'],'usd_flat':0.04,
@@ -43,6 +44,8 @@ PRICES={
         'source':'fal.ai/models/fal-ai/sam-3/video-rle: $0.005 per 16 frames (docs/MASK-WAND.md); one call per click type (include, exclude)','date':DATE,'verified':True},
     'sam2_points_replicate':{'provider':'replicate','endpoint':'meta/sam-2-video','gpu':'Nvidia L40S','usd_per_gpu_second':GPU_USD_PER_SECOND['Nvidia L40S'],'usd_flat':0.029,
         'source':'replicate.com/meta/sam-2-video: "approximately $0.029 to run" on Nvidia L40S (listed average; docs/MASK-WAND.md); one prediction per click type','date':DATE,'verified':False},
+    'words_fal':{'provider':'fal','endpoint':'fal-ai/elevenlabs/speech-to-text','usd_per_started_minute':0.03,
+        'source':'fal.ai/models/fal-ai/elevenlabs/speech-to-text: "$0.03 per minutes" (read 2026-10-23); billing granularity not published, so the estimate counts every started minute (an 8 s clip shows $0.03). The paid fallback of the Words track; the default local Whisper is free','date':'2026-10-23','verified':True},
     'media_host':{'provider':'tmpfiles','endpoint':'upload','usd_flat':0.0,'source':'free host','date':DATE,'verified':True},
     'replicate_upload':{'provider':'replicate','endpoint':'files','usd_flat':0.0,'source':'Replicate file uploads are not billed','date':DATE,'verified':True},
 }
@@ -71,6 +74,9 @@ def price_for(key,seconds=None,params=None):
     if entry is None:return None
     seconds=float(seconds or DEFAULT_SECONDS)
     if 'usd_per_clip_second' in entry:return round(entry['usd_per_clip_second']*seconds,4)
+    if 'usd_per_started_minute' in entry:
+        import math
+        return round(entry['usd_per_started_minute']*max(1,math.ceil(seconds/60-1e-9)),4)
     if 'usd_per_frame' in entry:return round(entry['usd_per_frame']*round(seconds*FPS),4)
     if 'gpu_seconds_per_frame' in entry:return round(entry['usd_per_gpu_second']*entry['gpu_seconds_per_frame']*round(seconds*FPS),4)
     return round(entry.get('usd_flat',0.0),4)
