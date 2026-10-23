@@ -11,9 +11,20 @@ from fractions import Fraction
 import av, mediapipe as mp, numpy as np, sys, json, urllib.request
 from PIL import ImageDraw
 sys.path.insert(0,str(Path(__file__).resolve().parent))
-from mesh_tracking import face_box,smooth_box,fill_gaps,evaluate,MAX_GAP
+from mesh_tracking import face_box,smooth_box,fill_gaps,evaluate,map_landmarks,MAX_GAP,PAD
 
 root=Path(sys.argv[1]).resolve();source=root/'original.mp4';FPS=24;depth='--depth' in sys.argv
+# A zoomed tracking copy from the input doctor (small face): track on it, map every landmark back to the full frame.
+zoom=None
+if (root/'tracking-source.mp4').exists() and (root/'tracking-source.json').exists():
+    try:zoom=json.loads((root/'tracking-source.json').read_text())
+    except ValueError:zoom=None
+    if zoom and not (zoom.get('crop') and zoom.get('original')):zoom=None
+track_source=root/'tracking-source.mp4' if zoom else source
+def option(name,default):
+    """`--pad 2.0` / `--max-gap 8` overrides from the face stage; without them the worker behaves as it always did."""
+    return type(default)(sys.argv[sys.argv.index(name)+1]) if name in sys.argv else default
+PAD_USED=option('--pad',PAD);GAP_USED=option('--max-gap',MAX_GAP)
 model=Path(__file__).resolve().parent/'models/face_landmarker.task'
 if not model.exists():
     model.parent.mkdir(exist_ok=True)
@@ -36,7 +47,7 @@ def detect(detector,frame,box,timestamp=None):
 
 # Pass 1: track.
 landmarks=[];sources=[];history=[];box=None;lost=0
-with V.FaceLandmarker.create_from_options(options(V.RunningMode.VIDEO)) as tracker,V.FaceLandmarker.create_from_options(options(V.RunningMode.IMAGE)) as finder,av.open(str(source)) as inp:
+with V.FaceLandmarker.create_from_options(options(V.RunningMode.VIDEO)) as tracker,V.FaceLandmarker.create_from_options(options(V.RunningMode.IMAGE)) as finder,av.open(str(track_source)) as inp:
     stream=inp.streams.video[0];W,H=stream.width,stream.height;full=(0,0,W,H)
     for i,f in enumerate(inp.decode(video=0)):
         frame=f.to_ndarray(format='rgb24');points=None;how=None
@@ -47,13 +58,17 @@ with V.FaceLandmarker.create_from_options(options(V.RunningMode.VIDEO)) as track
             points=detect(finder,frame,full);how='full'
         if points is None:
             lost+=1
-            if lost>MAX_GAP:box=None;history.clear()   # keep trying the last known box through a short loss
+            if lost>GAP_USED:box=None;history.clear()   # keep trying the last known box through a short loss
         else:
-            lost=0;box=smooth_box(history,face_box(points,W,H))
-        landmarks.append(points);sources.append(how if points else None)
+            lost=0;box=smooth_box(history,face_box(points,W,H,PAD_USED))
+        landmarks.append(map_landmarks(points,zoom['crop'],zoom['original']) if (points and zoom) else points);sources.append(how if points else None)
 
 # Fast mode is strict (no fallback for lost frames); Advanced + Face mesh keeps the depth composite where the face is lost.
-filled,status=fill_gaps(landmarks,MAX_GAP);report=evaluate(status,FPS,strict=not depth)
+# --strict / --lenient (from the face stage's `strict` param) override that default.
+strict=not depth
+if '--strict' in sys.argv:strict=True
+if '--lenient' in sys.argv:strict=False
+filled,status=fill_gaps(landmarks,GAP_USED);report=evaluate(status,FPS,max_gap=GAP_USED,strict=strict)
 
 # Pass 2: draw.
 connections=V.FaceLandmarksConnections
@@ -90,6 +105,7 @@ finally:
     'summary':{k:report[k] for k in ['frames','tracked','filled','missing']}}))
 (root/'face-tracking.json').write_text(json.dumps({**report,'fps':FPS,
     'missing_frames':[i for i,s in enumerate(status) if s=='missing'],'filled_frames':[i for i,s in enumerate(status) if s=='filled'],
-    'crop':'face-first, padded %.1fx, smoothed; full-frame re-detection when lost'%1.8},indent=1))
+    'crop':'face-first, padded %.1fx, smoothed; full-frame re-detection when lost'%PAD_USED,
+    'tracking_source':'tracking-source.mp4 (zoomed copy from the input doctor, landmarks mapped back to the original frame)' if zoom else 'original.mp4'},indent=1))
 print({k:report[k] for k in ['frames','tracked','filled','missing','ok','warning','message']},flush=True)
 if not report['ok']:raise RuntimeError('Face tracking gaps: '+report['message'])

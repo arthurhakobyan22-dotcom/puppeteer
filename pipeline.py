@@ -47,11 +47,15 @@ def file_path(x):
     raise ValueError('Provider did not return a downloadable video.')
 
 def depth_hf(src,dst):
+    from stages.calls import record_call
+    record_call(Path(dst).parent,'huggingface',DEPTH)
     c=Client(DEPTH,token=os.getenv('HF_TOKEN') or None,verbose=False)
     result=c.predict({'video':handle_file(str(src))},max_len=-1,target_fps=24,max_res=960,grayscale=False,api_name='/infer_video_depth')
     shutil.copy(file_path(result[1]),dst)
 
 def depth_replicate(src,dst,model_name="lucataco/depth-anything-video"):
+    from stages.calls import record_call
+    record_call(Path(dst).parent,'replicate',model_name)
     token=os.getenv('REPLICATE_API_TOKEN')
     if not token:raise ValueError('Replicate fallback requires REPLICATE_API_TOKEN in the server environment.')
     # Resolve live model schema instead of assuming an input field.
@@ -125,24 +129,6 @@ def composite(original,depth,seg,directory,audio_source=None):
     return counts[0]
 
 def run(src,directory,prompt='person',provider='replicate',status=print,clean_dialogue=False):
-    directory=Path(directory);directory.mkdir(parents=True,exist_ok=True)
-    if clean_dialogue:
-        from audio_workflow import separate
-        separate(src,directory,status)
-    status('Preparing video · 24 fps');meta=normalize(src,directory/'original.mp4')
-    status('Video Depth Anything · generating depth')
-    if provider=='huggingface':depth_hf(directory/'original.mp4',directory/'depth-raw.mp4')
-    else:depth_replicate(directory/'original.mp4',directory/'depth-raw.mp4', 'chenxwh/depth-any-video' if provider=='replicate-chenxwh' else 'lucataco/depth-anything-video')
-    shutil.copyfile(directory/'depth-raw.mp4',directory/'depth.mp4')
-    status(f'SAM 3 · segmenting {prompt!r} on the depth video')
-    from raw_masks import segment_raw,clean_border_fragments
-    raw_dir=clean_border_fragments(segment_raw(directory/'depth.mp4',directory,prompt,rgb_video=directory/'original.mp4',status=status))
-    status('Compositing · depth subject over original background')
-    composite(directory/'original.mp4',directory/'depth.mp4',raw_dir,directory,src)
-    from audio_workflow import prepare_seedance_video
-    status('Embedding isolated vocals (clean dialogue)' if clean_dialogue else 'Embedding original source audio')
-    prepare_seedance_video(directory,clean_dialogue)
-    try:mask_method=json.loads((directory/'sam-report.json').read_text()).get('method') or 'SAM 3 raw PNG masks'
-    except (OSError,ValueError):mask_method='SAM 3 raw PNG masks'
-    meta.update(prompt=prompt,depth_provider=provider,mask_method=mask_method,clean_dialogue=bool(clean_dialogue))
-    (directory/'manifest.json').write_text(json.dumps(meta,indent=2));status('Complete')
+    """Advanced mode (depth + SAM) as the `depth` chain: the same artifacts as before, plus run.json and stage reports."""
+    from stages.runner import run_mode
+    run_mode('depth',src,directory,status,prompt=prompt,provider=provider,clean_dialogue=clean_dialogue);status('Complete')

@@ -10,7 +10,7 @@ def prepare(form_value):
   def fake_run(src,folder,prompt,provider,status,clean_dialogue=False):calls.append((prompt,provider,clean_dialogue))
   with patch.object(application,'RUNS',Path(d)),patch.object(application,'run',side_effect=fake_run):
    client=TestClient(application.app)
-   data={'mode':'depth','prompt':'person','provider':'replicate'}
+   data={'mode':'depth','prompt':'person','provider':'replicate','confirm_cost':'true'}
    if form_value is not None:data['clean_dialogue']=form_value
    r=client.post('/jobs',data=data,files={'video':('clip.mp4',b'video','video/mp4')})
    assert r.status_code==200,r.text

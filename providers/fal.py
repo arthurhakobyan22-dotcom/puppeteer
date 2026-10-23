@@ -62,6 +62,8 @@ class Fal(Provider):
         else:check_image_constraints(char1);images.append(char1)
         if char2:check_image_constraints(char2);images.append(Path(char2))
         full_prompt,mode=build_prompt(prompt,folder,refs)
+        from stages.calls import record_call
+        record_call(folder,'fal',DRAFT_APP)
         status('Uploading the prepared video and character references to fal storage')
         video_urls=[_call(fal_client.upload_file,path) for path in videos]
         image_urls=[_call(fal_client.upload_file,path) for path in images]
@@ -101,6 +103,8 @@ class Fal(Provider):
                 draft_id=json.loads(path.read_text()).get('draft_id')
                 if draft_id:break
         if not draft_id:raise ValueError('This fal draft has no draft_id, so it cannot be completed at 1080p. Create a new draft (fal keeps draft ids for 7 days).')
+        from stages.calls import record_call
+        record_call(folder,'fal',COMPLETE_APP)
         payload={'draft_id':draft_id,'resolution':'1080p'}
         hd=folder/'hd';hd.mkdir(exist_ok=True);(hd/'request.json').write_text(json.dumps(payload,indent=2))
         handle=_call(fal_client.submit,COMPLETE_APP,arguments=payload)

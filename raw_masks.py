@@ -41,7 +41,9 @@ def _http_error(r,stage):
     if code==429:return SamError('quota',f'Replicate rate limit during {stage} ({code}): {detail}')
     return SamError('http',f'Replicate error during {stage} ({code}): {detail}')
 
-def _upload(path,h):
+def _upload(path,h,folder=None):
+    from stages.calls import record_call
+    record_call(folder or Path(path).parent,'replicate','files')
     with open(path,'rb') as f:r=requests.post(API+'/files',headers=h,files={'content':f},timeout=120)
     if not r.ok:raise _http_error(r,'video upload')
     return r.json()['urls']['get']
@@ -54,6 +56,8 @@ def _record(folder,entry):
 
 def _predict(h,body,folder,label):
     """Create a prediction, poll it, record the final state; return it. Raises SamError with the provider's reason."""
+    from stages.calls import record_call
+    record_call(folder,'replicate',label.split(' · ')[0])
     r=requests.post(API+'/predictions',headers=h,json=body,timeout=60)
     if not r.ok:raise _http_error(r,f'SAM submission ({label})')
     j=r.json();(Path(folder)/'sam-raw-request.json').write_text(json.dumps(j,indent=2));print('SAM job',label+':',j.get('id'),flush=True)
@@ -157,7 +161,7 @@ def segment_raw(video,folder,prompt='person',rgb_video=None,status=print,frames=
     sources=[('depth',Path(video))]+([('rgb',Path(rgb_video))] if rgb_video and Path(rgb_video).resolve()!=Path(video).resolve() else [])
     urls={}
     for source,path in sources:
-        urls[source]=_upload(path,h);dirs=[]
+        urls[source]=_upload(path,h,folder);dirs=[]
         for k,term in enumerate(terms):
             label=f'{PRIMARY_MODEL} · {term!r} on {source}';status(f'SAM 3 · segmenting {term!r} on {source} frames')
             j=_predict(h,{'version':PRIMARY_VERSION,'input':{'video':urls[source],'prompt':term,'mask_only':True,'return_zip':True}},folder,label)

@@ -55,6 +55,8 @@ def upload(path):
     fallback=setting('MEDIA_HOST_FALLBACKS','')
     hosts=list(dict.fromkeys([primary]+[h.strip().lower() for h in fallback.split(',') if h.strip()]))
     if any(h not in HOSTS for h in hosts):raise ValueError('Supported media hosts: tmpfiles, catbox')
+    from stages.calls import record_call
+    record_call(Path(path),primary,'upload')
     errors=[]
     for host in hosts:
         for attempt in range(2):

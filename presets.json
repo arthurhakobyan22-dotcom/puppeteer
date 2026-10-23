@@ -1,0 +1,26 @@
+{
+ "note": "Built-in presets are defined in stages/presets.py and listed here for reference; everything under \"presets\" with builtin: false was saved from a run.",
+ "builtin": [
+  {
+   "name": "Talking head",
+   "description": "Fast: the face mesh drawn on the original video, no depth or SAM calls (free preparation).",
+   "mode": "face_mesh"
+  },
+  {
+   "name": "Full body",
+   "description": "Advanced: Depth Anything plus a SAM 3 cutout of the subject; full mask review.",
+   "mode": "depth"
+  },
+  {
+   "name": "Expressive",
+   "description": "Advanced + Face mesh: the depth cutout with facial motion drawn on top; gaps only warn.",
+   "mode": "depth_mesh"
+  },
+  {
+   "name": "Profile-heavy",
+   "description": "Advanced with the face mesh off: best when the speaker turns away from the camera a lot.",
+   "mode": "depth"
+  }
+ ],
+ "presets": []
+}

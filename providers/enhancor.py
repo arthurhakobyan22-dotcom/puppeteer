@@ -27,6 +27,8 @@ class Enhancor(Provider):
         folder=Path(folder);self.require_configured();key=credential('ENHANCOR_API_KEY')
         char1=Path(refs['char1']);char2=refs.get('char2')
         full_prompt,mode=build_prompt(prompt,folder,refs)
+        from stages.calls import record_call
+        record_call(folder,'enhancor','seedance2.5/v1/queue (is_draft)')
         status('Uploading the prepared video and character references')
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:urls=list(pool.map(upload,[prepared,char1]+([Path(char2)] if char2 else [])))
         p={'resolution':'1080p','output_format':'mp4','pass_faces':True,'webhook_url':setting('ENHANCOR_WEBHOOK_URL','')}
@@ -59,6 +61,8 @@ class Enhancor(Provider):
         folder=Path(folder);key=credential('ENHANCOR_API_KEY')
         original=json.loads((folder/'seedance-request.json').read_text())
         if not original.get('is_draft'):raise ValueError('A completed draft is required before generating 1080p.')
+        from stages.calls import record_call
+        record_call(folder,'enhancor','seedance2.5/v1/queue (draft_id)')
         payload={'draft_id':request_id,'webhook_url':original.get('webhook_url','')}
         hd=folder/'hd';hd.mkdir(exist_ok=True);(hd/'request.json').write_text(json.dumps(payload,indent=2))
         response=requests.post(base_url()+'queue',headers={'x-api-key':key},json=payload,timeout=90)

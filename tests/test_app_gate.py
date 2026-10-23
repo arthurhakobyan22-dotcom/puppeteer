@@ -21,7 +21,7 @@ class ReviewGateTests(unittest.TestCase):
  def run_mode(self,mode,tamper):
   with tempfile.TemporaryDirectory() as d,patch.object(application,'RUNS',Path(d)):
    ident,p=fixture(d,mode);client=TestClient(application.app)
-   files={'char1':('ref.png',PNG,'image/png')};data={'prompt':'x','provider':'fal'}
+   files={'char1':('ref.png',PNG,'image/png')};data={'prompt':'x','provider':'fal','confirm_cost':'true'}
    review=client.get(f'/jobs/{ident}/mask-review').json()
    self.assertFalse(review['approved']);self.assertEqual(review['status'],'pending')
    with patch.object(seedance_bridge,'submit') as submit:

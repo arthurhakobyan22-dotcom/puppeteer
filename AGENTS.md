@@ -26,3 +26,7 @@ An image `char1` uses the provider's edit path: one video (`@Video1`, the prepar
 - **Advanced + Face mesh** (`depth_mesh`): depth pipeline plus the mesh over the depth composite; landmarks in `face-landmarks.json`. Review both mask coverage and tracking.
 
 In mesh modes, the prompt must say the mesh lines are motion guidance that must disappear, that the whole identity including hair is replaced, and that all dialogue and timing are preserved. Keep advanced depth mode available. Never submit automatically during setup.
+
+## Stages, caching and branching
+
+Preparation runs as a chain of stages (`input_doctor`, `audio`, `depth`, `mask`, `composite`, `face`, then `prompt`, `generate`, `finish`), each with interchangeable tools registered in `stages/`. Every run writes `run.json` (the full chain: tool + params + cache key per stage), `stages/<stage>/report.json` (frames covered / filled / missing, gaps in seconds, warnings, a plain health line, cost), `log.txt` and `calls.jsonl` (one line per external call). Changing a stage never overwrites a run: `POST /jobs/{id}/branch` creates a child run that hard-links every earlier artifact and re-runs only that stage and what follows; paid stages whose inputs, tool and params match an earlier run are reused, never re-billed. `PUPPETEER_OFFLINE=1` makes every paid or network step raise a plain error before anything is sent. Every paid endpoint needs `confirm_cost=true`; a request without it is refused with 402 and the estimate, on every route. Details, endpoints and the rules for new tools: `docs/STAGES.md`.

@@ -24,12 +24,15 @@ def write_audio(path,a):
 def separate(src,folder,status=print):
     folder=Path(folder)
     if (folder/'vocals.wav').exists() and (folder/'music.wav').exists():return
-    status('Audio · extracting original track');original=read_audio(src);write_audio(folder/'original-audio.wav',original)
+    from stages.calls import record_call
     token=os.getenv('REPLICATE_API_TOKEN')
     if not token:raise ValueError('REPLICATE_API_TOKEN is required for audio separation.')
+    record_call(folder,'replicate','files')
+    status('Audio · extracting original track');original=read_audio(src);write_audio(folder/'original-audio.wav',original)
     headers={'Authorization':'Bearer '+token}
     with (folder/'original-audio.wav').open('rb') as f:r=requests.post('https://api.replicate.com/v1/files',headers=headers,files={'content':f},timeout=120)
     r.raise_for_status();url=r.json()['urls']['get'];status('Audio · separating vocals and original music')
+    record_call(folder,'replicate','cjwbw/demucs')
     r=requests.post('https://api.replicate.com/v1/predictions',headers=headers,json={'version':'25a173108cff36ef9f80f854c162d01df9e6528be175794b81158fa03836d953','input':{'audio':url,'model_name':'htdemucs','output_format':'wav'}},timeout=60);r.raise_for_status();j=r.json()
     (folder/'audio-prediction.json').write_text(json.dumps(j,indent=2))
     for _ in range(180):
@@ -70,7 +73,13 @@ def finish_preview(generated,folder):
         generated=padded
     # Copy original compressed audio packets, preserving the complete source mix.
     with av.open(str(generated)) as inp,av.open(str(folder/'upload.mp4')) as source_audio,av.open(str(target),'w') as out:
-        if not source_audio.streams.audio:raise ValueError('Original source has no audio track.')
+        if not source_audio.streams.audio:
+            # Forgiving: a silent source gives a silent export (generated audio is still discarded, as always).
+            vs=out.add_stream_from_template(inp.streams.video[0])
+            for p in inp.demux(video=0):
+                if p.dts is not None:p.stream=vs;out.mux(p)
+            (folder/'audio-note.json').write_text(json.dumps({'final_audio':'none: the source has no audio track','generated_audio':'discarded'}))
+            return target
         video=inp.streams.video[0];audio=source_audio.streams.audio[0]
         vd=float(video.duration*video.time_base) if video.duration else float(inp.duration/av.time_base)
         sd=float(source_audio.duration/av.time_base)
@@ -88,8 +97,12 @@ def prepare_seedance_video(folder,clean_dialogue=False):
     data=json.loads(manifest.read_text()) if manifest.exists() else {}
     def build(samples=None):
         with av.open(str(folder/'composite-silent.mp4')) as video,av.open(str(folder/'upload.mp4')) as source,av.open(str(target),'w') as out:
-            if not source.streams.audio:raise ValueError('Original source has no audio track.')
             vs=out.add_stream_from_template(video.streams.video[0])
+            if not source.streams.audio:
+                # Forgiving: a silent source gives a silent prepared clip (warned in the manifest), never a hard stop.
+                for packet in video.demux(video=0):
+                    if packet.dts is not None:packet.stream=vs;out.mux(packet)
+                return 'silent'
             if samples is None:
                 # Copy the original compressed audio packets so decoded samples equal the source exactly.
                 astream=out.add_stream_from_template(source.streams.audio[0])
@@ -105,16 +118,19 @@ def prepare_seedance_video(folder,clean_dialogue=False):
                 f=av.AudioFrame.from_ndarray(np.ascontiguousarray(samples[:,i:i+4096].astype(np.float32)),format='fltp',layout='stereo');f.sample_rate=RATE;f.pts=i
                 for packet in audio.encode(f):out.mux(packet)
             for packet in audio.encode():out.mux(packet)
+    warning=None
     if clean_dialogue:
         vocals=folder/'vocals.wav'
         if not vocals.exists():raise ValueError('Clean dialogue needs vocals.wav; run audio separation first.')
         build(read_audio(vocals));embedded='vocals.wav (Demucs)';remux='reencoded'
     else:
-        try:build();embedded='entire original source audio';remux='copy'
-        except (av.FFmpegError,ValueError,OSError) as exc:
-            if 'no audio track' in str(exc):raise
+        try:result=build();embedded='entire original source audio';remux='copy'
+        except (av.FFmpegError,ValueError,OSError):
             # The source codec cannot live in MP4; re-encode the decoded original instead.
-            target.unlink(missing_ok=True);build(read_audio(folder/'upload.mp4'));embedded='entire original source audio';remux='reencoded'
-    data.update(clean_dialogue=bool(clean_dialogue),seedance_video='seedance-input.mp4',embedded_audio=embedded,audio_remux=remux,final_audio='entire original source audio',discard_seedance_audio=True)
+            target.unlink(missing_ok=True);result=build(read_audio(folder/'upload.mp4'));embedded='entire original source audio';remux='reencoded'
+        if result=='silent':embedded='none: the source has no audio track';remux='video only';warning='The source has no audio track, so the prepared clip is silent and there is no dialogue to lip-sync; add a soundtrack before uploading if you need one.'
+    data.update(clean_dialogue=bool(clean_dialogue),seedance_video='seedance-input.mp4',embedded_audio=embedded,audio_remux=remux,final_audio='entire original source audio' if remux!='video only' else 'none: the source has no audio track',discard_seedance_audio=True)
+    if warning:data['warning']=warning
+    else:data.pop('warning',None)
     manifest.write_text(json.dumps(data,indent=2))
     return target

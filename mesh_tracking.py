@@ -84,3 +84,12 @@ def evaluate(status,fps,max_gap=MAX_GAP,max_untracked=MAX_UNTRACKED,strict=True)
     warning='; '.join(warnings)
     return {'frames':n,'tracked':tracked,'filled':filled,'missing':missing,'gaps':gaps,'filled_ranges':ranges(status,fps,'filled'),
             'max_gap_frames':max_gap,'max_missing_ratio':max_untracked,'strict':strict,'ok':not problems,'warning':warning,'message':'; '.join(problems) if problems else 'face tracked throughout'}
+
+def map_landmarks(points,crop,original):
+    """Landmarks normalized to a zoomed tracking copy (`crop` = {x0, y0, w, h} in original pixels) back to the full frame.
+
+    `original` = {width, height}. Pure arithmetic: x_full = (x0 + x * w) / width. Used when the input doctor wrote
+    `tracking-source.mp4` for a small face; every drawn or saved landmark stays in the original frame's coordinates."""
+    if not points:return points
+    x0,y0,w,h=float(crop['x0']),float(crop['y0']),float(crop['w']),float(crop['h']);W,H=float(original['width']),float(original['height'])
+    return [((x0+x*w)/W,(y0+y*h)/H) for x,y in points]

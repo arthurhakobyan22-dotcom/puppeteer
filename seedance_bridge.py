@@ -45,12 +45,18 @@ def submit(folder,prompt,char1,char2=None,provider=None,status=print):
     if adapter.draft_endpoint:response['endpoint']=adapter.draft_endpoint
     (folder/'seedance-response.json').write_text(json.dumps(response))
     (folder/'generation.json').write_text(json.dumps({'request_id':ident,'provider':name,'prompt':full_prompt,'mode':mode,'video':'seedance-result.mp4'}))
+    try:
+        from stages import prompt as prompt_stage,generate as generate_stage
+        prompt_stage.record(folder,prompt,full_prompt,mode);generate_stage.record_submission(folder,name,ident,prompt=full_prompt,mode=mode)
+    except OSError:pass
     status('Seedance draft submitted: '+ident)
     return ident
 
 def wait_and_finish(folder,request_id,status=print):
     """Poll the saved provider every 10 s; on completion download the clip and restore the original audio."""
     folder=Path(folder);adapter=get_provider(provider_for(folder))
+    from stages.calls import offline,OfflineError
+    if offline():raise OfflineError('Polling '+adapter.label+' is switched off in offline mode (PUPPETEER_OFFLINE=1); the saved request '+request_id+' is kept and can be resumed later.')
     for _ in range(360):
         state=adapter.poll(request_id,folder=folder)
         (folder/'provider-status.json').write_text(json.dumps(state,indent=2,default=str))
@@ -61,8 +67,19 @@ def wait_and_finish(folder,request_id,status=print):
                 data=json.loads(generation.read_text());data['draft_id']=state['draft_id'];generation.write_text(json.dumps(data))
             status('Restoring entire original source audio · discarding generated audio')
             finish_preview(folder/'seedance-result.mp4',folder)
+            try:
+                from stages import generate as generate_stage,finish as finish_stage
+                if folder.name!='hd':generate_stage.record_result(folder,ok=True)
+                finish_stage.record_restore(folder)
+            except OSError:pass
             return
-        if state.get('state')=='error':raise RuntimeError(state.get('status') or 'Seedance failed')
+        if state.get('state')=='error':
+            try:
+                from stages import generate as generate_stage,finish as finish_stage
+                if folder.name=='hd':finish_stage.record_hd(folder.parent,message=state.get('status') or 'Seedance failed')
+                else:generate_stage.record_result(folder,ok=False,message=state.get('status') or 'Seedance failed')
+            except OSError:pass
+            raise RuntimeError(state.get('status') or 'Seedance failed')
         if state.get('status'):status(state['status'])
         time.sleep(10)
     raise TimeoutError('Seedance is still pending. Request ID saved; do not resubmit automatically.')
@@ -83,4 +100,8 @@ def submit_hd(folder):
     response={'requestId':ident,'provider':name}
     if adapter.final_endpoint:response['endpoint']=adapter.final_endpoint
     (hd/'response.json').write_text(json.dumps(response))
+    try:
+        from stages import finish as finish_stage
+        finish_stage.record_hd(folder,name,ident)
+    except OSError:pass
     return ident
