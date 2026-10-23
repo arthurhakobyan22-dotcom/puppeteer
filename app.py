@@ -890,3 +890,119 @@ def resume_saved_generations():
 @app.get('/health')
 def health():
     return {'status':'ok','service':'Puppeteer'}
+# ---------------------------------------------------------------- export kit (stages/export.py, stages/export_presets.py): target presets, README, zip; free and local.
+# Pending timeline edits are saved first through the same plan / save / run_child path as POST /jobs/{id}/edits/save (one free
+# branch), then the child is exported; the response, the poll and the README carry `exported_run`. docs/EXPORT.md.
+
+exports={}   # (run id, export name) -> live state while an export runs; finished ones are read back from export/<name>.json
+exports_lock=threading.Lock()
+EXPORT_NAME=re.compile(r'[a-z_]{1,32}-\d{8}-\d{6}(-[0-9a-f]{4})?')
+
+def export_fail(e):
+    return fail(getattr(e,'status',400),str(e),getattr(e,'fix','Try again.'))
+
+def export_pending(folder):
+    """The pending-edits note for an export: {total, summary, note, problem, estimated_cost_usd, planned}. Writes nothing."""
+    view=stages.editlayer.view(RUNS,folder.name,folder);total=view['pending']['total']
+    out={'total':total,'summary':view['summary'],'note':None,'problem':None,'estimated_cost_usd':0.0,'planned':None}
+    if not total:return out
+    try:planned=stages.editlayer.plan(folder,RUNS)
+    except stages.editlayer.EditError as e:out['problem']={'message':str(e),'fix':e.fix,**e.extra};return out
+    except ValueError as e:out['problem']={'message':'The edits could not be prepared for saving: '+str(e),'fix':'Check that this run still has its files, then try again.'};return out
+    estimate,paid=estimate_stages(planned['chain'],stages.costs.clip_seconds(folder),rerun_stages(planned['stage']))
+    out.update(planned=planned,estimated_cost_usd=estimate)
+    if estimate>0:out['problem']={'message':f'Saving these edits first would re-run a paid stage (about ${estimate:.2f}), so the export cannot save them for you.','fix':'Save the edits from the editor (Save edits shows the estimate and asks you to confirm), then export the new run.','estimated_cost_usd':round(estimate,4),'status':402}
+    else:out['note']=f'{total} pending edit{"s" if total!=1 else ""} will be saved first (free) and the export made from the new run.'
+    return out
+
+def export_state(ident,name):
+    with exports_lock:live=exports.get((ident,name))
+    if live:return live
+    rec=stages.export.read_json(RUNS/ident/'export'/(name+stages.export.RECORD_SUFFIX))
+    return rec if isinstance(rec,dict) else None
+
+def export_listing(ident):
+    folder=RUNS/ident;seen=set();out=[]
+    with exports_lock:live=[dict(v) for (i,n),v in exports.items() if i==ident]
+    for s in live:seen.add(s['name']);out.append(s)
+    for rec in stages.export.list_exports(folder):
+        if rec['name'] in seen:continue
+        out.append({**rec,'zip_url':f'/jobs/{ident}/export/{rec["name"]}.zip'})
+    for s in out:s.setdefault('zip_url',f'/jobs/{ident}/export/{s["name"]}.zip')
+    out.sort(key=lambda r:r.get('started') or r.get('created') or '',reverse=True)
+    return out
+
+@app.get('/jobs/{ident}/export')
+def get_export(ident:str):
+    """Presets, the items this run can export (with the reason when one is missing), the pending-edits note and earlier exports."""
+    folder=hd_folder(ident);info=stages.export.describe(folder,RUNS);pending=export_pending(folder);pending.pop('planned',None)
+    return {'id':ident,**info,'pending':pending,'exports':export_listing(ident),'running':(job_status(ident) or {}).get('state')=='running'}
+
+@app.post('/jobs/{ident}/export')
+async def post_export(ident:str,request:Request):
+    """`{preset, items?, mesh_format?: prores|png, alpha_format?: prores|png}` → starts the export in a thread and returns its state
+    `{state, name, run, exported_run, status, …}`; poll GET /jobs/{id}/export/{name}. Pending edits are saved first (one free branch)."""
+    folder=hd_folder(ident);data=await body_fields(request)
+    preset=str(data.get('preset') or 'custom').strip().lower()
+    if preset not in stages.export_presets.PRESETS:return fail(400,f'There is no export preset called {preset!r}.','Use one of: '+', '.join(stages.export_presets.PRESET_ORDER)+'.')
+    try:items=stages.export.parse_items(data.get('items'),preset)
+    except (ValueError,TypeError) as e:return fail(400,str(e),'Tick the items listed by GET /jobs/{id}/export.')
+    if not items:return fail(400,'Nothing is ticked, so there is nothing to export.','Tick at least one item (the Custom preset starts empty).')
+    formats={}
+    for key in ('mesh_format','alpha_format'):
+        value=str(data.get(key) or 'prores').strip().lower()
+        if value not in stages.export_presets.RGBA_FORMATS:return fail(400,f'{key} must be prores or png, not {value!r}.','Choose ProRes 4444 (.mov) or a PNG sequence.')
+        formats[key]=value
+    problem=stages.export.ffmpeg_problem()
+    if problem:return fail(400,*problem)
+    if (job_status(ident) or {}).get('state')=='running':return fail(409,'This run is still preparing.','Wait until it finishes, then export.')
+    avail=stages.export.availability(folder,RUNS);missing=[k for k in items if not avail[k]['available']]
+    if missing:return fail(400,f'This run cannot export {avail[missing[0]]["label"].lower()}: '+(avail[missing[0]]['reason'] or ''),'Untick it, or pick a run that has it.',item=missing[0])
+    pending=export_pending(folder)
+    if pending['problem']:p=pending['problem'];return fail(p.pop('status',400),p.pop('message'),p.pop('fix'),**p)
+    planned=pending['planned'];name=stages.export.export_name(preset)
+    state={'state':'running','name':name,'run':ident,'requested_run':ident,'exported_run':None,'preset':preset,'items':items,'formats':formats,'status':'Starting the export…','started':stages.report.now(),
+           'pending_edits':pending['total'],'zip_url':f'/jobs/{ident}/export/{name}.zip'}
+    with exports_lock:exports[(ident,name)]=state
+    def work():
+        import time
+        target=folder;edits_line=None
+        try:
+            if planned:
+                state['status']=f'Saving {pending["total"]} pending edit{"s" if pending["total"]!=1 else ""} as a new version first (free)…'
+                child,chain_data,changed,stage=stages.editlayer.save(folder,RUNS,planned)
+                job=run_child(folder,child,chain_data,stage,changed,0.0,lead='Saved edits from ');cid=child.name
+                while jobs.get(cid,{}).get('state')=='running':state['status']='New version '+cid[:8]+'… · '+str(jobs[cid].get('status') or '');time.sleep(0.2)
+                if jobs.get(cid,{}).get('state')!='done':
+                    raise stages.export.ExportError('The new version could not be prepared: '+str(jobs.get(cid,{}).get('status') or 'it stopped with an error')+'.',jobs.get(cid,{}).get('fix') or 'Open the new run in Studio to see the stage that failed; your edits are saved in it.')
+                target=child;state['exported_run']=cid;edits_line=f'{pending["total"]} pending edit{"s" if pending["total"]!=1 else ""} of {ident} saved first as the new version {cid} ({changed}); this export is of that version.'
+            result=stages.export.build_export(target,items,preset,RUNS,status=lambda s:state.update(status=s),mesh_format=formats['mesh_format'],alpha_format=formats['alpha_format'],name=name,requested_run=ident,edits_line=edits_line,record_in=folder)
+            state.update(stages.export.record_of(result));state.update(state='done',status='Export ready · '+result['zip'].name,zip_url=f'/jobs/{ident}/export/{name}.zip')
+        except (stages.export.ExportError,stages.editlayer.EditError) as e:state.update(state='error',status=str(e),fix=getattr(e,'fix',''))
+        except Exception as e:
+            print(f'export {name} of {ident} failed: {type(e).__name__}: {e}',flush=True)
+            state.update(state='error',status='The export could not be finished.',fix='Check the app log for the reason, then export again.')
+        finally:
+            with exports_lock:
+                if state['state']=='done':exports.pop((ident,name),None)   # the record on disk answers from here on
+    threading.Thread(target=work,daemon=True).start()
+    return state
+
+@app.get('/jobs/{ident}/export/{name}.zip')
+def download_export(ident:str,name:str):
+    """The finished export as a zip (safe names only: <preset>-<yyyymmdd>-<hhmmss>[-xxxx])."""
+    folder=hd_folder(ident)
+    if not EXPORT_NAME.fullmatch(name):return fail(400,'That export name is not allowed.','Use a download link from the export panel, for example seedance_web-20261024-120000-ab12.zip.')
+    path=stages.export.zip_for(folder,name)
+    if path is None or not path.is_file() or path.is_symlink() or RUNS.resolve() not in path.resolve().parents:return fail(404,f'There is no export called {name} for this run.','Export again from step 04; earlier exports are listed there.')
+    return FileResponse(str(path),media_type='application/zip',filename=f'{ident[:8]}-{name}.zip',headers={'Cache-Control':'no-store'})
+
+@app.get('/jobs/{ident}/export/{name}')
+def poll_export(ident:str,name:str):
+    """The state of one export: running (`status` line), done (the record with `files`, `readme`, `zip_url`, `exported_run`) or error (`status` + `fix`)."""
+    hd_folder(ident)
+    if not EXPORT_NAME.fullmatch(name):return fail(400,'That export name is not allowed.','Use the name POST /jobs/{id}/export returned.')
+    state=export_state(ident,name)
+    if state is None:return fail(404,f'There is no export called {name} for this run.','Start one with POST /jobs/{id}/export.')
+    return {**state,'zip_url':f'/jobs/{ident}/export/{name}.zip'}
+

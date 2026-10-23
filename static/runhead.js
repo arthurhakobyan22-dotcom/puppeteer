@@ -45,6 +45,7 @@ export function mountRunHead(parent, { view }) {
     actions.replaceChildren();
     if (view === 'quick') actions.append(el('a', { class: 'button small secondary', href: hrefFor({ job: id, view: 'studio' }), 'data-nav': true, text: 'Open in Studio' }));
     else actions.append(el('a', { class: 'button small secondary', href: hrefFor({ job: id, view: 'quick' }), 'data-nav': true, text: 'Quick view' }));
+    if (view === 'studio') actions.append(el('a', { class: 'button small secondary', href: '#export', text: 'Export…', title: 'Export kit under step 04: zip for Seedance web, Kling, ComfyUI, After Effects (free, local)', onclick: e => { const t = document.getElementById('export'); if (t) { e.preventDefault(); t.scrollIntoView({ behavior: 'smooth', block: 'start' }); } } }));
     const inLab = state.labRuns.includes(id);
     actions.append(el('button', { type: 'button', class: 'small secondary', text: inLab ? 'In Lab ✓ · open' : 'Add to Lab', onclick: () => { if (!inLab) setLabRuns([...state.labRuns, id]); navigate({ view: 'lab', runs: state.labRuns, stage: state.labStage }); } }));
     actions.append(el('button', { type: 'button', class: 'small secondary', text: 'Save as preset', onclick: () => { form.hidden = !form.hidden; if (!form.hidden) form.name.focus(); } }));

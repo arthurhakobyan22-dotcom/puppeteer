@@ -24,6 +24,7 @@ page did still works; it is now split into readable files and has three depths (
 | `static/track-words.js` | The words track (Agent 4): Transcribe (free local Whisper, or fal with its estimate), word blocks (click, double-click to edit, drag edges), split / merge / add / delete, .srt / words.json / mouth-guidance.json downloads. |
 | `static/draft.js` | Steps 03 and 04 (`mountDraft`, `mountFinal`): providers, saved references, the paid buttons with their estimate, manual import; "Insert dialogue beats" (step 03) and the subtitles block (step 04: "Burn subtitles into final", off by default, .srt export). |
 | `static/stagecard.js` | One Studio card per stage (`mountStageCard`). |
+| `static/export.js` | The export kit under step 04 (`mountExport`, `tpl-export`; World stage Agent 4): tick boxes per item (unavailable ones disabled with the reason), target preset with a "What's in it" line, the alpha format, the pending-edits note, "Export · free, local", progress, README + zip link, earlier exports. `docs/EXPORT.md`. |
 | `static/runhead.js` | The run header (`mountRunHead`): name, state chip, spent so far, parent, what changed, Add to Lab, Save as preset. |
 | `static/quick.js` | The Quick view (`renderQuick`) and `mountPanels` / `mountFlow` (the step 02–04 panels shared with Studio). |
 | `static/studio.js` | The Studio view (`renderStudio`) and the legacy "Preparation method" form (`mountLegacyForm`). |
@@ -175,6 +176,18 @@ free, local; preview + download of the subtitled copy) and the .srt export. New 
   stage whose tool is an import (the card then shows "Imported file: <name>" instead of the raw params). The run header
   and the Runs rows show "imported · <stage>" chips. Details: `docs/IMPORTS.md`.
 
+### Export kit (stage 3, Agent 4)
+
+Under step 04 (`mountFinal` mounts `mountExport(node)`; works with no draft and no generator keys) and from the Studio
+run head's "Export…" link (scrolls to `#export`). Target picker (Seedance web, Kling, ComfyUI, After Effects / Nuke,
+Custom) re-ticks the preset's default items and shows "What's in it: …"; one tick box per item, disabled with the plain
+reason when the run lacks the source; the alpha format (ProRes 4444 .mov or RGBA PNG sequence) appears when a
+transparent item is ticked; the pending-edits line says "N pending edits will be saved first (free) and the export made
+from the new run" (or the track's refusal / the paid refusal, with the button disabled); "Export · free, local" →
+`POST /jobs/{id}/export`, polled with `GET /jobs/{id}/export/{name}` every 0.7 s (progress line), then the README in a
+`<pre>`, the "Download <name>.zip ↓" link (`GET /jobs/{id}/export/{name}.zip`), "Open the new version →" when the edits
+were saved first, and "Earlier exports" with a zip link each. Details and the reasoning per preset: `docs/EXPORT.md`.
+
 ## 6. Endpoints per view
 
 | view | calls |
@@ -183,6 +196,7 @@ free, local; preview + download of the subtitled copy) and the .srt export. New 
 | Quick (form) | `POST /estimate` (preset + seconds + prompt/provider/clean_dialogue) for the button label and the per-preset cost lines; `POST /jobs` (multipart: `video`, `preset`, `prompt`, `provider`, `clean_dialogue`, `char1`, `char2`, `confirm_cost=true`) |
 | job panels (Quick + Studio) | `GET /jobs/{id}/run`, `GET /jobs/{id}/files`, `GET /jobs/{id}/mask-review`, `GET /jobs/{id}` (poll every 2.5 s while running), `GET /runs/{id}/face-tracking.json`, `GET /runs/{id}/generation.json`, `GET /jobs/{id}/hd`; `POST /jobs/{id}/mask-review`; `POST /jobs/{id}/seedance` (`confirm_cost=true`); `POST /jobs/{id}/hd` (`confirm_cost=true`); `POST /jobs/{id}/finish`; `POST /presets` |
 | Studio cards | `POST /jobs/{id}/estimate`, `POST /jobs/{id}/branch`; legacy form: `POST /estimate` with `mode`, `POST /jobs` with `mode` |
+| export kit (step 04) | `GET /jobs/{id}/export`, `POST /jobs/{id}/export`, `GET /jobs/{id}/export/{name}` (poll), `GET /jobs/{id}/export/{name}.zip` |
 | Lab | `GET /jobs/tree` (picker), `GET /jobs/{id}/run` + `GET /jobs/{id}/files` per tile, `GET /compare/picks`, `POST /compare/picks` (`runs`, `stage`, `picked`, `note`) |
 | Runs | `GET /jobs/tree` (tree) or `GET /jobs` (flat) |
 

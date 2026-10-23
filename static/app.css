@@ -329,3 +329,17 @@ footer{margin-top:30px;color:var(--muted);font-size:12px}
 .chip.imported{background:#fff3e0;color:#9a5b00}
 @media(max-width:520px){.ft-sliders{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:520px){.tl{grid-template-columns:58px minmax(0,1fr)}.tl-label{padding:0 6px;font-size:10px}.tr-counter{flex-basis:100%;order:3}}
+/* Export kit (step 04, World stage Agent 4) */
+.export{margin-top:18px;padding-top:16px;border-top:1px solid var(--line);min-width:0}
+.export h3 .hint{font-weight:400}
+.export-items{display:grid;gap:6px;margin:10px 0}
+@media(min-width:720px){.export-items{grid-template-columns:1fr 1fr}}
+.export-item{align-items:flex-start;padding:8px 10px;border:1px solid var(--line);border-radius:10px;min-width:0}
+.export-item input{margin-top:3px;flex:none}
+.export-item>span{min-width:0;overflow-wrap:anywhere}
+.export-item.off{opacity:.6}
+.export-result{display:grid;gap:8px;margin-top:10px;min-width:0}
+.export-readme{font:12px/1.6 var(--mono);color:var(--text);background:#f4f4f7;padding:12px;border-radius:9px;max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+.export-list{display:grid;gap:6px;margin-top:8px}
+.export-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line);min-width:0}
+.export-row .wrap{flex:1 1 200px;min-width:0;overflow-wrap:anywhere}

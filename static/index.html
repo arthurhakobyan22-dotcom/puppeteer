@@ -201,6 +201,23 @@
     </div>
     <div class="tiles" data-tiles></div>
     <div class="empty" data-empty>Choose at least two runs above.</div>
+<!-- ============================================================ Export kit (inside the step 04 panel; static/export.js) -->
+<template id="tpl-export">
+  <div class="export" id="export">
+    <h3>Export kit <span class="hint">· free, runs locally</span></h3>
+    <p class="hint">Everything you prepared and edited, packed for the tool you take it to. Pending timeline edits are saved first as one new version, so every export includes them.</p>
+    <div class="row"><label class="field" style="flex:1 1 260px">Target<select data-preset aria-label="Export target"></select></label></div>
+    <p class="line info" data-what>What's in it: …</p>
+    <div class="export-items" data-items></div>
+    <div class="row" data-formats></div>
+    <p class="line" data-pending hidden></p>
+    <div class="actions"><span class="hint" data-hint>Free, runs locally.</span><button type="button" data-export disabled>Export · free, local</button></div>
+    <div class="line info" data-progress role="status" hidden></div>
+    <div class="export-result" data-result hidden></div>
+    <details data-earlier-box hidden><summary>Earlier exports</summary><div class="export-list" data-earlier></div></details>
+  </div>
+</template>
+
   </section>
 </template>
 

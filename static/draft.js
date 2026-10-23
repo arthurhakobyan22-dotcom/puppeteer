@@ -5,6 +5,7 @@ import { $, el, usd, showError, notice, tpl, wireUploads } from './ui.js';
 import { state } from './state.js';
 import { loadJob, isBusy, pollHD } from './jobdata.js';
 import { edits } from './editlayer.js';
+import { mountExport } from './export.js';   // export kit (World stage, Agent 4), mounted under step 04
 
 export const DEFAULT_PROMPT = "@Image1 defines the character's identity only (face, hair, outfit, proportions); do not copy its pose, expression, props, background or lighting. Pose, motion, timing and lip-sync come from @Video1.";
 const REF_EXT = ['png', 'jpg', 'jpeg', 'webp', 'mp4', 'mov', 'webm'];
@@ -132,6 +133,7 @@ export function mountFinal(parent) {
 
   // subtitles: "Burn subtitles into final" (off by default; free, local) + .srt export, from the run's words
   const subs = el('div', { class: 'subs' }); ready.append(subs);
+  const exportKit = mountExport(node);   // works with no generation at all: prep → edit → export
   const sub = { state: null, key: '', busy: false, status: '' };
   async function loadSubs(force = false) {
     const files = state.files || new Set();
@@ -194,6 +196,7 @@ export function mountFinal(parent) {
     const s = state.hd;
     if (s && s.state && s.state !== 'idle') {
       upgradeStatus.hidden = false; upgradeStatus.className = 'line ' + (s.state === 'error' ? 'error' : s.state === 'done' ? 'ok' : 'info');
+    exportKit.update();
       upgradeStatus.textContent = (s.status || '') + (s.state === 'error' && s.fix ? ' ' + s.fix : '');
     } else upgradeStatus.hidden = true;
     const g = state.generation;
