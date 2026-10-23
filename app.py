@@ -246,12 +246,18 @@ def get(ident:str):
         raise HTTPException(404)
     return jobs[ident]
 @app.post('/jobs/{ident}/seedance')
-def seedance(ident:str,prompt:str=Form(...),char1:UploadFile=File(...),char2:UploadFile|None=File(None),provider:str=Form(''),confirm_cost:str|None=Form(None)):
+def seedance(ident:str,prompt:str=Form(...),char1:UploadFile=File(...),char2:UploadFile|None=File(None),provider:str=Form(''),confirm_cost:str|None=Form(None),task:str=Form('')):
+    """`task` (auto | reference | editing): the Seedance task; when the form sends none it comes from the run's slots.json
+    (the Set slot: original set → editing, a changed set → reference), and a run without slots follows FAL_TASK as before."""
     if len(ident)!=32 or not all(c in '0123456789abcdef' for c in ident):raise HTTPException(404)
     folder=RUNS/ident
     from providers import PROVIDERS,default_provider
-    provider=provider.strip().lower()
+    provider=provider.strip().lower();task=(task or '').strip().lower()
     if provider and provider not in PROVIDERS:raise HTTPException(400,'Unknown Seedance provider; choose one of: '+', '.join(PROVIDERS))
+    if task and task not in stages.slots.TASKS:return fail(400,f'Unknown task {task!r}.','Use auto, reference or editing (auto follows the Set slot).')
+    if not task and (folder/'slots.json').exists():task=stages.slots.effective_task(stages.slots.read(folder))
+    if task=='auto':task=''
+
     if not (folder/'audio-manifest.json').exists():raise HTTPException(400,'Audio preparation must complete first.')
     from mask_review import require_approved
     try:require_approved(folder)
@@ -261,7 +267,7 @@ def seedance(ident:str,prompt:str=Form(...),char1:UploadFile=File(...),char2:Upl
     if refused is not None:return refused
     paths=[save_reference(folder,name,upload) for name,upload in [('char1-reference',char1),('char2-reference',char2)]]
     from seedance_bridge import submit
-    try:request_id=submit(folder,prompt,*paths,provider=provider or None)
+    try:request_id=submit(folder,prompt,*paths,provider=provider or None,task=task or None)
     except Exception as e:raise HTTPException(502,str(e))
     jobs[ident]={'id':ident,'state':'running','status':'Seedance rendering: '+request_id}
     def collect():
@@ -484,6 +490,9 @@ def run_child(folder,child,chain_data,stage,changed,estimate,lead='Branched from
             stages.run_branch(child,chain_data,stage,lambda s:jobs[cid].update(status=s))
             try:stages.words.refresh_guidance(child)   # the face stage may have re-run: mouth guidance follows the child's own tracking
             except Exception as e:stages.runner.log(child,f'mouth guidance not refreshed: {type(e).__name__}: {e}')
+            try:
+                if (child/'slots.json').exists():stages.slots.mirror(child,stages.slots.read(child))   # slots saved while the run was preparing land in the finished run.json too
+            except Exception as e:stages.runner.log(child,f'slots not mirrored: {type(e).__name__}: {e}')
             jobs[cid].update(state='done',status='Preparation complete · input review required' if stage in stages.PREP_STAGES else 'Ready · review the prepared input and create a draft')
         except Exception as e:
             message,fix=stages.runner.plain_error(e);jobs[cid].update(state='error',status=message,fix=fix)
@@ -865,6 +874,53 @@ def import_own(ident:str,stage:str=Form(''),file:UploadFile|None=File(None),conf
     stages.runner.log(child,f'imported {params["name"]} ({size} bytes, sha256 {sha}) into the {stage} stage')
     return run_child(folder,child,chain_data,stage,changed,estimate,lead='Imported into a branch of ')
 
+# ---------------------------------------------------------------- World stage (Agent 1): set plates / look images under runs/_assets, Set / Look / Light slots (stages/plates.py, stages/slots.py)
+
+def asset_fail(e):return fail(getattr(e,'status',400),str(e),getattr(e,'fix','Use a PNG, JPEG or WebP image.'))
+
+@app.post('/jobs/{ident}/assets')
+async def post_asset(ident:str,file:UploadFile|None=File(None),kind:str=Form('set')):
+    """Multipart `file` (png / jpg / jpeg / webp, ≤30 MB) + `kind` (set | look) → stored as runs/_assets/<sha16>.<ext>; returns {name, kind, width, height, url}.
+    The run id only says where the upload came from; assets are shared by every run (a composite copies its plate into the run as set-plate.<ext>)."""
+    hd_folder(ident)
+    if file is None or not (file.filename or '').strip():return fail(400,'No image was sent.','Choose a PNG, JPEG or WebP image first.')
+    data=await file.read()
+    try:name=stages.plates.store_asset(data,file.filename,RUNS,(kind or 'set').strip().lower())
+    except stages.plates.AssetError as e:return asset_fail(e)
+    return stages.plates.asset_meta(name,RUNS)
+
+@app.get('/assets')
+def list_assets(kind:str=''):
+    """Every stored set plate / look image, newest first: {assets: [{name, filename, kind, width, height, size, url}]}; `?kind=set|look` narrows."""
+    return {'assets':stages.plates.list_assets(RUNS,kind.strip().lower() or None)}
+
+@app.get('/assets/{name}')
+def get_asset(name:str):
+    try:path=stages.plates.asset_path(name,RUNS)
+    except ValueError as e:return fail(400,str(e),'Use the name an upload returned, for example 0123456789abcdef.png.')
+    if not path.exists():return fail(404,'That image is not in the asset store any more.','Upload it again with the picker.')
+    return FileResponse(path,headers={'Cache-Control':'public, max-age=31536000, immutable'})
+
+@app.get('/jobs/{ident}/slots')
+def get_slots(ident:str):
+    """The run's Set / Look / Light slots (defaults when slots.json is missing) plus `task` (what will be sent), `derived_task`,
+    `task_source` (set | user), `background` (the composite stage's), `background_needed` / `background_applied` for true_swap and original_depth."""
+    folder=hd_folder(ident)
+    try:chain=stages.run_info(folder)['run'].get('chain') or {}
+    except Exception:chain={}
+    return {'id':ident,**stages.slots.view(folder,chain)}
+
+@app.put('/jobs/{ident}/slots')
+async def put_slots(ident:str,request:Request):
+    """Partial update (JSON or form; a form field may carry JSON for set / look / generator): merged, validated, saved to
+    slots.json and mirrored into run.json (`slots`, chain.prompt.params flat keys). Writes nothing anywhere else; no branch, no re-run."""
+    folder=hd_folder(ident);data=await body_fields(request);form='json' not in request.headers.get('content-type','')
+    patch={k:json_field(v,form) for k,v in data.items() if k in ('set','look','light','generator')}   # slots are not tool outputs: saving while the run prepares is fine (run_child mirrors them again when it finishes)
+    try:stages.slots.write(folder,patch)
+    except stages.slots.SlotError as e:return fail(e.status,str(e),e.fix)
+    except OSError as e:return fail(500,'The slots could not be saved.','Check that the run folder is writable, then try again.')
+    return get_slots(ident)
+
 def resume_saved_generations():
     """Resume collection only: never requeue a paid prediction on restart."""
     from seedance_bridge import wait_and_finish
@@ -887,9 +943,6 @@ def resume_saved_generations():
                 write_status(folder,registry[ident])
             threading.Thread(target=collect_saved,daemon=True).start()
 
-@app.get('/health')
-def health():
-    return {'status':'ok','service':'Puppeteer'}
 # ---------------------------------------------------------------- export kit (stages/export.py, stages/export_presets.py): target presets, README, zip; free and local.
 # Pending timeline edits are saved first through the same plan / save / run_child path as POST /jobs/{id}/edits/save (one free
 # branch), then the child is exported; the response, the poll and the README carry `exported_run`. docs/EXPORT.md.
@@ -1006,3 +1059,6 @@ def poll_export(ident:str,name:str):
     if state is None:return fail(404,f'There is no export called {name} for this run.','Start one with POST /jobs/{id}/export.')
     return {**state,'zip_url':f'/jobs/{ident}/export/{name}.zip'}
 
+@app.get('/health')
+def health():
+    return {'status':'ok','service':'Puppeteer'}

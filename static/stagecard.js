@@ -3,6 +3,7 @@
 import { api, plain, send } from './api.js';
 import { $, el, usd, spent, duration, ranges, shortId, setChip, showError, notice, tpl } from './ui.js';
 import { state, navigate } from './state.js';
+import { backgroundControls, BACKGROUND_PARAMS } from './slots.js';   // Background row of the composite card (World stage, Agent 1)
 
 const PREVIEW = {
   input_doctor: ['original.mp4'], audio: ['vocals.wav', 'music.wav'], depth: ['depth.mp4', 'depth-raw.mp4'], mask: ['mask.mp4'],
@@ -95,7 +96,10 @@ export function mountStageCard(parent, stageDef, index) {
       paramsBox.append(el('p', { class: 'hint', text: local.params.name ? 'Imported file: ' + local.params.name : 'Choose the file with "Import my own…" below; this tool needs a file you import.' }));
       return;
     }
+    const custom = stageDef.name === 'composite' && tool.name === 'depth_cutout' ? BACKGROUND_PARAMS : [];   // drawn by backgroundControls below
+    if (stageDef.name === 'composite' && tool.name === 'original') paramsBox.append(el('p', { class: 'hint', text: 'Original frames have no depth person, so there is no background to choose here. Pick "Depth subject over original" to set one.' }));
     for (const [name, spec] of Object.entries(tool.params || {})) {
+      if (custom.includes(name)) continue;
       const value = local.params[name] !== undefined ? local.params[name] : spec.default;
       if (spec.type === 'bool') {
         const input = el('input', { type: 'checkbox' }); input.checked = !!value; input.onchange = () => set(name, input.checked);
@@ -108,6 +112,7 @@ export function mountStageCard(parent, stageDef, index) {
       else { const long = name === 'text' || String(value || '').length > 60; input = el(long ? 'textarea' : 'input', long ? { rows: 4 } : { type: 'text' }); input.value = value == null ? '' : String(value); input.onchange = () => set(name, input.value); }
       paramsBox.append(el('label', { class: 'field' }, spec.label || name, input, spec.hint ? el('span', { class: 'hint', text: spec.hint }) : null));
     }
+    if (custom.length) backgroundControls(paramsBox, { tool, params: local.params, set, jobId: state.jobId });
   }
   function set(name, value) { local.params[name] = value; local.touched = true; local.estimate = null; refreshRerun(); }
   function chooseTool(name) {

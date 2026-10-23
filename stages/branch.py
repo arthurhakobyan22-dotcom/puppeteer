@@ -41,7 +41,9 @@ def shown_value(key,value):
             lo=min((int(s.get('frame_from',0)) for s in value if isinstance(s,dict)),default=0);hi=max((int(s.get('frame_to',s.get('frame_from',0))) for s in value if isinstance(s,dict)),default=lo)
             return f'{len(value)} brush stroke{"s" if len(value)!=1 else ""} on frames {lo}–{hi}'
         return f'{len(value)} items'
-    if isinstance(value,dict):return f'{len(value)} settings'
+    if isinstance(value,dict):
+        if key=='set_fit':return f"moved {round(float(value.get('x',0))*100)}% / {round(float(value.get('y',0))*100)}%, scale ×{float(value.get('scale',1)):.2f}"
+        return f'{len(value)} settings'
     return value
 
 def shown_params(params):
@@ -52,7 +54,11 @@ def describe_change(stage,old,new):
     old_tool,new_tool=old.get('tool','off'),new.get('tool','off');old_params,new_params=old.get('params') or {},new.get('params') or {}
     if old_tool!=new_tool:
         return f'{stage}: {old_tool}'+(f' ({shown_params(old_params)})' if shown_params(old_params) else '')+f' → {new_tool}'+(f' ({shown_params(new_params)})' if shown_params(new_params) else '')
-    diffs=[f'{k}: {shown_value(k,old_params.get(k))} → {shown_value(k,v)}' for k,v in new_params.items() if old_params.get(k)!=v and k not in HIDDEN_PARAMS]
+    try:filled={**get_tool(stage,old_tool).defaults(),**old_params}   # a param a tool drops at its default (composite background) reads "original → plain", not "None → plain"
+    except ValueError:filled=old_params
+    diffs=[f'{k}: {shown_value(k,filled.get(k))} → {shown_value(k,v)}' for k,v in new_params.items() if old_params.get(k)!=v and k not in HIDDEN_PARAMS and not (filled.get(k) in (None,'') and v in (None,''))]
+    defaults=get_tool(stage,new_tool).defaults() if new_tool==old_tool else {}
+    diffs+=[f'{k}: {shown_value(k,v)} → {shown_value(k,defaults.get(k))}' for k,v in old_params.items() if k not in new_params and k not in HIDDEN_PARAMS and k in defaults]   # back to a dropped default
     return f'{stage}: {new_tool} '+(', '.join(diffs) if diffs else 'run again with the same settings')
 
 def changed_chain(run_chain,stage,tool=None,params=None):

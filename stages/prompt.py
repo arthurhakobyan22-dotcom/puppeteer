@@ -14,9 +14,17 @@ def default_prompt():
 
 class IdentityOnly(Tool):
     name='identity_only';stage='prompt';label='Identity-only prompt';description='The built-in prompt: the reference defines identity only; pose, motion, timing and lip-sync come from the prepared clip. Edit the text to change it.'
-    params={'text':{'type':'string','default':None,'label':'Prompt','hint':'Shown before submission; the provider appends the reference rules.'}}
+    params={'text':{'type':'string','default':None,'label':'Prompt','hint':'Shown before submission; the provider appends the reference rules.'},
+            # Set / Look / Light slots (stages/slots.py), mirrored here so they travel with branches; the slots panel in the draft step edits them
+            'set_mode':{'type':'choice','default':'original','choices':['original','original_depth','set_ref','prompt','true_swap'],'label':'Set','hint':'From the Set slot: keep the room, keep its depth only, a set reference image, a described set, or a true swap (set image as the background).'},
+            'set_image':{'type':'string','default':'','label':'Set image','hint':'Asset name of the set plate (runs/_assets).'},
+            'set_prompt':{'type':'string','default':'','label':'Set description','hint':'Words for the set when the Set slot is "prompt".'},
+            'look_mode':{'type':'choice','default':'follow','choices':['follow','style_ref','prompt'],'label':'Look','hint':'From the Look slot: follow the references, a style image, or a described style.'},
+            'look_image':{'type':'string','default':'','label':'Look image','hint':'Asset name of the style image (runs/_assets).'},
+            'look_prompt':{'type':'string','default':'','label':'Look description','hint':'Words for the rendering style when the Look slot is "prompt".'},
+            'light':{'type':'string','default':'','label':'Light','hint':'One line about the lighting (direction, quality, colour).'}}
     inputs=();outputs=('prompt.txt',)
-    def defaults(self):return {'text':default_prompt()}
+    def defaults(self):return {'text':default_prompt()}   # only `text`: the slot keys appear in params when a slot is written, so legacy chains stay `{text}`
     def run(self,inputs,params,folder,status):
         text=params.get('text') or default_prompt();folder=Path(folder)
         (folder/'prompt.txt').write_text(text)

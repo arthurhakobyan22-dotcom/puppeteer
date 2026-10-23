@@ -166,6 +166,23 @@
   </section>
 </template>
 
+<!-- ============================================================ Set / Look / Light slots (inside step 03, above the prompt; static/slots.js). Agents 2 and 3 mount into [data-slot=prompt-builder] and [data-slot=generator]. -->
+<template id="tpl-slots">
+  <div class="slots">
+    <div class="slots-head"><h3>Set, look and light</h3><span class="hint">What the generated world should show. Saved with this run (slots.json); the prompt builder reads it. Nothing re-runs when you change a slot.</span></div>
+    <div class="split">
+      <div class="slot" data-set></div>
+      <div class="slot" data-look></div>
+    </div>
+    <label class="field" style="margin-top:12px">Light<input name="light" placeholder="e.g. soft window light from the left, warm practicals" aria-label="Light"></label>
+    <div class="row" data-apply hidden></div>
+    <p class="line info" data-task role="status">Task · …</p>
+    <p class="hint" data-saved></p>
+    <div data-slot="prompt-builder"></div>
+    <div data-slot="generator"></div>
+  </div>
+</template>
+
 <!-- ============================================================ Final panel (step 04) -->
 <template id="tpl-final">
   <section class="panel" id="final">
@@ -182,6 +199,23 @@
       <form data-form="finish" style="margin-top:14px"><label class="upload"><span class="icon">↑</span><span><strong>Choose Seedance result</strong><small data-filename>We’ll restore the original source audio.</small></span><input name="video" aria-label="Seedance result" type="file" accept="video/*" required></label><div class="actions"><button class="secondary" type="submit">Restore original audio</button></div></form>
     </details>
   </section>
+</template>
+
+<!-- ============================================================ Export kit (inside the step 04 panel; static/export.js) -->
+<template id="tpl-export">
+  <div class="export" id="export">
+    <h3>Export kit <span class="hint">· free, runs locally</span></h3>
+    <p class="hint">Everything you prepared and edited, packed for the tool you take it to. Pending timeline edits are saved first as one new version, so every export includes them.</p>
+    <div class="row"><label class="field" style="flex:1 1 260px">Target<select data-preset aria-label="Export target"></select></label></div>
+    <p class="line info" data-what>What's in it: …</p>
+    <div class="export-items" data-items></div>
+    <div class="row" data-formats></div>
+    <p class="line" data-pending hidden></p>
+    <div class="actions"><span class="hint" data-hint>Free, runs locally.</span><button type="button" data-export disabled>Export · free, local</button></div>
+    <div class="line info" data-progress role="status" hidden></div>
+    <div class="export-result" data-result hidden></div>
+    <details data-earlier-box hidden><summary>Earlier exports</summary><div class="export-list" data-earlier></div></details>
+  </div>
 </template>
 
 <!-- ============================================================ Lab -->
@@ -201,23 +235,6 @@
     </div>
     <div class="tiles" data-tiles></div>
     <div class="empty" data-empty>Choose at least two runs above.</div>
-<!-- ============================================================ Export kit (inside the step 04 panel; static/export.js) -->
-<template id="tpl-export">
-  <div class="export" id="export">
-    <h3>Export kit <span class="hint">· free, runs locally</span></h3>
-    <p class="hint">Everything you prepared and edited, packed for the tool you take it to. Pending timeline edits are saved first as one new version, so every export includes them.</p>
-    <div class="row"><label class="field" style="flex:1 1 260px">Target<select data-preset aria-label="Export target"></select></label></div>
-    <p class="line info" data-what>What's in it: …</p>
-    <div class="export-items" data-items></div>
-    <div class="row" data-formats></div>
-    <p class="line" data-pending hidden></p>
-    <div class="actions"><span class="hint" data-hint>Free, runs locally.</span><button type="button" data-export disabled>Export · free, local</button></div>
-    <div class="line info" data-progress role="status" hidden></div>
-    <div class="export-result" data-result hidden></div>
-    <details data-earlier-box hidden><summary>Earlier exports</summary><div class="export-list" data-earlier></div></details>
-  </div>
-</template>
-
   </section>
 </template>
 

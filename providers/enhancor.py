@@ -23,7 +23,7 @@ class Enhancor(Provider):
         credential('ENHANCOR_API_KEY')
         if not setting('ENHANCOR_WEBHOOK_URL'):raise ValueError('Webhook URL required. Install cloudflared and restart the app, or set ENHANCOR_WEBHOOK_URL.')
 
-    def submit_draft(self,prepared,refs,prompt,*,folder,status=print):
+    def submit_draft(self,prepared,refs,prompt,*,folder,status=print,task=None):   # task: Enhancor has no task setting (it always edits the prepared clip), so it is ignored here
         folder=Path(folder);self.require_configured();key=credential('ENHANCOR_API_KEY')
         char1=Path(refs['char1']);char2=refs.get('char2')
         full_prompt,mode=build_prompt(prompt,folder,refs)

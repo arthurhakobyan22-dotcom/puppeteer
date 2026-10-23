@@ -11,6 +11,7 @@ import { $, $$, el, ranges, showError, notice, tpl } from './ui.js';
 import { state, navigate } from './state.js';
 import { loadJob, fixActions } from './jobdata.js';
 import { mountEditor } from './editor.js';
+import { backgroundChip } from './slots.js';
 
 export const TABS = [
   ['Prepared input', 'seedance-input.mp4', 'Prepared video with embedded audio'],
@@ -46,6 +47,7 @@ export function mountReview(parent) {
   const status = q('[data-review-status]'), tracking = q('[data-tracking]');
   const editor = mountEditor(q('[data-editor]'), { tabs: TABS, onViewChosen: file => { state.previewChosen = true; state.selectedPreview = file; } });
   const check = q('[data-check]'), approve = q('[data-approve]'), reject = q('[data-reject]'), audio = q('[data-audio]'), toolsBox = q('[data-review-tools]');
+  const chips = el('div', { class: 'meta slot-chips', hidden: true }); toolsBox.before(chips);   // "Background · …" (World stage)
 
   check.onchange = () => { approve.disabled = !check.checked; };
   approve.onclick = () => saveReview(true);
@@ -108,6 +110,9 @@ export function mountReview(parent) {
       const line = trackingLine(state.tracking, job.state, mode !== 'face_mesh' && files.has('depth.mp4'));
       tracking.className = 'line ' + line.level; tracking.textContent = line.text; tracking.hidden = false;
     } else tracking.hidden = true;
+    // background chip
+    const chip = backgroundChip(state.run && state.run.run && state.run.run.chain, id);
+    chips.hidden = !chip; chips.replaceChildren(...(chip ? [chip] : []));
     // controls
     const canReview = !!review.fingerprint && !running;
     check.disabled = !canReview; check.checked = !!review.approved; approve.disabled = true; reject.disabled = !canReview;

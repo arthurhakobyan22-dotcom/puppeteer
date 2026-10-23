@@ -91,6 +91,33 @@ def grayscale(src,dst,inferno=False):
     finish(out,s)
 
 def composite(original,depth,seg,directory,audio_source=None):
+    """Depth person over the original frames: mask.mp4, composite-silent.mp4, composite.mp4 (with audio). Unchanged behaviour."""
+    return _cutout(original,depth,seg,directory,audio_source,lambda rgb,d:rgb)
+
+PLAIN_COLORS={'black':(0,0,0),'gray':(128,128,128)}
+
+def composite_bg(original,depth,seg,directory,audio_source=None,background='original',plate=None,plain=(0,0,0),fit=None):
+    """Like `composite`, with a chosen background behind the depth person: 'original' (the real frames), 'full_depth' (the
+    whole frame is the depth video), 'plain' (a flat colour `plain`), 'set_image' (`plate`, an image path, fitted to the
+    frame with stages.plates.fit_rect and moved / scaled by `fit`). Same output files as `composite`."""
+    if background in (None,'','original'):return _cutout(original,depth,seg,directory,audio_source,lambda rgb,d:rgb)
+    if background=='full_depth':return _cutout(original,depth,seg,directory,audio_source,lambda rgb,d:d)
+    if background=='plain':
+        color=np.array(PLAIN_COLORS.get(plain,plain) if isinstance(plain,str) else plain,dtype=np.uint8)
+        return _cutout(original,depth,seg,directory,audio_source,lambda rgb,d:np.broadcast_to(color,rgb.shape))
+    if background=='set_image':
+        if not plate or not Path(plate).exists():raise ValueError('The set image for the background is missing; choose a set plate on the composite card first.')
+        from stages.plates import render_plate
+        cache={}
+        def fill(rgb,d):
+            key=rgb.shape[:2]
+            if key not in cache:cache[key]=render_plate(plate,rgb.shape[1],rgb.shape[0],fit)
+            return cache[key]
+        return _cutout(original,depth,seg,directory,audio_source,fill)
+    raise ValueError(f'Unknown background {background!r}; choose original, full_depth, plain or set_image.')
+
+def _cutout(original,depth,seg,directory,audio_source,fill):
+    """Shared body: `fill(rgb, depth_frame)` gives the background for one frame; the depth person is placed on it inside the mask."""
     raw=Path(seg).is_dir()
     mask_files=sorted(Path(seg).glob('mask_*.png')) if raw else []
     counts=[sum(1 for _ in frames(p)) for p in [original,depth]]+[len(mask_files) if raw else sum(1 for _ in frames(seg))]
@@ -111,7 +138,7 @@ def composite(original,depth,seg,directory,audio_source=None):
             mask=((marked_error+100<unchanged_error)&(observed[:,:,1]-base[:,:,1]>12)).astype(np.uint8)*255
         mask=np.asarray(Image.fromarray(mask).resize((w,h),Image.Resampling.NEAREST));area+=np.count_nonzero(mask)
         d=np.asarray(Image.fromarray(d).resize((w,h),Image.Resampling.BILINEAR));alpha=(mask>127)[:,:,None]
-        result=np.where(alpha,d,rgb).astype(np.uint8)
+        result=np.where(alpha,d,fill(rgb,d)).astype(np.uint8)
         for name,a in [('mask',np.repeat(mask[:,:,None],3,axis=2)),('composite-silent',result)]:
             if name not in outs:outs[name]=writer(directory/(name+'.mp4'),w,h)
             put(*outs[name],a,i)

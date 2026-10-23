@@ -12,8 +12,13 @@ from . import costs
 class SeedanceProvider(Tool):
     stage='generate';paid=True
     params={'char1':{'type':'string','default':'char1-reference.png','label':'Character 1 reference','hint':'Image, or an identity video for Character 1 only.'},
-            'char2':{'type':'string','default':'','label':'Character 2 reference','hint':'Optional image.'}}
+            'char2':{'type':'string','default':'','label':'Character 2 reference','hint':'Optional image.'},
+            'task':{'type':'choice','default':'auto','choices':['auto','reference','editing'],'label':'Task','hint':'auto follows the Set slot (original set → editing, anything else → reference) or FAL_TASK; Enhancor has no task setting.'}}
     inputs=('seedance-input.mp4',);outputs=('seedance-request.json','seedance-response.json','generation.json','seedance-result.mp4','final-preview.mp4')
+    def normalize_params(self,params):
+        merged=super().normalize_params(params)
+        if merged.get('task') in (None,'','auto'):merged.pop('task',None)   # the default is dropped: legacy params {char1, char2} and their keys are unchanged
+        return merged
     def estimate_cost(self,inputs,params):return costs.estimate_tool(self.name,inputs.get('seconds'),params)
     def run(self,inputs,params,folder,status):
         import seedance_bridge
@@ -21,7 +26,8 @@ class SeedanceProvider(Tool):
         text=(chain.get('prompt') or {}).get('params',{}).get('text') or seedance_bridge.DEFAULT_PROMPT
         char1=folder/str(params.get('char1') or 'char1-reference.png');char2=folder/params['char2'] if params.get('char2') else None
         if not char1.exists():raise ValueError('Character 1 reference is missing; add it in the draft panel before generating.')
-        request_id=seedance_bridge.submit(folder,text,char1,char2,provider=self.name,status=status)
+        task=params.get('task') if params.get('task') in ('reference','editing') else None
+        request_id=seedance_bridge.submit(folder,text,char1,char2,provider=self.name,status=status,task=task)
         seedance_bridge.wait_and_finish(folder,request_id,status)
         return {'outputs':[n for n in self.outputs if (folder/n).exists()],'health':f'Draft rendered by {self.label} ({request_id}).','cost_usd':self.estimate_cost(inputs,params)}
 
@@ -33,12 +39,13 @@ class EnhancorTool(SeedanceProvider):
 
 register(FalTool);register(EnhancorTool)
 
-def record_submission(folder,provider,request_id,prompt=None,mode=None):
-    """Write the generate report when a draft is submitted (called by seedance_bridge.submit)."""
+def record_submission(folder,provider,request_id,prompt=None,mode=None,task=None):
+    """Write the generate report when a draft is submitted (called by seedance_bridge.submit). `task`: the Seedance task sent
+    (reference | editing | …), or 'not applicable' for a provider without one (Enhancor)."""
     folder=Path(folder);seconds=costs.clip_seconds(folder)
-    report=new_report('generate',provider,{'provider':provider},started=now())
+    report=new_report('generate',provider,{'provider':provider,**({'task':task} if task else {})},started=now())
     report.update(state='running',health=f'Draft submitted to {provider} ({request_id}); waiting for the render.',cost_usd=costs.price_for(provider,seconds) or 0.0,
-                  outputs={n:None for n in ('seedance-request.json','seedance-response.json','generation.json') if (folder/n).exists()},data={'request_id':request_id,'mode':mode,'prompt':prompt})
+                  outputs={n:None for n in ('seedance-request.json','seedance-response.json','generation.json') if (folder/n).exists()},data={'request_id':request_id,'mode':mode,'prompt':prompt,'task':task})
     write_report(folder,'generate',report);return report
 
 def record_result(folder,ok=True,message=None):

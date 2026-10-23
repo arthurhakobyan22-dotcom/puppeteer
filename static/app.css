@@ -329,6 +329,27 @@ footer{margin-top:30px;color:var(--muted);font-size:12px}
 .chip.imported{background:#fff3e0;color:#9a5b00}
 @media(max-width:520px){.ft-sliders{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:520px){.tl{grid-template-columns:58px minmax(0,1fr)}.tl-label{padding:0 6px;font-size:10px}.tr-counter{flex-basis:100%;order:3}}
+
+/* World stage (Agent 1): Set / Look / Light slots, asset picker, Background row */
+.slots{display:grid;gap:10px;margin:20px 0 6px;padding:14px;border:1px solid var(--line-strong);border-radius:12px;background:#fafafb;min-width:0}
+.slots-head h3{margin:0 0 4px;font-size:15px}
+.slots .slot{display:grid;gap:8px;min-width:0}
+.slots textarea{min-height:52px}
+.slots .line{margin:4px 0 0}
+.asset-picker{display:grid;gap:8px;min-width:0}
+.asset-grid{display:flex;gap:8px;flex-wrap:wrap;min-width:0}
+.asset{display:grid;gap:3px;width:92px;padding:4px;background:#fff;border:1px solid var(--line-strong);border-radius:8px;color:var(--muted);font:500 10px/1.3 var(--sans);text-align:center;cursor:pointer}
+.asset img{width:100%;height:56px;object-fit:cover;border-radius:5px;background:#09090c}
+.asset span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.asset.active{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft);color:var(--accent)}
+.asset-upload{position:relative;overflow:hidden;cursor:pointer}
+.asset-upload input{position:absolute;inset:0;opacity:0;width:100%;cursor:pointer}
+.bg-plate{display:grid;gap:8px;min-width:0}
+.bg-canvas{width:100%;max-width:480px;height:auto;border-radius:8px;border:1px solid var(--line);background:#09090c;cursor:grab;touch-action:none}
+.bg-canvas:active{cursor:grabbing}
+.bg-plate input[type=range]{width:100%}
+.slot-chips a.chip{text-decoration:none}
+
 /* Export kit (step 04, World stage Agent 4) */
 .export{margin-top:18px;padding-top:16px;border-top:1px solid var(--line);min-width:0}
 .export h3 .hint{font-weight:400}

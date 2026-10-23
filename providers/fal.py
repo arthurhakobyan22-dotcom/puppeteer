@@ -38,7 +38,12 @@ class Fal(Provider):
         load_env()
         credential('FAL_KEY')
 
-    def _task(self):
+    def _task(self,explicit=None):
+        """The Seedance task: the explicit one from the request (the Set slot: original set → editing, a changed set → reference) when given, else FAL_TASK (default editing)."""
+        if explicit not in (None,'','auto'):
+            task=str(explicit).strip().lower()
+            if task not in TASKS:raise ValueError('The task must be one of: '+', '.join(TASKS))
+            return task
         task=(setting('FAL_TASK','editing') or 'editing').strip().lower()
         if task not in TASKS:raise ValueError('FAL_TASK must be one of: '+', '.join(TASKS))
         return task
@@ -53,8 +58,8 @@ class Fal(Provider):
             if saved.get('requestId')==request_id and saved.get('endpoint'):return saved['endpoint']
         return COMPLETE_APP if folder.name=='hd' else DRAFT_APP
 
-    def submit_draft(self,prepared,refs,prompt,*,folder,status=print):
-        folder=Path(folder);self.require_configured();task=self._task()
+    def submit_draft(self,prepared,refs,prompt,*,folder,status=print,task=None):
+        folder=Path(folder);self.require_configured();task=self._task(task)
         char1=Path(refs['char1']);char2=refs.get('char2')
         videos=[Path(prepared)];images=[]
         check_video_constraints(prepared)

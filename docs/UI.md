@@ -262,3 +262,37 @@ user gesture when it is off screen, so drive the Play button with a real click.
 `8f6e9537…` (see docs/MASK-WAND.md "Verification artefacts"), plus `431506e4…` (Talking head preset on the fixture
 upload, input-doctor card checked in Studio). No `calls.jsonl` exists in any of them. At 380 px with the wand open
 `document.documentElement.scrollWidth` is 380 and the overlay box equals the rendered video box.
+
+## 12. Background row, Background chip and the Set / Look / Light panel (Agent 1, World stage)
+
+- `static/slots.js` holds it all: `fitRect` / `parseFit` (the plate maths, same as `stages/plates.py`), `assetPicker({kind,
+  value, onChange})` (thumbnails from `GET /assets?kind=` plus an "Upload image…" input → `POST /jobs/{id}/assets`),
+  `backgroundControls(box, {tool, params, set, jobId})`, `backgroundChip(chain, jobId)` and `mountSlots(before)`.
+- **Composite card (Studio).** `stagecard.js` skips the four background params in its generic loop for `depth_cutout`
+  and calls `backgroundControls`: a Background select (Original frames / Full depth / Plain colour / Set image with one
+  line each), the plain colour when `plain`, and for `set_image` the set-plate picker plus a canvas: the plate drawn
+  with `fitRect`, the first frame (`GET /jobs/{id}/mask/frame?i=0`, with the mask outline) half transparent over it;
+  drag = move (frame fractions), the slider = scale, "Centre & cover" resets. Every change goes through the card's
+  `set()` so "Re-run from here" (free: composite + face are local) branches with `{background, set_image, set_fit}`.
+  The `original` composite tool shows one line: no depth person, so no background to choose.
+- **Review panel.** A chip row (`.slot-chips`, before `[data-review-tools]`) shows "Background · Set image" when the
+  composite tool is `depth_cutout`; it links to `/?job=<id>&view=studio#stage-composite` (Studio scrolls to the card).
+- **Draft step.** `mountSlots` mounts `tpl-slots` above the prompt textarea (`draft.js` calls `slots.update()` in its
+  `update()`). Set (five modes with one line each; the picker for `set_ref` / `true_swap`, a textarea for `prompt`),
+  Look (three modes; the picker for `style_ref`, a textarea for `prompt`), Light (one line), the task line
+  "Task · reference (set changed)" / "Task · editing (original set)" / "(chosen by you)" (plus one sentence when the
+  generator is Enhancor: no task setting, recorded as not applicable), and "Saved with this run (slots.json)". Changes
+  are saved at once (`PUT /jobs/{id}/slots`, text fields debounced 500 ms). `original_depth` and `true_swap` show
+  "Apply as background (new run) · free": `POST /jobs/{id}/branch` at `composite` with `background: full_depth` or
+  `set_image` (+ the plate and fit), then `PUT /jobs/<child>/slots` with the same slots and `navigate` to the child;
+  when the run already has that background the note says "Applied in this run". Picking `true_swap` on a run whose
+  composite already has a plate adopts that plate. Mount points for Agents 2 and 3 inside `tpl-slots`:
+  `[data-slot=prompt-builder]` and `[data-slot=generator]` (empty divs under the task line).
+- New calls: `GET/PUT /jobs/{id}/slots`, `POST /jobs/{id}/assets`, `GET /assets`, `GET /assets/{name}`,
+  `GET /jobs/{id}/mask/frame?i=0` (the canvas frame). CSS: `.slots*`, `.asset*`, `.bg-plate`, `.bg-canvas`, `.slot-chips`.
+- Verification artefacts (2026-10-24, port 8781, offline): `46bb5dfe…` (hard-link copy of `0be4cf2c…`, own
+  status / run.json / stages/), its composite children `459087f5…` (original), `503a4e8b…` (full depth), `9f3aabb3…`
+  (plain gray), `08a838f2…` (set image via the API), `721368c2…` (set image placed by dragging on the card),
+  `cdc475cc…` (full depth from "Apply as background" in the draft step, slots saved on it), and `03b6e510…` (the plain
+  error for a missing plate). The plate is `runs/_assets/f7f1c8783ca9d58e.png`. No `calls.jsonl` anywhere; the fixture
+  and the copy are sha256-identical before and after; 375 px wide: no horizontal scroll, no console errors.

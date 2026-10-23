@@ -24,7 +24,9 @@ def provider_for(folder):
         if saved in PROVIDERS:return saved
     return 'enhancor'
 
-def submit(folder,prompt,char1,char2=None,provider=None,status=print):
+def submit(folder,prompt,char1,char2=None,provider=None,status=print,task=None):
+    """`task` (reference | editing, from the Set slot or the form) goes to the adapter; generation.json records the task used
+    ('not applicable' for Enhancor) and run.json.chain.generate.params.task is set when it is one of the tool's choices."""
     folder=Path(folder)
     from mask_review import require_approved,is_mesh
     require_approved(folder)
@@ -40,17 +42,37 @@ def submit(folder,prompt,char1,char2=None,provider=None,status=print):
         status('Embedding audio in the prepared video');prepared=prepare_seedance_video(folder,clean_dialogue)
     refs={'char1':Path(char1),'char2':Path(char2) if char2 else None}
     full_prompt,mode=build_prompt(prompt,folder,refs)
-    ident=adapter.submit_draft(prepared,refs,prompt,folder=folder,status=status)
+    ident=adapter.submit_draft(prepared,refs,prompt,folder=folder,status=status,task=task)
     response={'requestId':ident,'provider':name}
     if adapter.draft_endpoint:response['endpoint']=adapter.draft_endpoint
     (folder/'seedance-response.json').write_text(json.dumps(response))
-    (folder/'generation.json').write_text(json.dumps({'request_id':ident,'provider':name,'prompt':full_prompt,'mode':mode,'video':'seedance-result.mp4'}))
+    task_used=task_sent(folder,task)
+    generation={'request_id':ident,'provider':name,'prompt':full_prompt,'mode':mode,'video':'seedance-result.mp4','task':task_used}
+    if task_used=='not applicable':generation['task_note']=adapter.label+' has no task setting: it always edits the prepared clip.'
+    (folder/'generation.json').write_text(json.dumps(generation))
     try:
         from stages import prompt as prompt_stage,generate as generate_stage
-        prompt_stage.record(folder,prompt,full_prompt,mode);generate_stage.record_submission(folder,name,ident,prompt=full_prompt,mode=mode)
+        prompt_stage.record(folder,prompt,full_prompt,mode);generate_stage.record_submission(folder,name,ident,prompt=full_prompt,mode=mode,task=task_used)
+        record_task(folder,task_used)
     except OSError:pass
     status('Seedance draft submitted: '+ident)
     return ident
+
+def task_sent(folder,task=None):
+    """The task that went out with the draft: what the adapter wrote into seedance-request.json; 'not applicable' when the
+    request has no task field (Enhancor); the explicit one only when there is no request file to read."""
+    try:return json.loads((Path(folder)/'seedance-request.json').read_text()).get('task') or 'not applicable'
+    except (OSError,ValueError,AttributeError):return task or 'not applicable'
+
+def record_task(folder,task):
+    """run.json.chain.generate.params.task = the task sent, when it is one of the tool's choices (never for 'not applicable')."""
+    if task not in ('reference','editing'):return
+    from stages.runner import load_run,save_run
+    from stages.base import fresh
+    run=load_run(folder)
+    if not run:return
+    entry=run.setdefault('chain',{}).setdefault('generate',{'tool':'fal','params':{},'key':None,'cached_from':None});entry['params']={**(entry.get('params') or {}),'task':task}
+    fresh(Path(folder)/'run.json');save_run(folder,run)
 
 def wait_and_finish(folder,request_id,status=print):
     """Poll the saved provider every 10 s; on completion download the clip and restore the original audio."""

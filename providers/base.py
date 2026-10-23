@@ -18,8 +18,9 @@ class Provider:
     def require_configured(self):
         """Raise ValueError when keys/callbacks are missing; never return or log their values."""
         raise NotImplementedError
-    def submit_draft(self,prepared,refs,prompt,*,folder,status=print):
-        """Submit the prepared clip plus `refs={'char1':Path,'char2':Path|None}`; return the provider request id."""
+    def submit_draft(self,prepared,refs,prompt,*,folder,status=print,task=None):
+        """Submit the prepared clip plus `refs={'char1':Path,'char2':Path|None}`; return the provider request id.
+        `task` (fal: reference | editing | …) overrides the adapter's default when given; adapters without a task setting ignore it."""
         raise NotImplementedError
     def poll(self,request_id,*,folder):
         """Return {'state': queued|running|done|error, 'status': str, 'result_url': str|None, ...}."""

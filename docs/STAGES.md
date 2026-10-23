@@ -404,3 +404,34 @@ The independent reviewer's findings and what changed:
   (`composite.BASE_OF['import_control'] = 'imported-control.mp4'`; `mode_for_chain` → `original`). `describe_chain`
   appends ` · imported` and shows the file name only. `GET /jobs` / `GET /jobs/tree` summaries carry `imported: [stages]`.
   Upload route, conform rules and the zip download: `docs/IMPORTS.md`.
+
+## 18. World stage (Agent 1): backgrounds, set plates, Set / Look / Light slots
+
+- **Composite `depth_cutout` params** (`stages/composite.py`): `background` (`original` default | `full_depth` | `plain` |
+  `set_image`), `plain_color` (`black` | `gray`), `set_image` (an asset name, see below), `set_fit` (JSON
+  `{"x","y","scale"}`, frame fractions / scale factor). `normalize_params` drops every key at its default and the keys the
+  chosen background does not use, so a legacy chain's params stay `{}` and **its cache key is unchanged**
+  (`tests/test_world.py` pins it). `original` runs `pipeline.composite` exactly as before; the other three run the
+  additive `pipeline.composite_bg(original, depth, seg, directory, audio_source, background, plate, plain, fit)` (same
+  mask recovery, same three output files; `composite.mp4` keeps the audio). With `set_image` the plate is copied into
+  the run as `set-plate.<ext>` after `fresh()` and listed in the report's outputs (so a branch links it). A missing plate
+  is a plain error with a fix; `describe_change` reads "composite: depth_cutout background: original → plain". The face
+  stage draws on `depth-composite-silent.mp4` as before, so the mesh lands on top of every background.
+  `stages.composite.background_of(chain)` → `(background, label)` for the UI chip. `pipeline.PLAIN_COLORS` holds the
+  two colours; `stages.plates.fit_rect(plate_w, plate_h, frame_w, frame_h, fit)` is the one fit formula (cover + centre,
+  then scale around the centre, then move by frame fractions), ported one to one as `fitRect` in `static/slots.js`.
+- **Assets** (`stages/plates.py`): `store_asset(bytes, filename, runs_root, kind)` → `runs/_assets/<sha256[:16]>.<ext>`
+  (+ `<sha16>.json` with the original name, kind, size, width, height); png / jpg / jpeg / webp, ≤ 30 MB, decoded with
+  PIL first. `asset_path(name, runs_root)` (strict name check), `asset_info(path)`, `asset_meta(name, runs_root)`,
+  `list_assets(runs_root, kind)`. Routes: `POST /jobs/{id}/assets` (multipart `file`, `kind` = `set` | `look`) →
+  `{name, filename, kind, size, width, height, url}`; `GET /assets` (`?kind=`) → `{assets: [...]}`; `GET /assets/{name}`
+  serves the file (immutable cache headers). `_assets` is not a run id, so `GET /jobs` ignores it like `_imports`.
+- **Slots** (`stages/slots.py`, `runs/<id>/slots.json`): shape and rules in `docs/WORLD-LOOK-EXPORT-SPEC.md` §3 and §W1.
+  `read(folder)` (slots.json → `run.json.slots` → the flat keys a branch inherited in `chain.prompt.params` → defaults),
+  `write(folder, patch)` (merge, validate, `fresh()` both files, mirror into run.json as `slots` and into
+  `chain.prompt.params` as `set_mode`, `set_image`, `set_prompt`, `look_mode`, `look_image`, `look_prompt`, `light`),
+  `task_for(slots)`, `effective_task(slots)`, `view(folder, chain)`. Routes: `GET /jobs/{id}/slots`,
+  `PUT /jobs/{id}/slots` (JSON or form, partial). Writing a slot never re-runs anything and never writes into another
+  run; `app.run_child` mirrors a child's slots again when its run finishes. The prompt tool `identity_only` declares the
+  flat keys as params (its `defaults()` still answers only `text`, so legacy chains are unchanged); the generate tools
+  declare `task` (dropped at `auto`).

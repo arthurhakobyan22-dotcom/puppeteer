@@ -20,6 +20,7 @@ Both adapters build the same prompt through `providers.base.build_prompt`: your 
 - Draft endpoint: `bytedance/seedance-2.5/reference-to-video`. Every local file is uploaded to fal storage with `fal_client.upload_file`; nothing goes to tmpfiles or catbox.
 - Payload: `{'prompt', 'video_urls': [prepared (+ char1 video)], 'image_urls': [char1 image, char2]` (omitted when empty)`, 'task': FAL_TASK, 'draft': True, 'resolution': '480p', 'generate_audio': True}`. `duration` and `aspect_ratio` are not sent: `task: editing` coerces them to `auto`.
 - `FAL_TASK` (default `editing`) accepts `auto | reference | editing | extension`. `editing` modifies the prepared clip; `reference` treats it as a style/motion reference.
+- **Task from the Set slot (World stage).** `Fal._task(explicit=None)` takes the task from the request when one is given: `seedance_bridge.submit(..., task=)` passes it through `submit_draft(..., task=)`; `POST /jobs/{id}/seedance` reads `task` from the form, else from the run's `slots.json` (`stages.slots.effective_task`: an `original` set → `editing`, any other set → `reference`, unless the user overrode `generator.task`); a run without `slots.json` and no form field follows `FAL_TASK` exactly as before. The `generate` tools have a `task` param (`auto | reference | editing`, default `auto` = as before). `generation.json` records the task that went out (`task`), and `run.json.chain.generate.params.task` is set to it.
 - Local checks before any upload (no paid call): each video 1.8–30.2 s, ≤200 MB, 300–6000 px per side, aspect 0.4–2.5, 24–60 fps; images ≤30 MB.
 - Polling: `fal_client.status` → `Queued` (queue position shown), `InProgress`, `Completed`; then `fal_client.result` is saved to `fal-result.json` (`video.url`, `seed`, `draft_id`) and `draft_id` is copied into `generation.json`.
 - Finalize: `bytedance/seedance-2.5/draft/complete` with `{'draft_id': ..., 'resolution': '1080p'}`. This is a true completion of the same draft (same account, valid for 7 days), so the 1080p result matches the approved 480p draft. If the result carried `draft_id: null`, finalize raises instead of re-running.
@@ -38,6 +39,6 @@ Both adapters build the same prompt through `providers.base.build_prompt`: your 
 
 - `seedance-request.json`: the exact payload sent (no secrets).
 - `seedance-response.json`: `{'requestId', 'provider', 'endpoint'?}`; `wait_and_finish`, startup resume and `workflow.py resume` read the provider from here.
-- `generation.json`: `{'request_id', 'provider', 'prompt', 'mode', 'video', 'draft_id'?}`.
+- `generation.json`: `{'request_id', 'provider', 'prompt', 'mode', 'video', 'task', 'task_note'?, 'draft_id'?}`. `task` is what the adapter sent (fal: `editing` | `reference` | …); Enhancor has no task setting, so it is recorded as `'not applicable'` with a one-sentence `task_note`, and the slots panel says so.
 - `provider-status.json`: last poll result. `fal-result.json`: raw fal result.
 - `hd/request.json`, `hd/response.json`: finalize payload and `{'requestId', 'provider', 'endpoint'?}`.
