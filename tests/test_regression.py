@@ -497,7 +497,7 @@ class RunsAndRoutesTests(unittest.TestCase):
             self.assertEqual(client.get('/jobs/'+'d'*32).status_code,404);self.assertEqual(client.get('/jobs/notarun').status_code,404)
             listed=client.get(f'/jobs/{HEX}/files').json()['files'];self.assertIn('mask.mp4',listed);self.assertIn('seedance-input.mp4',listed);self.assertEqual(client.get('/jobs/'+'d'*32+'/files').status_code,404)
             self.assertEqual(client.get(f'/jobs/{HEX}/hd').json()['state'],'idle');self.assertEqual(client.get('/health').json(),{'status':'ok','service':'Puppeteer'})
-            providers=client.get('/providers').json();self.assertEqual(set(providers['providers']),{'enhancor','fal'});self.assertNotIn('FAL_KEY',json.dumps(providers))
+            providers=client.get('/providers').json();self.assertEqual(set(providers['providers']),{'enhancor','fal','wan'});self.assertNotIn('FAL_KEY',json.dumps(providers))
 
 # ---------------------------------------------------------------- doctor.py and the existing test modules
 

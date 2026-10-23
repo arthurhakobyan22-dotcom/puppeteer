@@ -230,9 +230,10 @@ export function mountSlots(before) {
     else if (slots.background_applied) setNote.textContent = 'Applied in this run: the composite already uses the ' + BACKGROUND_LABEL[needed].toLowerCase() + ' background.';
     else setNote.textContent = 'This set mode needs the ' + BACKGROUND_LABEL[needed].toLowerCase() + ' background in the composite (this run has ' + (slots.background === needed ? 'a different set plate' : (slots.background_label || 'original frames').toLowerCase()) + '). "Apply as background" makes a new run with it and saves these slots there.';
     const provider = (state.generation && state.generation.provider) || (slots.generator && slots.generator.name) || '';
-    const enhancor = provider === 'enhancor' || (!provider && state.providerDefault === 'enhancor' && !(state.providers.fal && state.providers.fal.configured));
+    const caps = state.providers[provider] || (!provider && state.providerDefault === 'enhancor' && !(state.providers.fal && state.providers.fal.configured) ? state.providers.enhancor : null);
+    const noTask = !!(caps && Array.isArray(caps.tasks) && !caps.tasks.length);   // from the generator's capabilities (tasks: []), not a hard-coded provider name
     const why = slots.task_source === 'user' ? 'chosen by you' : slots.set.mode === 'original' ? 'original set' : 'set changed';
-    taskLine.textContent = 'Task · ' + slots.task + ' (' + why + ')' + (enhancor ? '. Enhancor has no task setting: it always edits the prepared clip, so this is recorded as not applicable there.' : '');
+    taskLine.textContent = 'Task · ' + slots.task + ' (' + why + ')' + (noTask ? '. ' + caps.label + ' has no task setting' + (caps.control === 'pose' ? ' (it always keeps the pose and timing of the prepared clip)' : ' (it always edits the prepared clip)') + ', so this is recorded as not applicable there.' : '');
   }
   return { node, update() { if (state.jobId !== loadedFor) { slots = null; saved.textContent = ''; } load(); if (slots) render(); }, reload: () => load(true) };
 }

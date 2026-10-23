@@ -364,3 +364,18 @@ footer{margin-top:30px;color:var(--muted);font-size:12px}
 .export-list{display:grid;gap:6px;margin-top:8px}
 .export-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line);min-width:0}
 .export-row .wrap{flex:1 1 200px;min-width:0;overflow-wrap:anywhere}
+/* Generator slot (Agent 3): the generator picker in the draft step (static/generator.js) */
+.generator{display:grid;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);min-width:0}
+.generator-list{display:flex;flex-wrap:wrap;gap:8px}
+.generator-choice{display:grid;gap:2px;text-align:left;padding:8px 12px;background:#fff;color:var(--text);border:1px solid var(--line-strong);border-radius:10px;min-width:0;flex:1 1 180px}
+.generator-choice strong{font-size:13px}
+.generator-choice small{font-size:11px;color:#656977}
+.generator-choice.active{border-color:var(--accent);background:var(--accent-soft)}
+.generator-choice.unconfigured{opacity:.6}
+.generator-choice:disabled{cursor:default}
+.generator-summary{margin:0}
+.generator-limits{margin:0;padding-left:18px;font-size:13px;display:grid;gap:4px}
+.generator-limits .hint{display:block}
+.upload.disabled{opacity:.55;cursor:default;border-style:solid}
+.upload.disabled:hover{border-color:var(--line-strong);background:#fafafb}
+.upload.disabled input{cursor:default}

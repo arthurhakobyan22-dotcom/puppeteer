@@ -8,7 +8,7 @@ Files in a run folder: `seedance-request.json` (payload, no secrets, written by 
 from pathlib import Path
 import json,time,shutil
 from audio_workflow import finish_preview
-from providers import get_provider,default_provider,PROVIDERS
+from providers import get_provider,default_provider,PROVIDERS,GENERATORS   # GENERATORS = the Seedance pair + wan (docs/GENERATORS.md)
 from providers.base import build_prompt,download_result
 
 DEFAULT_PROMPT="@Image1 defines the character's identity only (face, hair, outfit, proportions); do not copy its pose, expression, props, background or lighting. Pose, motion, timing and lip-sync come from @Video1."
@@ -21,7 +21,7 @@ def provider_for(folder):
         if not path.exists():continue
         try:saved=json.loads(path.read_text()).get('provider')
         except (ValueError,AttributeError):continue
-        if saved in PROVIDERS:return saved
+        if saved in GENERATORS:return saved
     return 'enhancor'
 
 def submit(folder,prompt,char1,char2=None,provider=None,status=print,task=None):
@@ -33,7 +33,7 @@ def submit(folder,prompt,char1,char2=None,provider=None,status=print,task=None):
     if (folder/'seedance-response.json').exists():raise ValueError('This job already has a provider response. Resume it; prepare a new job for a deliberate variation.')
     if not (folder/'audio-manifest.json').exists():raise ValueError('Audio preparation must complete before submission.')
     name=provider or default_provider()
-    if name not in PROVIDERS:raise ValueError(f'Unknown provider {name!r}; choose one of: '+', '.join(PROVIDERS))
+    if name not in GENERATORS:raise ValueError(f'Unknown provider {name!r}; choose one of: '+', '.join(GENERATORS))
     adapter=get_provider(name);adapter.require_configured()
     from audio_workflow import prepare_seedance_video
     clean_dialogue=bool(json.loads((folder/'audio-manifest.json').read_text() or '{}').get('clean_dialogue'))

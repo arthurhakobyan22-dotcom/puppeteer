@@ -251,9 +251,9 @@ def seedance(ident:str,prompt:str=Form(...),char1:UploadFile=File(...),char2:Upl
     (the Set slot: original set → editing, a changed set → reference), and a run without slots follows FAL_TASK as before."""
     if len(ident)!=32 or not all(c in '0123456789abcdef' for c in ident):raise HTTPException(404)
     folder=RUNS/ident
-    from providers import PROVIDERS,default_provider
+    from providers import GENERATORS,default_provider
     provider=provider.strip().lower();task=(task or '').strip().lower()
-    if provider and provider not in PROVIDERS:raise HTTPException(400,'Unknown Seedance provider; choose one of: '+', '.join(PROVIDERS))
+    if provider and provider not in GENERATORS:raise HTTPException(400,'Unknown Seedance provider; choose one of: '+', '.join(GENERATORS))
     if task and task not in stages.slots.TASKS:return fail(400,f'Unknown task {task!r}.','Use auto, reference or editing (auto follows the Set slot).')
     if not task and (folder/'slots.json').exists():task=stages.slots.effective_task(stages.slots.read(folder))
     if task=='auto':task=''
@@ -262,9 +262,10 @@ def seedance(ident:str,prompt:str=Form(...),char1:UploadFile=File(...),char2:Upl
     from mask_review import require_approved
     try:require_approved(folder)
     except ValueError as e:raise HTTPException(409,str(e))
-    estimate=stages.costs.price_for(provider or default_provider(),stages.costs.clip_seconds(folder)) or 0
+    estimate=generator_estimate(folder,provider or default_provider())   # the chosen generator's price (wan: at the resolution saved in the slots)
     refused=cost_gate(estimate,confirm_cost,legacy=True,folder=folder,what='Creating this draft')
     if refused is not None:return refused
+    if provider=='wan':write_wan_options(folder)   # the Wan adapter reads its resolution from wan-options.json (slots.generator.resolution, else 480p)
     paths=[save_reference(folder,name,upload) for name,upload in [('char1-reference',char1),('char2-reference',char2)]]
     from seedance_bridge import submit
     try:request_id=submit(folder,prompt,*paths,provider=provider or None,task=task or None)
@@ -282,9 +283,15 @@ def seedance(ident:str,prompt:str=Form(...),char1:UploadFile=File(...),char2:Upl
 
 @app.get('/providers')
 def list_providers():
-    """Capabilities plus a configured flag per provider; never the key values."""
-    from providers import PROVIDERS,get_provider,configured,default_provider
-    return {'default':default_provider(),'providers':{name:{**get_provider(name).capabilities(),'configured':configured(name)} for name in PROVIDERS}}
+    """Capabilities (normalized, providers/capabilities.py) plus `configured` and `summary` per generator; never the keys (not even
+    their names: `GET /jobs/{id}/generators` says which variable to add). Lists every generator (`providers.GENERATORS`: enhancor,
+    fal, wan); `default` is still one of the Seedance pair."""
+    from providers import GENERATORS,normalized_capabilities,configured,default_provider
+    from providers.capabilities import summary
+    out={}
+    for name in GENERATORS:
+        caps=normalized_capabilities(name);out[name]={**caps,'configured':configured(name),'summary':summary(caps)}
+    return {'default':default_provider(),'generators':list(GENERATORS),'providers':out}
 
 @app.post('/jobs/{ident}/finish')
 def finish(ident:str,video:UploadFile=File(...)):
@@ -332,10 +339,11 @@ async def create_hd(ident:str,request:Request):
         if not (folder/'final-preview.mp4').exists():raise HTTPException(400,'Complete and review a draft first.')
         from seedance_bridge import provider_for
         from providers import get_provider
+        caps=get_provider(provider_for(folder)).capabilities()
+        if not caps.get('finalize'):return fail(400,caps.get('finalize_hint') or caps['label']+' cannot complete drafts: the first render is the final.','Download this draft as it is, or create a new draft with a generator that completes at 1080p (Seedance via fal or Enhancor).')
         estimate=stages.costs.price_for(provider_for(folder)+'_complete',stages.costs.clip_seconds(folder)) or 0
         refused=cost_gate(estimate,confirm_cost,legacy=True,folder=folder,what='Completing this draft in HD')
         if refused is not None:return refused
-        caps=get_provider(provider_for(folder)).capabilities()
         hd=folder/'hd';hd.mkdir(exist_ok=True)
         hd_jobs[ident]={'state':'running','status':'Submitting approved draft for '+caps['final_resolution'],'id':ident,'provider':caps['name']}
         def save(): write_status(hd,hd_jobs[ident])
@@ -380,6 +388,7 @@ def get_run(ident:str):
     info['status']=status;info['calls']=stages.read_calls(folder)
     seconds=stages.costs.clip_seconds(folder);info['seconds']=seconds   # for the cost meter on the draft / HD buttons
     info['estimates']={'draft':{p:stages.costs.price_for(p,seconds) for p in ('fal','enhancor')},'complete':{p:stages.costs.price_for(p+'_complete',seconds) for p in ('fal','enhancor')},'note':stages.costs.NOTE}
+    info['estimates']['draft']['wan']=generator_estimate(folder,'wan',seconds);info['estimates']['complete']['wan']=None   # wan: one render at the slots' resolution, nothing to complete
     return info
 
 @app.post('/estimate')
@@ -942,6 +951,45 @@ def resume_saved_generations():
                 except Exception as e:registry[ident].update(state='error',status=str(e))
                 write_status(folder,registry[ident])
             threading.Thread(target=collect_saved,daemon=True).start()
+
+# ---------------------------------------------------------------- Generators (Agent 3): the generator slot (providers/capabilities.py, providers/wan.py, stages/generate.py WanTool; docs/GENERATORS.md)
+
+def generator_estimate(folder,name,seconds=None):
+    """Draft estimate for generator `name` on this run; wan is priced at the resolution saved in the slots (480p when none)."""
+    seconds=seconds if seconds is not None else stages.costs.clip_seconds(folder)
+    if name=='wan':
+        try:resolution=(stages.slots.read(folder).get('generator') or {}).get('resolution')
+        except Exception:resolution=None
+        return stages.costs.estimate_tool('wan',seconds,{'resolution':resolution or '480p'}) or 0
+    return stages.costs.price_for(name,seconds) or 0
+
+def write_wan_options(folder):
+    return stages.generate.write_wan_options(folder)
+
+@app.get('/jobs/{ident}/generators')
+def list_generators(ident:str,char1_video:str='',char2:str=''):
+    """Every generator for this run, for the generator slot: normalized capabilities, `configured` (+ `key` to add when not),
+    `summary`, `estimate_usd` at this run's length (wan: `estimates` per resolution too) and `limits` = the plain sentences from
+    `providers.capabilities.supports` for the run's slots: [{slot, message, fix}], [] when everything asked for is supported.
+    `char1_video=1` / `char2=1` describe references picked in the form but not saved yet; saved references in the run count anyway."""
+    folder=hd_folder(ident)
+    from providers import GENERATORS,KEYS,normalized_capabilities,configured
+    from providers.capabilities import supports,summary
+    current=stages.slots.read(folder);seconds=stages.costs.clip_seconds(folder)
+    names={p.name for p in folder.iterdir()} if folder.is_dir() else set()
+    saved1=next((n for n in sorted(names) if n.startswith('char1-reference.')),None)
+    facts={'char1_video':truthy(char1_video) or bool(saved1 and saved1.rsplit('.',1)[-1].lower() in ('mp4','mov','webm')),'char2':truthy(char2) or any(n.startswith('char2-reference.') for n in names),'seconds':seconds}
+    caps_all={name:normalized_capabilities(name) for name in GENERATORS};ready={name:configured(name) for name in GENERATORS}
+    nearest=sorted(GENERATORS,key=lambda n:not ready[n])   # the nearest option named in a limit is a configured generator when there is one
+    generator=current.get('generator') or {};out=[]
+    for name in GENERATORS:
+        asked={**current,**facts,'task':stages.slots.effective_task(current),'generator':{**generator,'resolution':generator.get('resolution') if generator.get('name')==name else None}}   # the saved resolution belongs to the chosen generator only
+        caps=caps_all[name];entry={**caps,'configured':ready[name],'key':KEYS[name],'summary':summary(caps),'estimate_usd':generator_estimate(folder,name,seconds),
+                                   'limits':supports(caps,asked,[caps_all[n] for n in nearest if n!=name])}
+        if name=='wan':entry['estimates']={r:stages.costs.estimate_tool('wan',seconds,{'resolution':r}) for r in caps['resolutions']}
+        out.append(entry)
+    generator=current.get('generator') or {}
+    return {'id':ident,'chosen':generator.get('name'),'resolution':generator.get('resolution'),'task':stages.slots.effective_task(current),'seconds':seconds,'generators':out}
 
 # ---------------------------------------------------------------- export kit (stages/export.py, stages/export_presets.py): target presets, README, zip; free and local.
 # Pending timeline edits are saved first through the same plan / save / run_child path as POST /jobs/{id}/edits/save (one free

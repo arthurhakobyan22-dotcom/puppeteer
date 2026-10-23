@@ -6,6 +6,7 @@ import { state } from './state.js';
 import { loadJob, isBusy, pollHD } from './jobdata.js';
 import { edits } from './editlayer.js';
 import { mountSlots } from './slots.js';   // Set / Look / Light slots (World stage, Agent 1), mounted above the prompt
+import { mountGenerator } from './generator.js';   // generator slot (Agent 3): picker, supported options, limits, price; keeps select[name=provider] in sync
 import { mountExport } from './export.js';   // export kit (World stage, Agent 4), mounted under step 04
 
 export const DEFAULT_PROMPT = "@Image1 defines the character's identity only (face, hair, outfit, proportions); do not copy its pose, expression, props, background or lighting. Pose, motion, timing and lip-sync come from @Video1.";
@@ -41,6 +42,19 @@ export function mountDraft(parent) {
   const thumbs = { char1: q('input[name=char1]').closest('.upload'), char2: q('input[name=char2]').closest('.upload') };
   let filled = false;
   const slots = mountSlots(textarea.closest('label'));
+  // generator slot: fed by GET /jobs/{id}/generators; its choice drives the legacy select, the labels and the estimate on the button
+  let generatorChoice = null;
+  const refFacts = () => ({ char1_video: !!(form.elements.char1.files[0] && form.elements.char1.files[0].type.startsWith('video/')) || isVideoName(savedReference(state.files || new Set(), 'char1')), char2: !!(form.elements.char2.files[0]) || !!savedReference(state.files || new Set(), 'char2') });
+  const generator = mountGenerator(slots.node.querySelector('[data-slot=generator]'), { select, facts: refFacts, onChange: g => {
+    const changed = !generatorChoice || generatorChoice.name !== g.name; generatorChoice = g; select.closest('label').hidden = true; applyProvider(g.name);
+    // the reference inputs follow the generator: no second character / no identity video where the generator takes one image only
+    const char2 = thumbs.char2, char2Input = char2.querySelector('input'), limit = slot => (g.caps.limits || []).find(l => l.slot === slot);
+    char2Input.disabled = !g.caps.slots.char2; char2.classList.toggle('disabled', !g.caps.slots.char2);
+    char2.querySelector('small').textContent = g.caps.slots.char2 ? (char2Input.files && char2Input.files.length ? char2Input.files[0].name : (savedReference(state.files || new Set(), 'char2') ? 'Saved reference · click to replace' : 'Choose character reference')) : (limit('char2') ? limit('char2').message + ' ' + limit('char2').fix : g.caps.label + ' takes one reference image: Character 2 is not sent.');
+    thumbs.char1.querySelector('input').accept = g.caps.slots.identity_video ? 'image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm' : 'image/png,image/jpeg,image/webp';
+    if (changed) slots.reload();   // the task line reads the generator's capabilities (tasks: [])
+  } });
+  new MutationObserver(() => { if (/^Saved/.test(slots.node.querySelector('[data-saved]').textContent)) generator.refresh(); }).observe(slots.node.querySelector('[data-saved]'), { childList: true, characterData: true, subtree: true });
 
   // dialogue beats from the Words track: timed lines inserted into the prompt, editable before submit (what is in the textarea is sent)
   const beatsButton = el('button', { type: 'button', class: 'small secondary', text: 'Insert dialogue beats', onclick: () => insertBeats() });
@@ -76,7 +90,8 @@ export function mountDraft(parent) {
     q('[data-provider-label]').textContent = 'Provider · ' + c.label; q('[data-draft-quality]').textContent = 'Draft · ' + c.draft_resolution; q('[data-final-quality]').textContent = 'Final · ' + c.final_resolution;
     hint.textContent = (c.configured ? '' : 'Not configured: add its key to .env and restart the app. ') + (c.needs_webhook ? 'Needs the cloudflared callback tunnel (or ENHANCOR_WEBHOOK_URL). ' : 'No webhook or tunnel needed. ') + 'Hosting: ' + (c.hosting === 'fal_storage' ? 'fal storage' : c.hosting) + '.';
     const estimates = (state.run && state.run.estimates && state.run.estimates.draft) || {};
-    button.textContent = 'Create draft · ' + usd(estimates[name]);
+    const chosen = generatorChoice && generatorChoice.name === name && generatorChoice.estimate_usd != null ? generatorChoice.estimate_usd : estimates[name];   // wan: priced at the resolution picked in the generator slot
+    button.textContent = 'Create draft · ' + usd(chosen);
   }
 
   function update() {
@@ -97,7 +112,7 @@ export function mountDraft(parent) {
       }
     }
     button.disabled = !files.has('seedance-input.mp4') || isBusy() || !review.approved;
-    slots.update();
+    slots.update(); generator.update();
     beatsButton.disabled = !hasWords();
     beatsHint.textContent = hasWords() ? 'Adds timed lines like  0.0–1.8 s says: "…"  from the transcript (your pending word edits first); edit them before you create the draft.' : 'Transcribe on the Words track in step 02 (free) to insert timed dialogue beats here.';
   }
@@ -191,7 +206,10 @@ export function mountFinal(parent) {
       const estimates = (state.run && state.run.estimates && state.run.estimates.complete) || {};
       upgrade.textContent = (caps.finalize_label || 'Approve & generate full resolution →') + ' · ' + usd(estimates[providerName()]);
       q('[data-finalize-hint]').textContent = caps.finalize_hint || ('Approve it to generate the ' + finalRes + ' version through ' + (caps.label || 'the provider') + '.');
-      q('[data-finalize-warning]').hidden = caps.finalize_identical !== false;
+      const noFinalize = caps.name && !caps.finalize;   // e.g. Wan Animate: the first render is the final, so there is no HD button, only the sentence
+      upgrade.hidden = !!noFinalize;
+      if (noFinalize) { q('[data-finalize-hint]').textContent = caps.finalize_hint || (caps.label + ' cannot complete drafts: the first render is the final.'); q('[data-finalize-hint]').previousElementSibling.textContent = 'This render is the final'; }
+      q('[data-finalize-warning]').hidden = noFinalize || caps.finalize_identical !== false;
       const hdRunning = state.hd && state.hd.state === 'running';
       upgrade.disabled = isBusy() || hd || hdRunning;
     }

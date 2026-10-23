@@ -17,7 +17,11 @@ class Enhancor(Provider):
     def capabilities(self):
         return {'name':'enhancor','label':'Enhancor','draft_resolution':'1080p draft','final_resolution':'1080p','finalize':'complete_draft','finalize_identical':True,
                 'finalize_label':'Approve & generate 1080p →','finalize_hint':'Enhancor completes the approved draft at 1080p with its original parameters.',
-                'needs_webhook':True,'hosting':'tmpfiles','max_seconds':30,'video_identity_reference':True}
+                'needs_webhook':True,'hosting':'tmpfiles','max_seconds':30,'video_identity_reference':True,
+                # generator keys (providers/capabilities.py). Enhancor exposes mode edit|multi_reference, no Seedance `task`, so tasks is [] and the UI says
+                # the set mode only changes the prompt here. Image cap: same Seedance 2.5 model as fal (30); Enhancor publishes no limit of its own (docs/ENHANCOR-API.md).
+                'resolutions':['1080p'],'draft':True,'audio':True,'tasks':[],'ref_images_max':30,
+                'slots':{'set_ref':True,'look_ref':True,'char2':True,'identity_video':True},'control':'video','fps':24,'prompt':True}
 
     def require_configured(self):
         credential('ENHANCOR_API_KEY')

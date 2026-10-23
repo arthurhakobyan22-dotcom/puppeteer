@@ -42,3 +42,21 @@ Both adapters build the same prompt through `providers.base.build_prompt`: your 
 - `generation.json`: `{'request_id', 'provider', 'prompt', 'mode', 'video', 'task', 'task_note'?, 'draft_id'?}`. `task` is what the adapter sent (fal: `editing` | `reference` | …); Enhancor has no task setting, so it is recorded as `'not applicable'` with a one-sentence `task_note`, and the slots panel says so.
 - `provider-status.json`: last poll result. `fal-result.json`: raw fal result.
 - `hd/request.json`, `hd/response.json`: finalize payload and `{'requestId', 'provider', 'endpoint'?}`.
+
+## Generator capabilities and the third generator (Wan 2.2 Animate)
+
+Every adapter's `capabilities()` now also carries the generator keys defined in `providers/capabilities.py`
+(`resolutions`, `draft`, `finalize`, `max_seconds`, `audio`, `tasks`, `ref_images_max`, `slots`, `control`, `fps`,
+`prompt`); `normalize()` fills defaults so every generator returns the same shape and `supports(caps, slots)` turns a
+slots object into plain sentences ("… takes one reference image: the set image is ignored here. Use … for a set
+reference."). fal: 480p/720p/1080p, draft, audio, tasks `auto/reference/editing/extension`, up to 30 reference images,
+every slot. Enhancor: 1080p, draft, audio, no task setting (`tasks: []`), every slot.
+
+`providers/wan.py` adds `wan` = `fal-ai/wan/v2.2-14b/animate/replace` (same `FAL_KEY`, same fal storage upload):
+one video + one image → the person replaced, pose and timing kept; 480p/580p/720p, one render (no draft/complete,
+`finalize: null`), no prompt, no audio, one reference image, no identity video. It is listed in `providers.GENERATORS`
+(`providers.PROVIDERS` stays the Seedance pair). Research table, limits and the adapter contract: `docs/GENERATORS.md`.
+Files per run: `wan-request.json` (also copied to `seedance-request.json`), `wan-result.json`, optional
+`wan-options.json` `{"resolution"}` read before submit. Routes: `GET /providers` now lists all three (`generators` + normalized
+`providers`), `GET /jobs/{id}/generators` gives per-run limits and estimates, `POST /jobs/{id}/seedance` accepts `provider=wan`, and
+`POST /jobs/{id}/hd` refuses a wan run with a plain sentence (no draft to complete). The generate tool is `wan_fal` (`stages/generate.py`).

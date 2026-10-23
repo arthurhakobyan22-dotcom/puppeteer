@@ -111,7 +111,7 @@ class ReviewWordingTests(unittest.TestCase):
     def test_run_info_carries_estimates_for_the_cost_meter(self):
         with tempfile.TemporaryDirectory() as d,patch.object(application,'RUNS',Path(d)):
             prepared(d);client=TestClient(application.app);info=client.get(f'/jobs/{HEX}/run').json()
-            self.assertIn('seconds',info);self.assertEqual(set(info['estimates']['draft']),{'fal','enhancor'});self.assertEqual(set(info['estimates']['complete']),{'fal','enhancor'})
+            self.assertIn('seconds',info);self.assertEqual(set(info['estimates']['draft']),{'fal','enhancor','wan'});self.assertEqual(set(info['estimates']['complete']),{'fal','enhancor','wan'})
             self.assertGreater(info['estimates']['complete']['fal'],info['estimates']['draft']['fal'])
 
 class StaticTests(unittest.TestCase):

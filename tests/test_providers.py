@@ -277,7 +277,7 @@ class EndpointTests(unittest.TestCase):
         import app as application
         with patch('providers.setting',side_effect=lambda k,d='':d):
             data=TestClient(application.app).get('/providers').json()
-        self.assertEqual(data['default'],'enhancor');self.assertEqual(set(data['providers']),{'enhancor','fal'})
+        self.assertEqual(data['default'],'enhancor');self.assertEqual(set(data['providers']),{'enhancor','fal','wan'})
         for name,caps in data['providers'].items():
             self.assertFalse(caps['configured'],name)
             for key in CAPABILITY_KEYS:self.assertIn(key,caps)

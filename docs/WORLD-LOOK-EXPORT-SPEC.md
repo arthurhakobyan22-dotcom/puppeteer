@@ -319,10 +319,28 @@ s, {'resolution'})`; no `wan_complete` (there is no completion).
 sources, refusals before upload, missing key, offline, redaction, poll states, finalize refusal, costs, `GET /providers`
 unchanged with the new keys). `tests/test_generators.py tests/test_providers.py tests/test_regression.py`: 84 passed.
 
-**Phase B (not started):** `wan_fal` tool in `stages/generate.py` (writes `wan-options.json`, calls
-`seedance_bridge.submit(provider='wan')`), `seedance_bridge.submit` / `provider_for` accepting `GENERATORS`,
-`GET /providers` listing `wan` (widen the two set assertions), `static/generator.js`, the task-support sentence in
-the draft panel, `docs/UI.md`.
+**Phase B (done).** `providers.GENERATORS` drives `seedance_bridge.submit` / `provider_for`, the `provider` field of
+`POST /jobs/{id}/seedance` and `GET /providers` (now `{default, generators, providers}` with normalized capabilities + `configured` +
+`summary`; `default` stays enhancor | fal; the two set assertions were widened to include `wan`). New: `GET /jobs/{id}/generators`
+(capabilities, configured + `key`, summary, estimate at this run's length, `limits` from `supports()` with the nearest *configured*
+generator; `?char1_video=1&char2=1` for unsaved form picks), `stages/generate.py` `WanTool` (`wan_fal`: params `char1`,
+`resolution`; writes `wan-options.json`; report tool `wan_fal`), `write_wan_options()`, the wan estimate on the seedance cost gate and
+in `GET /jobs/{id}/run` (`estimates.draft.wan`, `estimates.complete.wan: null`), a plain 400 from `POST /jobs/{id}/hd` for a run
+with `finalize: null`. UI: `static/generator.js` (`mountGenerator`, mounted by `draft.js` into `[data-slot=generator]`): picker,
+summary, limits, resolution select (wan only), draft/final line, saves `slots.generator.{name,resolution}`, keeps the legacy
+`select[name=provider]` in sync (row hidden), disables `set_ref` / `style_ref` options, the Character 2 upload and video Character 1
+where unsupported; `slots.js` task line now reads `tasks: []` from the capabilities; step 04 hides the HD button for `finalize: null`.
+Docs: `docs/GENERATORS.md`, `docs/UI.md` §13, `docs/PROVIDERS.md`. Tests: `tests/test_generators.py` (27), full suite 310 passed.
+
+**Verification (2026-10-24, port 8783, offline).** Hard-link copy of `0be4cf2cadd945008a9c9131b6c75f12` →
+`ec49f86d3330400c913db6965ef1e842` (own status.json / run.json / stages/). With FAL_KEY set (offline): the generator slot lists
+Enhancor (not configured · ENHANCOR_API_KEY), fal ($2.15 draft) and Wan ($0.49 · one render); choosing Wan disables `set_ref`,
+`style_ref` and Character 2, restricts Character 1 to images, shows the task sentence and the resolution select (480p · about $0.49),
+the button reads the wan price, the legacy select says `wan`; back on fal everything is enabled again and the limits list is empty.
+380 px: `scrollWidth` 380, no console errors. With `FAL_KEY= ENHANCOR_API_KEY=`: all three unconfigured with their key names;
+`/run`, `/slots`, `/export`, `/edits` answer 200; `POST /hd` on the (never generated) copy answers 400. The fixture's `run.json` /
+`status.json` are sha256-identical before and after; the copy has no `calls.jsonl`.
+
 
 ## §W4 notes (Agent 4: export kit, start.command)
 

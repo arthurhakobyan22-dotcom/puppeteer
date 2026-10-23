@@ -296,3 +296,25 @@ upload, input-doctor card checked in Studio). No `calls.jsonl` exists in any of 
   `cdc475cc…` (full depth from "Apply as background" in the draft step, slots saved on it), and `03b6e510…` (the plain
   error for a missing plate). The plate is `runs/_assets/f7f1c8783ca9d58e.png`. No `calls.jsonl` anywhere; the fixture
   and the copy are sha256-identical before and after; 375 px wide: no horizontal scroll, no console errors.
+
+## 13. Generator slot (Agent 3, World stage)
+
+- `static/generator.js` `mountGenerator(host, {select, facts, onChange})`, mounted by `draft.js` into `[data-slot=generator]` inside
+  `tpl-slots` (under the task line, after the prompt builder). Data: `GET /jobs/{id}/generators` (normalized capabilities,
+  `configured` + `key`, `summary`, `estimate_usd` / `estimates` per resolution, `limits` = `supports(caps, slots)`), reloaded when the
+  slots panel reports a save (`[data-saved]` text) and on every `update()`.
+- One radio button per generator in `providers.GENERATORS` order (Enhancor, fal · Seedance 2.5, Wan 2.2 Animate · replace (fal)):
+  configured ones show the estimate ("about $2.15 draft" / "about $0.49 · one render"); unconfigured ones are disabled and say
+  "not configured · FAL_KEY" (tooltip: the `.env` line). Then the summary line, the limits list ("Set · … takes one reference image:
+  the set image is ignored here." + the nearest configured generator), a Resolution select only for a generator that renders once at a
+  chosen resolution (wan: 480p/580p/720p with the price per option), and the draft line ("Draft 480p → 1080p on approval (the same
+  draft completed)" or "One render at 480p. Wan Animate has no draft to complete …"). Once a draft exists the picker is locked to
+  the generator that made it.
+- Side effects of a choice: `PUT /jobs/{id}/slots {generator: {name, resolution}}`; the legacy `select[name=provider]` gets the same
+  value and its row is hidden (the form still submits it); the Create-draft button shows the chosen generator's estimate; the Set
+  select's `set_ref` / Look select's `style_ref` options are disabled (tooltip = the sentence, label "· not with Wan …") when the
+  generator has no such slot; the Character 2 upload is disabled with the sentence; Character 1 accepts images only when the
+  generator takes no identity video; the slots task line adds "… has no task setting …" when `tasks` is empty.
+- Step 04: a run whose generator has `finalize: null` hides the HD button and shows `finalize_hint` under "This render is the final".
+- Checked 2026-10-24 on port 8783 (offline) with the copy `ec49f86d…`: 380 px without horizontal scroll, no console errors, and
+  with `FAL_KEY= ENHANCOR_API_KEY=` every generator unconfigured with its key name while prep / edit / export routes keep working.

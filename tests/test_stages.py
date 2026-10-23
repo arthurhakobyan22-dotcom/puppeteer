@@ -45,9 +45,9 @@ class RegistryTests(unittest.TestCase):
             with self.assertRaises(ValueError):stages.get_tool(stage,'off')
         first={'input_doctor':'probe','audio':'original','depth':'depth_anything_replicate','mask':'sam3_replicate','composite':'depth_cutout','face':'mediapipe_mesh','prompt':'identity_only','generate':'fal','finish':'restore_original_audio'}
         for stage,name in first.items():self.assertEqual(stages.tools_for(stage)[0].name,name)
-        self.assertEqual({t.name for t in stages.tools_for('generate')},{'fal','enhancor'})
+        self.assertEqual({t.name for t in stages.tools_for('generate')},{'fal','enhancor','wan_fal'})
         paid={(t.stage,t.name) for s in stages.STAGES for t in stages.tools_for(s) if t.paid}
-        self.assertEqual(paid,{('audio','clean_dialogue'),('depth','depth_anything_replicate'),('depth','depth_anything_replicate_chenxwh'),('mask','sam3_replicate'),('mask','sam3_points_fal'),('mask','sam2_points_replicate'),('generate','fal'),('generate','enhancor'),('finish','complete_draft')})
+        self.assertEqual(paid,{('audio','clean_dialogue'),('depth','depth_anything_replicate'),('depth','depth_anything_replicate_chenxwh'),('mask','sam3_replicate'),('mask','sam3_points_fal'),('mask','sam2_points_replicate'),('generate','fal'),('generate','enhancor'),('generate','wan_fal'),('finish','complete_draft')})
         with self.assertRaises(ValueError):stages.get_tool('face','nope')
         with self.assertRaises(ValueError):stages.tools_for('render')
     def test_params_schema_and_coercion(self):

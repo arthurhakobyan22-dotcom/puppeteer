@@ -40,12 +40,24 @@ PRICES={
         'source':'Enhancor publishes no API price list; placeholder until the per-job price is read from app.enhancor.ai/api-dashboard','date':DATE,'verified':False},
     'enhancor_complete':{'provider':'enhancor','endpoint':'seedance2.5/v1/queue (draft_id)','usd_per_clip_second':0.30,'resolution':'1080p',
         'source':'Enhancor publishes no API price list; placeholder until the per-job price is read from app.enhancor.ai/api-dashboard','date':DATE,'verified':False},
+    # Wan 2.2 Animate (replace) on fal: one render, no draft/complete, so there is no `wan_complete` entry. fal bills frames ÷ 16 as "video seconds":
+    # at our 24 fps a clip second is 1.5 billed seconds → 480p $0.06, 580p $0.09, 720p $0.12 per clip second (resolution picked per run; `estimate_tool` switches the key).
+    'wan':{'provider':'fal','endpoint':'fal-ai/wan/v2.2-14b/animate/replace','usd_per_clip_second':round(0.04*FPS/16,4),'resolution':'480p',
+        'source':'fal.ai/models/fal-ai/wan/v2.2-14b/animate/replace/llms.txt: "480p: $0.04 per video second", "16 frames per video second" (read 2026-10-24); docs/GENERATORS.md','date':'2026-10-24','verified':True},
+    'wan_580p':{'provider':'fal','endpoint':'fal-ai/wan/v2.2-14b/animate/replace (580p)','usd_per_clip_second':round(0.06*FPS/16,4),'resolution':'580p',
+        'source':'same page: "580p: $0.06 per video second" at 16 frames per billed second (read 2026-10-24)','date':'2026-10-24','verified':True},
+    'wan_720p':{'provider':'fal','endpoint':'fal-ai/wan/v2.2-14b/animate/replace (720p)','usd_per_clip_second':round(0.08*FPS/16,4),'resolution':'720p',
+        'source':'same page: "720p: $0.08 per video second" at 16 frames per billed second (read 2026-10-24)','date':'2026-10-24','verified':True},
     'sam3_points_fal':{'provider':'fal','endpoint':'fal-ai/sam-3/video-rle','usd_per_frame':round(0.005/16,6),
         'source':'fal.ai/models/fal-ai/sam-3/video-rle: $0.005 per 16 frames (docs/MASK-WAND.md); one call per click type (include, exclude)','date':DATE,'verified':True},
     'sam2_points_replicate':{'provider':'replicate','endpoint':'meta/sam-2-video','gpu':'Nvidia L40S','usd_per_gpu_second':GPU_USD_PER_SECOND['Nvidia L40S'],'usd_flat':0.029,
         'source':'replicate.com/meta/sam-2-video: "approximately $0.029 to run" on Nvidia L40S (listed average; docs/MASK-WAND.md); one prediction per click type','date':DATE,'verified':False},
     'words_fal':{'provider':'fal','endpoint':'fal-ai/elevenlabs/speech-to-text','usd_per_started_minute':0.03,
         'source':'fal.ai/models/fal-ai/elevenlabs/speech-to-text: "$0.03 per minutes" (read 2026-10-23); billing granularity not published, so the estimate counts every started minute (an 8 s clip shows $0.03). The paid fallback of the Words track; the default local Whisper is free','date':'2026-10-23','verified':True},
+    # Claude vision fill of the SET / LIGHT slots (stages/vision.py): one Messages call with one ~1024 px JPEG. An image costs about (w × h) / 750
+    # tokens, so a 1024 × 576 frame is ~790 tokens; with the instruction and headroom the estimate counts 1,600 input + 300 output tokens.
+    'claude_vision':{'provider':'anthropic','endpoint':'messages','usd_flat':round(1600*2.0/1e6+300*10.0/1e6,4),'model':'claude-sonnet-5-5','input_tokens':1600,'output_tokens':300,'usd_per_million_input':2.0,'usd_per_million_output':10.0,
+        'source':'platform.claude.com/docs/en/about-claude/pricing: Claude Sonnet 5.5 $2 per million input tokens, $10 per million output tokens (read 2026-10-24 via the claude-api skill, cached 2026-09-25); image tokens ≈ width × height / 750','date':'2026-10-24','verified':True},
     'media_host':{'provider':'tmpfiles','endpoint':'upload','usd_flat':0.0,'source':'free host','date':DATE,'verified':True},
     'replicate_upload':{'provider':'replicate','endpoint':'files','usd_flat':0.0,'source':'Replicate file uploads are not billed','date':DATE,'verified':True},
 }
@@ -99,6 +111,10 @@ def estimate_tool(tool,seconds=None,params=None):
     if tool=='complete_draft':
         provider=params.get('provider') or 'fal'
         return price_for(provider+'_complete',seconds)
+    if tool in ('wan','wan_fal'):
+        # one render; the price depends on the resolution chosen for this run (480p default)
+        resolution=str(params.get('resolution') or '480p').strip().lower()
+        return price_for('wan_'+resolution if resolution in ('580p','720p') else 'wan',seconds)
     return price_for(tool,seconds,params)
 
 def call_cost(provider,endpoint,folder=None):

@@ -32,7 +32,10 @@ class Fal(Provider):
     def capabilities(self):
         return {'name':'fal','label':'fal · Seedance 2.5','draft_resolution':'480p','final_resolution':'1080p','finalize':'complete_draft','finalize_identical':True,
                 'finalize_label':'Approve & complete at 1080p →','finalize_hint':'fal completes this exact draft at 1080p (same draft id, valid for 7 days). No webhook or tunnel needed.',
-                'needs_webhook':False,'hosting':'fal_storage','max_seconds':30,'video_identity_reference':True}
+                'needs_webhook':False,'hosting':'fal_storage','max_seconds':30,'video_identity_reference':True,
+                # generator keys (providers/capabilities.py; fal OpenAPI for reference-to-video read 2026-10-24: image_urls "up to 30 images", total files ≤50)
+                'resolutions':['480p','720p','1080p'],'draft':True,'audio':True,'tasks':list(TASKS),'ref_images_max':30,
+                'slots':{'set_ref':True,'look_ref':True,'char2':True,'identity_video':True},'control':'video','fps':24,'prompt':True}
 
     def require_configured(self):
         load_env()

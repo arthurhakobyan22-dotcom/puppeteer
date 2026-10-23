@@ -49,3 +49,18 @@ Replicate bills public models by predict time at the hardware rate above; the pe
 | **Full run incl. 1080p complete** | | **≈$16.9** |
 
 Seedance dominates every run; everything else together is under $0.40. For `stages/costs.py`, model the per-tool formulas above with `frames = round(duration_s × fps)` and expose the three unverified runtime constants (SAM 3 s/frame on L40S, SAM 2 s/frame, fal `sam2/video` GPU rate) as named defaults so they can be replaced with measured values after the first paid runs.
+
+## Wan endpoints on fal (read 2026-10-24, for the pose-native generator; details in docs/GENERATORS.md)
+
+| Endpoint | Unit | Listed price | Formula | 10 s @ 24 fps estimate | Source |
+|---|---|---|---|---|---|
+| fal `fal-ai/wan/v2.2-14b/animate/replace` (**chosen**, `stages/costs.py` keys `wan`, `wan_580p`, `wan_720p`) and `/animate/move` | "16 frames per video second" (frames ÷ 16 billed seconds) | 480p **$0.04**, 580p **$0.06**, 720p **$0.08** per billed second | `rate × frames / 16` = `rate × 1.5 × clip_s` at 24 fps | **$0.60** (480p), $0.90 (580p), **$1.20** (720p) | https://fal.ai/models/fal-ai/wan/v2.2-14b/animate/replace/llms.txt ; OpenAPI `endpoint_id=fal-ai/wan/v2.2-14b/animate/replace` |
+| fal `fal-ai/wan-motion` | per 24-fps second, 720p only | **$0.06** per video second; + **$0.08** once when `enhance_identity` is on (Flux edit pre-pass) | `0.06 × clip_s (+0.08)` | $0.60 ($0.68 with enhance_identity) | https://fal.ai/models/fal-ai/wan-motion/llms.txt |
+| fal `fal-ai/wan-vace-14b` (+ `/inpainting`, `/outpainting`) | per video second (same 16-frame rule) | 480p $0.04, 580p $0.06, 720p $0.08 | as above; ≤ 241 frames | $0.60 / $0.90 / $1.20 | https://fal.ai/models/fal-ai/wan-vace-14b/llms.txt |
+| fal `fal-ai/wan/v2.2-a14b/video-to-video` | per video second | 480p $0.04, 580p $0.06, 720p $0.08 | as above; ≤ 161 frames; no image input | — | https://fal.ai/models/fal-ai/wan/v2.2-a14b/video-to-video/llms.txt |
+| fal `fal-ai/wan/v2.7/reference-to-video` | per output second (+ input video seconds when a video is given) | **$0.10** per second | `0.10 × (in_s + out_s)` with a video ref | $2.00 (10 s in + 10 s out) | https://fal.ai/models/fal-ai/wan/v2.7/reference-to-video/llms.txt |
+| fal `fal-ai/wan/v2.7/edit-video` | per output second | **$0.10** (720p) / **$0.15** (1080p) | `rate × out_s`; input 2–10 s | $1.00 / $1.50 | https://fal.ai/models/fal-ai/wan/v2.7/edit-video/llms.txt |
+
+`fal-ai/wan-vace-14b/reference-to-video`, `fal-ai/wan-vace-14b/video-to-video`, `fal-ai/wan/v2.5|v2.6/*`, `fal-ai/wan-animate`
+and `fal-ai/wan/v2.2-14b/animate-v2/*` returned 404 from the OpenAPI endpoint on 2026-10-24. All Wan prices above are
+per-unit list prices read from the vendor page (`verified: true`); none has a draft/complete step.
