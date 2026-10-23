@@ -104,15 +104,20 @@ def frame_shape(video):
         n=s.frames or sum(1 for _ in c.decode(video=0))
         return s.height,s.width,n,(float(rate) if rate else DEFAULT_FPS)
 
-def work_scale(h,w):
-    return min(1.0,WORK_MAX_SIDE/max(h,w))
+def work_scale(h,w,side=None):
+    """Downscale factor so the longest side is `side` px (WORK_MAX_SIDE by default; the timeline's quick Apply uses 240)."""
+    return min(1.0,(side or WORK_MAX_SIDE)/max(h,w))
 
-def decode_video(video,scale=1.0,gray=False):
-    """Every frame of `video` as an RGB (or gray) uint8 array, downscaled by `scale`."""
+def decode_video(video,scale=1.0,gray=False,fast=False):
+    """Every frame of `video` as an RGB (or gray) uint8 array, downscaled by `scale`. `fast=True` lets FFmpeg scale
+    while decoding (area filter; about 4x faster than OpenCV's INTER_AREA here, pixels differ by rounding only)."""
     import av,cv2
     out=[]
     with av.open(str(video)) as c:
         for f in c.decode(video=0):
+            if fast and scale<1.0:
+                a=f.to_ndarray(format='rgb24',width=max(2,int(f.width*scale)),height=max(2,int(f.height*scale)),interpolation='AREA')
+                out.append(cv2.cvtColor(a,cv2.COLOR_RGB2GRAY) if gray else a);continue
             a=f.to_ndarray(format='rgb24')
             if scale<1.0:
                 h,w=a.shape[:2];a=cv2.resize(a,(max(2,int(w*scale)),max(2,int(h*scale))),interpolation=cv2.INTER_AREA)
@@ -224,17 +229,20 @@ def propagate(rgb,gray,depth,start,px,py,direction,max_frames,*,depth_tol=24,col
         out[j]=reg;i=j
     return region,out,reason
 
-def local_propagate(folder,edits,*,max_frames=120,depth_tol=24,color_tol=32,status=lambda s:None):
-    """Run every edit on the clip in `folder`: returns ({frame: [(mode, region at work resolution)]}, per-edit notes, (h, w), fps).
+def local_propagate(folder,edits,*,max_frames=120,depth_tol=24,color_tol=32,status=lambda s:None,work_side=None,fast_decode=False):
+    """Run every edit on the clip in `folder` in ONE pass (the clip is decoded once for the whole list): returns
+    ({frame: [(mode, region at work resolution)]}, per-edit notes, (h, w), fps).
 
-    `edits`: [{frame, x, y, label}] with label 1 = include, 0 = exclude, normalized coordinates."""
+    `edits`: [{frame, x, y, label}] with label 1 = include, 0 = exclude, normalized coordinates. `work_side`: longest
+    side of the working resolution (default WORK_MAX_SIDE = 480; the timeline's quick Apply passes 240); `fast_decode`
+    scales while decoding (the timeline's Apply uses it)."""
     import cv2
     folder=Path(folder);original=folder/'original.mp4';depth_video=folder/'depth.mp4'
     if not original.exists():raise ValueError('This run has no prepared clip (original.mp4), so there is nothing to select on.')
     if not depth_video.exists():raise ValueError('This run has no depth video, so the free local wand has nothing to follow. Use the Brush, or run the depth stage first.')
-    h,w,n,fps=frame_shape(original);scale=work_scale(h,w)
+    h,w,n,fps=frame_shape(original);scale=work_scale(h,w,work_side)
     status('Mask wand · reading the clip')
-    rgb=decode_video(original,scale);depth=decode_video(depth_video,scale,gray=True)
+    rgb=decode_video(original,scale,fast=fast_decode);depth=decode_video(depth_video,scale,gray=True,fast=fast_decode)
     if len(depth)!=len(rgb):raise ValueError(f'The depth video has {len(depth)} frames but the clip has {len(rgb)}; re-run the depth stage before editing the mask.')
     gray=[cv2.cvtColor(a,cv2.COLOR_RGB2GRAY) for a in rgb]
     wh,ww=gray[0].shape[:2];per_frame={};notes=[]
@@ -319,36 +327,53 @@ def history(base_folder):
 
 # ---------------------------------------------------------------- previews for the UI
 
-def preview_png(folder,frame,edits,*,depth_tol=24,color_tol=32):
-    """What the given clicks select on one frame, as a PNG under `<folder>/wand-preview/`; returns (relative name, info).
-
-    The frame is drawn with the current mask outline (green), include selections tinted green and exclude selections
-    tinted red. No propagation, no branch."""
+def selections(folder,frame,edits,strokes=(),*,depth_tol=24,color_tol=32):
+    """What clicks and strokes select on one frame, at the clip's size: ([(mode, bool region)], (h, w), n, fps).
+    Clicks use the free seed step (no propagation); strokes covering `frame` are rasterised."""
     import cv2
     folder=Path(folder);original=folder/'original.mp4';depth_video=folder/'depth.mp4'
     if not original.exists():raise ValueError('This run has no prepared clip (original.mp4) to preview.')
     h,w,n,fps=frame_shape(original)
     if frame<0 or frame>=n:raise ValueError(f'Frame {frame} is outside the clip (0–{n-1}).')
-    rgb=decode_frame(original,frame)
-    scale=work_scale(h,w);wh,ww=max(2,int(h*scale)),max(2,int(w*scale))
-    small=cv2.resize(rgb,(ww,wh),interpolation=cv2.INTER_AREA)
-    depth=cv2.cvtColor(cv2.resize(decode_frame(depth_video,frame),(ww,wh),interpolation=cv2.INTER_AREA),cv2.COLOR_RGB2GRAY) if depth_video.exists() else cv2.cvtColor(small,cv2.COLOR_RGB2GRAY)
-    base=read_mask(mask_dir(folder),frame,(h,w))
-    canvas=rgb.copy().astype(np.float32);info=[]
-    for edit in edits:
-        if int(edit['frame'])!=frame:continue
-        mode='exclude' if int(edit.get('label',1))==0 else 'include'
-        region,_=seed_region(small,depth,float(edit['x']),float(edit['y']),depth_tol,color_tol);full=upscale(region,(h,w))
+    here=[e for e in edits if int(e['frame'])==frame];out=[]
+    if here:
+        rgb=decode_frame(original,frame)
+        scale=work_scale(h,w);wh,ww=max(2,int(h*scale)),max(2,int(w*scale))
+        small=cv2.resize(rgb,(ww,wh),interpolation=cv2.INTER_AREA)
+        depth=cv2.cvtColor(cv2.resize(decode_frame(depth_video,frame),(ww,wh),interpolation=cv2.INTER_AREA),cv2.COLOR_RGB2GRAY) if depth_video.exists() else cv2.cvtColor(small,cv2.COLOR_RGB2GRAY)
+        for edit in here:
+            region,_=seed_region(small,depth,float(edit['x']),float(edit['y']),depth_tol,color_tol)
+            out.append(('exclude' if int(edit.get('label',1))==0 else 'include',upscale(region,(h,w))))
+    for stroke in strokes or ():
+        a=int(stroke.get('frame_from',0));b=int(stroke.get('frame_to',a))
+        if min(a,b)<=frame<=max(a,b):out.append(('exclude' if str(stroke.get('mode','paint')).lower() in ('erase','exclude') else 'include',rasterize_stroke(stroke,(h,w))))
+    return out,(h,w),n,fps
+
+def preview_png(folder,frame,edits,*,depth_tol=24,color_tol=32,strokes=(),out_dir=None,base_masks=None,transparent=False):
+    """What the given clicks (and brush strokes) select on one frame, as a PNG under `<folder>/wand-preview/` (or
+    `out_dir`); returns (name relative to the run folder, or the bare file name with `out_dir`, info).
+
+    The frame is drawn with the current mask outline (green; `base_masks` = the mask folder to outline, default the
+    run's own), include selections tinted green and exclude selections tinted red. `transparent=True` draws only the
+    tints and the outline on a transparent RGBA picture (the timeline lays it over the playing video). No
+    propagation, no branch."""
+    import cv2
+    folder=Path(folder)
+    regions,(h,w),n,fps=selections(folder,frame,edits,strokes,depth_tol=depth_tol,color_tol=color_tol)
+    base=read_mask(mask_dir(folder) if base_masks is None else base_masks,frame,(h,w))
+    canvas=np.zeros((h,w,4),np.float32) if transparent else decode_frame(folder/'original.mp4',frame).copy().astype(np.float32);info=[]
+    for mode,full in regions:
         tint=np.array([40,200,80],np.float32) if mode=='include' else np.array([230,60,50],np.float32)
-        canvas[full]=canvas[full]*0.45+tint*0.55
+        if transparent:canvas[full]=np.array([*tint,150],np.float32)
+        else:canvas[full]=canvas[full]*0.45+tint*0.55
         info.append({'mode':mode,'fraction':round(float(full.mean()),4),'already_in_mask':round(float((full&base).sum()/max(1,full.sum())),3)})
-    canvas=canvas.astype(np.uint8)
-    cv2.drawContours(canvas,outline(base),-1,(60,255,120),2)
-    out=folder/'wand-preview';out.mkdir(exist_ok=True)
-    digest=hashlib.sha1(json.dumps([frame,edits],sort_keys=True,default=str).encode()).hexdigest()[:10]
+    canvas=np.ascontiguousarray(canvas.astype(np.uint8))
+    cv2.drawContours(canvas,outline(base),-1,(60,255,120,255) if transparent else (60,255,120),2)
+    out=Path(out_dir) if out_dir is not None else folder/'wand-preview';out.mkdir(parents=True,exist_ok=True)
+    digest=hashlib.sha1(json.dumps([frame,edits,list(strokes or ()),str(base_masks or ''),transparent],sort_keys=True,default=str).encode()).hexdigest()[:10]
     name=f'preview-{frame:05d}-{digest}.png'
-    cv2.imwrite(str(out/name),cv2.cvtColor(canvas,cv2.COLOR_RGB2BGR))
-    return 'wand-preview/'+name,{'frame':frame,'frames':n,'fps':fps,'width':w,'height':h,'selections':info,'seconds':round(frame/fps,3)}
+    cv2.imwrite(str(out/name),cv2.cvtColor(canvas,cv2.COLOR_RGBA2BGRA if transparent else cv2.COLOR_RGB2BGR))
+    return (name if out_dir is not None else 'wand-preview/'+name),{'frame':frame,'frames':n,'fps':fps,'width':w,'height':h,'selections':info,'seconds':round(frame/fps,3)}
 
 def frame_jpeg(folder,frame,quality=85):
     """One frame of the prepared clip with the current mask outline, as JPEG bytes; returns (bytes, info)."""

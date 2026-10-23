@@ -1,8 +1,9 @@
 """External call log and the offline switch.
 
 Every paid or network code path calls `record_call(...)` before any I/O. With `PUPPETEER_OFFLINE=1` that raises
-`OfflineError` first, so nothing is sent. Otherwise one line is appended to `runs/<id>/calls.jsonl` and to the
-global `runs/calls.log`: `{time, provider, endpoint, stage, tool, cost_usd, ok}`. `ok: true` means the request
+`OfflineError` first, so nothing is sent. Otherwise one line is appended to `runs/<id>/calls.jsonl` (or, for a call
+made while editing, from a path under an edit session `runs/_sessions/<id>/…`, to that session's `calls.jsonl`, which
+is appended to the child's on save; the run folder is never written) and to the global `runs/calls.log`: `{time, provider, endpoint, stage, tool, cost_usd, ok}`. `ok: true` means the request
 was sent; a failure after that is in the run's `log.txt`. Costs are estimates from `stages/costs.py`.
 """
 from pathlib import Path
@@ -44,11 +45,22 @@ def run_folder_of(path):
         if is_run_folder(candidate):return candidate
     return None
 
+def session_folder_of(path):
+    """The edit session folder (`runs/_sessions/<id>/`) a path belongs to, or None."""
+    if path is None:return None
+    try:path=Path(path)
+    except TypeError:return None
+    for candidate in [path,*path.parents][:6]:
+        if candidate.parent.name=='_sessions' and len(candidate.name)==32 and all(c in '0123456789abcdef' for c in candidate.name):return candidate
+    return None
+
 def record_call(folder,provider,endpoint,stage=None,tool=None,cost_usd=None,ok=True):
-    """Log one external call; raise OfflineError first when offline. `folder` may be a run folder, a file in it, or None."""
+    """Log one external call; raise OfflineError first when offline. `folder` may be a run folder, a file in it, a
+    path inside an edit session (logged to the session's calls.jsonl), or None."""
     label=f'{provider} {endpoint}'.strip()
     if offline():raise OfflineError(f'{label} is switched off in offline mode (PUPPETEER_OFFLINE=1); nothing was sent.')
-    run=run_folder_of(folder)
+    session=session_folder_of(folder)
+    run=None if session else run_folder_of(folder)
     if stage is None or tool is None:
         context_stage,context_tool=current_context(run) if run else (None,None)
         stage=stage or context_stage;tool=tool or context_tool
@@ -58,11 +70,12 @@ def record_call(folder,provider,endpoint,stage=None,tool=None,cost_usd=None,ok=T
     entry={'time':datetime.now(timezone.utc).isoformat(timespec='seconds'),'provider':provider,'endpoint':endpoint,'stage':stage,'tool':tool,'cost_usd':round(float(cost_usd or 0),4),'ok':bool(ok)}
     line=json.dumps(entry)
     with _lock:
-        if run is not None:
-            with (run/'calls.jsonl').open('a') as f:f.write(line+'\n')
+        target=run or session
+        if target is not None:
+            with (target/'calls.jsonl').open('a') as f:f.write(line+'\n')
         try:
             GLOBAL_LOG.parent.mkdir(parents=True,exist_ok=True)
-            with GLOBAL_LOG.open('a') as f:f.write(json.dumps({**entry,'run':run.name if run else None})+'\n')
+            with GLOBAL_LOG.open('a') as f:f.write(json.dumps({**entry,'run':run.name if run else (session.name if session else None),**({'session':True} if session else {})})+'\n')
         except OSError:pass
     return entry
 

@@ -2,7 +2,8 @@
 
 One prediction per comma-separated term (unioned), retry on the RGB frames when the depth pass finds nothing,
 then `SAM_FALLBACK_MODEL`; every prediction is in `sam-attempts.json`, the chosen route in `sam-report.json`.
-The mask wand tools (`local_propagate`, `brush`, `sam3_points_fal`, `sam2_points_replicate`) edit an existing
+The mask wand tools (`local_propagate`, `brush`, `sam3_points_fal`, `sam2_points_replicate`, and `edit_layer` = the
+timeline editor's saved mask, see stages/masktrack.py) edit an existing
 mask: they are run as a branch at this stage, start from the parent run's masks (`base = parent`, found through
 `base_run` or run.json's parent) and write the same artifact set (`raw-masks/`, `clean-masks/`, `sam-report.json`
 with a `wand` section, `mask-edits.json` with the click history), so composite and face re-run unchanged.
@@ -10,6 +11,7 @@ See docs/MASK-WAND.md.
 """
 from pathlib import Path
 import json,time
+import numpy as np
 from .base import Tool,register,allow_off,fresh
 from . import wand
 
@@ -268,4 +270,54 @@ def decode_fal_rle(result,frames,shape,download=None):
         masks[i]=m
     return masks
 
-register(Sam3Replicate);register(LocalPropagate);register(Brush);register(Sam3PointsFal);register(Sam2PointsReplicate);allow_off('mask')
+class EditLayerMask(WandTool):
+    """The mask the timeline editor built (clicks applied in one propagation pass, brush strokes, Grab hands), saved
+    with "Save edits". `stages/masktrack.py` copies the final mask set into `edit-layer/mask/` of the child before the
+    child runs; this tool copies it into raw-masks/ + clean-masks/ and writes sam-report.json (+ `wand`) and
+    mask-edits.json like the other wand tools, so composite and face re-run unchanged on it."""
+    name='edit_layer';label='Timeline edits (free)';paid=False
+    description='Uses the mask you edited on the timeline (applied clicks, brush strokes, Grab hands). Free and local; saved with "Save edits".'
+    params={'layer_sha':{'type':'string','default':'','label':'Edit layer','hint':'sha256 of the saved mask edits (filled in by Save edits).'},
+            'result':{'type':'string','default':'','label':'Result','hint':'Id of the edited mask set in the edit session.'},
+            **WandTool.base_params}
+    inputs=('original.mp4','edit-layer/mask')
+    def run(self,inputs,params,folder,status):
+        import shutil
+        folder=Path(folder);src=folder/'edit-layer'/'mask'
+        if not src.is_dir() or not any(src.glob('mask_*.png')):raise ValueError('The timeline mask edits are missing from this run (edit-layer/mask/). Save the edits again from the run you edited.')
+        for name in self.outputs:fresh(folder/name)
+        for extra in folder.glob('raw-masks-*'):fresh(extra)
+        h,w,frames,fps=wand.frame_shape(folder/'original.mp4')
+        base_masks,base_folder=wand.load_base(folder.parent,params.get('base_run'),folder)
+        raw=folder/'raw-masks';clean=folder/'clean-masks';raw.mkdir(parents=True);clean.mkdir(parents=True)
+        changed=[];covered=0;missing=[];coverage={}
+        status('Mask · copying the timeline edits')
+        for i in range(frames):
+            name=f'mask_{i:05d}.png';path=src/name
+            if path.exists():
+                shutil.copyfile(path,raw/name);shutil.copyfile(path,clean/name)
+            else:
+                missing.append(i);wand.write_mask(np.zeros((h,w),bool) if base_masks is None else wand.read_mask(base_masks,i,(h,w)),raw/name);shutil.copyfile(raw/name,clean/name)
+            after=wand.read_mask(clean,i,(h,w))
+            if after.any():covered+=1
+            if not np.array_equal(after,wand.read_mask(base_masks,i,(h,w))):changed.append(i);coverage[i]=round(float(after.mean()),4)
+        try:record=json.loads((folder/'edit-layer'/'mask.json').read_text())
+        except (OSError,ValueError):record={}
+        report={}
+        if base_folder is not None and (base_folder/'sam-report.json').exists():
+            try:report=json.loads((base_folder/'sam-report.json').read_text())
+            except (OSError,ValueError):report={}
+        report.setdefault('frames',frames)
+        report['method']=(report.get('method') or 'masks')+' + timeline edits'
+        report['wand']={'tool':self.name,'label':self.label,'base':'parent','base_run':base_folder.name if base_folder is not None else None,'frames_changed':changed,
+                        'layer_sha':params.get('layer_sha'),'result':params.get('result'),'fixes':record.get('fixes') or [],'summary':record.get('summary') or []}
+        (folder/'sam-report.json').write_text(json.dumps(report,indent=1))
+        entry={'time':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'tool':self.name,'base':'parent','base_run':report['wand']['base_run'],'frames_changed':len(changed),'layer_sha':params.get('layer_sha'),'fixes':record.get('fixes') or []}
+        (folder/'mask-edits.json').write_text(json.dumps({'note':'Mask wand click and stroke history; each entry is one branch at the mask stage.','history':wand.history(base_folder)+[entry]},indent=1,default=str))
+        warnings=[f'{len(missing)} frame(s) were missing from the timeline edits and kept the earlier mask.'] if missing else []
+        lines=record.get('summary') or []
+        health=('Mask from the timeline edits ('+'; '.join(lines)+'): ' if lines else 'Mask from the timeline edits: ')+(f'{len(changed)} of {frames} frames differ from run {report["wand"]["base_run"]}.' if changed else 'no frame differs from the earlier mask.')
+        return {'outputs':[n for n in self.outputs if (folder/n).exists()],'frames':{'covered':covered,'filled':0,'missing':frames-covered},'warnings':warnings,'health':health,
+                'data':{'wand':report['wand'],'changed_ranges':self.changed_ranges(changed,fps) if changed else [],'coverage':coverage,'fps':fps}}
+
+register(Sam3Replicate);register(LocalPropagate);register(Brush);register(Sam3PointsFal);register(Sam2PointsReplicate);register(EditLayerMask);allow_off('mask')

@@ -487,6 +487,58 @@ async def save_edits(ident:str,request:Request):
     except (ValueError,OSError) as e:return fail(400,'The new version could not be created: '+str(e),'Check that this run still has its files, then try again; your edits are kept.')
     return run_child(folder,child,chain_data,stage,changed,estimate,lead='Saved edits from ')
 
+# ---------------------------------------------------------------- mask track of the edit layer: preview a click (no propagation), Apply to clip (one pass), Grab hands, problem ticks
+
+def mask_track_error(ident,e,what):
+    """Plain errors for the mask track routes; unexpected ones go to the session log, never to the screen raw."""
+    if isinstance(e,stages.editlayer.EditError):return edit_fail(e)
+    if isinstance(e,stages.OfflineError):return fail(400,str(e),e.fix)
+    if isinstance(e,ValueError):return fail(400,str(e),'Fix the clicks or strokes and try again.')
+    stages.editlayer.note(RUNS,ident,f'{what} failed: {type(e).__name__}: {e}')
+    return fail(500,f'The {what} could not be finished.','Check the edit session log (runs/_sessions/<id>/log.txt) for the reason, then try again.')
+
+@app.post('/jobs/{ident}/edits/mask/preview')
+async def mask_track_preview(ident:str,request:Request):
+    """What the pending clicks / strokes on one frame select, over the current session mask (free seed step only).
+    Body: frame | time, optional points / strokes (else the session's pending ones). Writes runs/_sessions/<id>/mask/previews/."""
+    folder=hd_folder(ident);data=await body_fields(request)
+    try:frame,n,fps=wand_frame(data,folder);return stages.masktrack.preview(RUNS,ident,folder,frame,points=data.get('points'),strokes=data.get('strokes'))
+    except Exception as e:return wand_error(e) if isinstance(e,ValueError) and not isinstance(e,stages.editlayer.EditError) else mask_track_error(ident,e,'mask preview')
+
+@app.post('/jobs/{ident}/edits/mask/apply')
+async def mask_track_apply(ident:str,request:Request):
+    """Apply every pending mask fix in one pass: `quality` (quick | full), `tool` (local_propagate | sam3_points_fal |
+    sam2_points_replicate), `replace` (an applied entry id: re-run it at full quality), `rev`, `confirm_cost`; `estimate_only`
+    answers {estimated_cost_usd} without running. Returns the edits view + {apply: {result, video, frames_changed, …}}."""
+    folder=hd_folder(ident);data=await body_fields(request)
+    try:plan=stages.masktrack.plan_apply(RUNS,ident,folder,data.get('quality'),data.get('tool'),data.get('replace') or None,data.get('rev'))
+    except Exception as e:return mask_track_error(ident,e,'mask apply')
+    if truthy(data.get('estimate_only')):return {'id':ident,'tool':plan['effective'],'estimated_cost_usd':plan['estimate'],'free':plan['estimate']<=0,'note':stages.costs.NOTE}
+    refused=cost_gate(plan['estimate'],data.get('confirm_cost'),legacy=False,folder=folder,what='Applying the mask fixes with '+stages.get_tool('mask',plan['effective']).label if plan['effective'] in stages.masktrack.HOSTED else 'Applying the mask fixes')
+    if refused is not None:return refused
+    try:return stages.masktrack.run_apply(plan)
+    except Exception as e:return mask_track_error(ident,e,'mask apply')
+
+@app.post('/jobs/{ident}/edits/mask/hands')
+async def mask_track_hands(ident:str,request:Request):
+    """Grab hands (free, local MediaPipe): `source` problems (the flagged frames) | range (`from`, `to`), `rev`.
+    Hand regions are OR-ed into the current mask on those frames only. Returns the edits view + {hands: …}."""
+    folder=hd_folder(ident);data=await body_fields(request)
+    try:plan=stages.masktrack.plan_hands(RUNS,ident,folder,'range' if str(data.get('source') or '')=='range' else 'problems',data.get('from'),data.get('to'),data.get('rev'))
+    except Exception as e:return mask_track_error(ident,e,'hands pass')
+    try:return stages.masktrack.run_hands(plan)
+    except Exception as e:return mask_track_error(ident,e,'hands pass')
+
+@app.get('/jobs/{ident}/mask/problems')
+def mask_problems(ident:str):
+    """Problem ticks on the current mask (the edit session's latest Apply, else the run's masks):
+    {frames: [{frame, kind: jump | limb, note, span}], areas, flagged, median, source, result, thresholds}."""
+    folder=hd_folder(ident)
+    try:return {'id':ident,**stages.masktrack.problems(RUNS,ident,folder)}
+    except Exception as e:
+        print(f'mask problems failed for {ident}: {type(e).__name__}: {e}',flush=True)   # a GET writes nothing, not even a log line in the run
+        return fail(500,'The mask could not be checked for problems.','Reload the page; if it happens again, check the app log.')
+
 # ---------------------------------------------------------------- mask wand: preview a click, apply edits as a branch at the mask stage, one frame with the outline
 
 WAND_TOOLS=('local_propagate','brush','sam3_points_fal','sam2_points_replicate')

@@ -151,9 +151,9 @@ class SaveTests(Base):
         runs_before=runs_in(self.runs);before=tree_hashes(self.parent)
         r=self.client.post(f'/jobs/{HEX}/edits/save');self.assertEqual(r.status_code,402);self.assertGreater(r.json()['estimated_cost_usd'],0);self.assertIn('Saving these edits',r.json()['message'])
         self.assertEqual(runs_in(self.runs),runs_before);self.assertTrue((self.runs/'_sessions'/HEX/'session.json').exists())
-        self.client.delete(f'/jobs/{HEX}/edits');editlayer.TRACKS.update(self.tracks)   # the real stubs: pending mask clicks refuse to save
+        self.client.delete(f'/jobs/{HEX}/edits');editlayer.TRACKS.update(self.tracks)   # the real mask track (Agent 2): pending clicks refuse to save
         self.put(0,'click','mask',{'points':[{'id':'p1','frame':12,'x':.5,'y':.5,'label':1},{'id':'p2','frame':40,'x':.5,'y':.5,'label':1}]})
-        r=self.client.post(f'/jobs/{HEX}/edits/save');self.assertEqual(r.status_code,400);self.assertIn('Mask edits cannot be saved yet',r.json()['message']);self.assertEqual(r.json()['track'],'mask')
+        r=self.client.post(f'/jobs/{HEX}/edits/save');self.assertEqual(r.status_code,400);self.assertIn('2 mask clicks are not applied yet',r.json()['message']);self.assertEqual(r.json()['track'],'mask')
         self.assertEqual(self.client.get(f'/jobs/{HEX}/edits').json()['summary'],['mask: 2 clicks on frames 12–40 not applied'])
         self.assertEqual(runs_in(self.runs),runs_before);self.assertEqual(tree_hashes(self.parent),before)
 
