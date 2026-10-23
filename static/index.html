@@ -111,7 +111,7 @@
   </article>
 </template>
 
-<!-- ============================================================ Review panel (step 02). Agent 3: the mask wand goes into [data-review-tools]. -->
+<!-- ============================================================ Review panel (step 02). The timeline editor (tpl-editor) mounts into [data-editor]; the old mask wand goes into [data-review-tools]. -->
 <template id="tpl-review">
   <section class="panel" id="review">
     <div class="heading"><span class="number">02</span><h2>Review the prepared input</h2></div>
@@ -119,8 +119,7 @@
     <div class="status" data-progress hidden><span class="dot"></span><div class="body"><span data-text></span><span class="fix" data-fix hidden></span><div class="actions-inline" data-actions hidden></div></div></div>
     <div class="empty" data-empty>Your original video and prepared previews will appear here.</div>
     <div data-ready hidden>
-      <div class="tabs" data-tabs role="group" aria-label="Preview selection"></div>
-      <div class="viewer"><video data-video controls playsinline preload="metadata"></video><div class="viewer-foot"><span class="hint" data-caption></span><a data-download download>Download video ↓</a></div></div>
+      <div data-editor></div>
       <div data-review-tools></div>
       <div class="review-box">
         <h3>Required · Review the complete input</h3>
@@ -133,6 +132,21 @@
       <details><summary>Audio downloads</summary><div class="download" data-audio></div></details>
     </div>
   </section>
+</template>
+
+<!-- ============================================================ Timeline editor (inside the review panel; static/editor.js) -->
+<template id="tpl-editor">
+  <div class="editor">
+    <div class="tabs" data-tabs role="group" aria-label="Preview selection"></div>
+    <div class="viewer editor-viewer">
+      <div class="stage-view" data-stage></div>
+      <div class="transport" data-transport></div>
+      <div class="viewer-foot"><span class="hint" data-caption></span><a data-download download>Download video ↓</a></div>
+    </div>
+    <div class="timeline-box" data-timeline></div>
+    <div class="track-panel" data-track-panel></div>
+    <div class="savebar" data-savebar role="region" aria-label="Pending edits"></div>
+  </div>
 </template>
 
 <!-- ============================================================ Draft panel (step 03) -->

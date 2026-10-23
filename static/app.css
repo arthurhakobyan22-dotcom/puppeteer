@@ -232,3 +232,50 @@ footer{margin-top:30px;color:var(--muted);font-size:12px}
 .checklist.fixes li{color:var(--ok)}
 .checklist.advice li{color:var(--warn)}
 .checklist-title{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin:4px 0 2px;font-family:var(--mono)}
+
+/* Timeline editor (review panel): stacked videos + overlay canvas, transport, timeline, track panel, Save bar */
+.editor{display:grid;gap:10px}
+.editor .tabs{margin-bottom:0}
+.editor-viewer{display:grid}
+.stage-view{position:relative;width:100%;aspect-ratio:16/9;max-height:480px;background:#09090c;overflow:hidden}
+.stage-view video.stage-video{position:absolute;inset:0;width:100%;height:100%;max-height:none;object-fit:contain;visibility:hidden;pointer-events:none;background:transparent}
+.stage-view video.stage-video.active{visibility:visible;pointer-events:auto}
+.stage-view video.stage-video.layer{pointer-events:none}
+.stage-overlay{position:absolute;z-index:2;pointer-events:none;display:block}
+.stage-overlay.interactive{cursor:crosshair;touch-action:none}
+.transport{display:flex;gap:8px 12px;align-items:center;flex-wrap:wrap;padding:10px 12px;background:#fff;border-top:1px solid var(--line)}
+.tr-steps,.tr-zoom{display:inline-flex;gap:4px;align-items:center;flex-wrap:wrap}
+.tr-steps button{min-width:44px}
+.tr-zoom button{min-width:32px;padding:6px 9px}
+.tr-zoom .hint{margin-right:2px}
+.tr-counter{flex:1 1 180px;color:var(--text);font-size:12px}
+.timeline-box{border:1px solid var(--line-strong);border-radius:12px;background:#fff;overflow:hidden}
+.tl{display:grid;grid-template-columns:72px minmax(0,1fr)}
+.tl-labels{display:flex;flex-direction:column;border-right:1px solid var(--line);background:#fafafb}
+.tl-corner{border-bottom:1px solid var(--line)}
+.tl-label{display:flex;align-items:center;justify-content:flex-start;width:100%;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;color:var(--muted);font:600 11px var(--mono);letter-spacing:.6px;text-transform:uppercase;padding:0 10px;flex-shrink:0}
+.tl-label:hover{background:var(--accent-soft);color:var(--accent);filter:none}
+.tl-label.active{background:var(--accent-soft);color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.tl-scroll{overflow-x:auto;overflow-y:hidden;position:relative;overscroll-behavior-x:contain}
+.tl-inner{position:relative}
+.tl-stage{position:sticky;left:0;touch-action:pan-y;user-select:none;cursor:text}
+.tl-ruler{display:block;border-bottom:1px solid var(--line)}
+.tl-lane{position:relative;border-bottom:1px solid var(--line)}
+.tl-lane.selected{background:#f9f9ff}
+.tl-lane canvas{display:block;position:absolute;inset:0}
+.tl-playhead{position:absolute;top:0;left:0;width:2px;margin-left:-1px;background:#e5362b;pointer-events:none;z-index:3}
+.tl-playhead::before{content:'';position:absolute;top:0;left:-4px;border:5px solid transparent;border-top:7px solid #e5362b}
+.tl-range{position:absolute;top:0;background:rgba(31,24,192,.12);border-left:1px solid rgba(31,24,192,.5);border-right:1px solid rgba(31,24,192,.5);pointer-events:none;z-index:2}
+.track-panel{display:grid;gap:8px}
+.track-panel-body{padding:12px;border:1px solid var(--line-strong);border-radius:12px;background:#fafafb;display:grid;gap:8px}
+.track-panel-body h3{margin:0}
+.track-panel-body p.hint{margin:0}
+.track-panel-hint{margin:0}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.savebar{display:flex;gap:8px 14px;align-items:center;flex-wrap:wrap;justify-content:space-between;padding:12px 14px;border:1px solid var(--line-strong);border-radius:12px;background:#fff}
+.savebar.has-edits{border-color:var(--accent-line);background:var(--accent-soft)}
+.sb-summary{display:grid;gap:2px;flex:1 1 240px;font-size:13px}
+.sb-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.savebar .line{flex:1 1 100%;margin:0}
+@media(max-width:520px){.tl{grid-template-columns:58px minmax(0,1fr)}.tl-label{padding:0 6px;font-size:10px}.tr-counter{flex-basis:100%;order:3}}

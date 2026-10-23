@@ -78,7 +78,7 @@ async function loadFrame(w, frame) {
     if (w.frameUrl) URL.revokeObjectURL(w.frameUrl);
     w.frameUrl = URL.createObjectURL(blob); w.previewUrl = '';
     const img = $('img', w.overlay); img.src = w.frameUrl;
-    if (w.video && Math.abs(w.video.currentTime * w.fps - w.frame) > 0.6) { w.seeking = true; w.video.currentTime = w.frame / w.fps; }
+    if (w.video && Math.floor(w.video.currentTime * w.fps + 1e-3) !== w.frame) { w.seeking = true; w.video.currentTime = (w.frame + 0.5) / w.fps; }   // frame centre, the editor's convention
     renderToolbar(w); positionOverlay(w);
     if (w.edits.some(e => e.frame === w.frame)) preview(w);
   } catch (e) { if (token === w.loadToken) showError(e, { key: 'wand' }); }
@@ -146,11 +146,11 @@ function open(w, video) {
   }
   if (getComputedStyle(w.viewer).position === 'static') w.viewer.style.position = 'relative';
   w.viewer.append(w.overlay);
-  w.onSeeked = () => { if (w.seeking) { w.seeking = false; return; } loadFrame(w, Math.round(video.currentTime * w.fps)); };
+  w.onSeeked = () => { if (w.seeking) { w.seeking = false; return; } loadFrame(w, Math.floor(video.currentTime * w.fps + 1e-3)); };
   video.addEventListener('seeked', w.onSeeked);
   w.resize = new ResizeObserver(() => positionOverlay(w)); w.resize.observe(video);
   w.loadToken = 0; w.previewToken = 0;
-  loadFrame(w, Math.round((video.currentTime || 0) * w.fps));
+  loadFrame(w, Math.floor((video.currentTime || 0) * w.fps + 1e-3));
 }
 
 function close(w) {

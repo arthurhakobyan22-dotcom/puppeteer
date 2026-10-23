@@ -182,4 +182,11 @@ class BranchAlsoTests(unittest.TestCase):
                 self.assertEqual(ha,hb,stage);self.assertEqual(strip(json.loads((a/'run.json').read_text())),strip(json.loads((b/'run.json').read_text())))
                 self.assertEqual((a/'log.txt').read_text()[20:],(b/'log.txt').read_text()[20:])
 
+class StaticEditorTests(unittest.TestCase):
+    def test_editor_modules_and_template_are_served(self):
+        client=TestClient(application.app);index=client.get('/').text
+        for name in ['tpl-editor','data-editor','data-review-tools','data-approve']:self.assertIn(name,index)
+        for module in ['editor','timeline','editlayer','tracks','track-placeholders','wand']:
+            r=client.get(f'/static/{module}.js');self.assertEqual(r.status_code,200,module);self.assertIn('javascript',r.headers['content-type'])
+
 if __name__=='__main__':unittest.main()
