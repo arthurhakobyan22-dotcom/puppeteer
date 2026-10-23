@@ -15,6 +15,7 @@ from .migrate import reconstruct,run_info
 from . import costs
 from . import editlayer,masktrack,meshedit,words   # noqa: F401  (edit layer + its track hooks; Agents 2–4 replace the stubs)
 from . import imports,subtitles   # noqa: F401  (Import my own tools, registered after every stage's own tools; subtitles from the Words track)
+from . import export,export_presets   # noqa: F401  (export kit: target presets, README, zip; app.py section "export kit")
 from .editlayer import register_track
 
 __all__=['STAGES','PREP_STAGES','GENERATION_STAGES','LABELS','Tool','OffTool','register','get_tool','tools_for','registry','fresh','OfflineError','record_call','offline','read_calls','total_cost',
