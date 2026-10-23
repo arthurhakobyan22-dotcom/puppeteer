@@ -101,6 +101,11 @@ def branch(parent,stage,tool=None,params=None,runs_root=None,preset=None,also=No
     if index>STAGES.index('audio') and (parent/'audio-manifest.json').exists() and not (child/'audio-manifest.json').exists():shutil.copy2(parent/'audio-manifest.json',child/'audio-manifest.json')
     for name in CARRY:
         if (parent/name).exists() and not (child/name).exists():link_artifact(parent/name,child/name)
+    for later in PREP_STAGES[index:] if stage in PREP_STAGES else []:   # a re-run edit-layer tool (mask edit_layer, face mesh_edit) reads the parent's saved edits
+        try:tool_inputs=get_tool(later,chain[later]['tool']).inputs
+        except ValueError:continue
+        for name in tool_inputs:
+            if name.startswith('edit-layer/') and (parent/name).exists() and not (child/name).exists():link_artifact(parent/name,child/name)
     mode=mode_for_chain(chain);child_run=new_run(child,chain,mode,parent=parent.name,changed=changed,preset=preset)
     for earlier in STAGES[:index]:
         report=reports.get(earlier) or {}

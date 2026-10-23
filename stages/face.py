@@ -4,7 +4,8 @@
 depth composite otherwise), `face-landmarks.json`, `face-tracking.json` and `preview.jpg`. `strict` is the gap
 rule: true fails on a gap longer than `max_gap` frames (Fast mode, no fallback), false only warns (the depth
 composite stands in where the face is lost). Default flags reproduce today's worker invocation exactly.
-`off` copies the base clip to `composite-silent.mp4`.
+`off` copies the base clip to `composite-silent.mp4`. `mesh_edit` (timeline mesh edits, free, local) lives in
+stages/meshedit.py and registers itself after these two, so `mediapipe_mesh` stays the default.
 """
 from pathlib import Path
 import json,shutil

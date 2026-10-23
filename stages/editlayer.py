@@ -15,7 +15,7 @@ caller (app.py) runs the child exactly like any other branch.
 """
 from pathlib import Path
 import copy,hashlib,json,os,shutil,threading,uuid
-from .base import STAGES,fresh
+from .base import STAGES,fresh,unshare
 from .report import now
 
 UNDO_CAP=200
@@ -214,6 +214,7 @@ def save(parent_folder,runs_root,planned=None,preset=None):
         session=load(runs_root,ident);layer={**empty_layer(),**session['layer']};sdir=session_dir(runs_root,ident)
         child,chain,chain_changed=make_branch(parent_folder,current['stage'],current['tool'],current['params'],runs_root=runs_root,preset=preset,also=current['also'] or None)
         try:
+            unshare(child/'edit-layer')   # branch() may have linked the parent's saved edits (for a re-run edit-layer tool); a track writes its own over them
             for name in current['tracks']:TRACKS[name].materialize(track_value(layer,name),child,sdir,parent_folder)
             sha=layer_sha(layer);changed=current['changed'] or chain_changed
             record={'version':1,'run':ident,'child':child.name,'saved':now(),'rev':current['rev'],'layer_sha':sha,'summary':[f'{label_of(n)}: '+', '.join(l) for n,l in summaries(layer)],'changed':changed,

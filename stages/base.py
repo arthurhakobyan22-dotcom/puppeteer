@@ -108,5 +108,16 @@ def fresh(path):
         if path.exists() and path.stat().st_nlink>1:path.unlink()
     except OSError:pass
 
+def unshare(folder):
+    """Replace every hard-linked file under `folder` with its own copy, so writing into it never reaches another run."""
+    import os,uuid
+    folder=Path(folder)
+    if not folder.is_dir():return
+    for path in list(folder.rglob('*')):
+        try:
+            if path.is_file() and not path.is_symlink() and path.stat().st_nlink>1:
+                tmp=path.with_name('.'+path.name+'.'+uuid.uuid4().hex[:6]);shutil.copy2(path,tmp);os.replace(tmp,path)
+        except OSError:pass
+
 def artifact(folder,name):
     return Path(folder)/name
