@@ -9,7 +9,8 @@
 //   edits.undo(); edits.redo()     POST; the editor wires Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z and Ctrl+Y
 //   edits.discard()                DELETE (the Save bar asks first)
 //   edits.save({confirm})          POST save → navigate to the child; 400 from a track's check → notice with that
-//                                  track's actions (edits.saveActions[track] = (problem) => [{label, run}]); 402 → "Run anyway · about $x"
+//                                  track's actions (edits.saveActions[track] = (problem) => [{label, run}]); 402 → "Run anyway · about $x";
+//                                  edits.saveChecks[track] = () => null | {message, fix} answers a known refusal in the page first
 //   edits.on('change', fn)         after every load / commit / undo / redo / discard; returns an unsubscribe function
 //   edits.pending                  {mask, mesh, words, total}; edits.summary: plain lines; edits.canUndo/canRedo, undoLabel/redoLabel, stale
 import { getJSON, send, plain } from './api.js';
@@ -36,6 +37,7 @@ export const edits = {
   jobId: null, rev: 0, layer: EMPTY(), pending: { total: 0 }, summary: [], canUndo: false, canRedo: false, undoLabel: '', redoLabel: '', stale: false,
   loaded: false, busy: false, generation: 0, queue: Promise.resolve(),
   saveActions: {},   // track -> (problem {message, fix, body}) => [{label, run}] shown when that track's check() refuses a save
+  saveChecks: {},    // track -> () => null | {message, fix}: the same refusal answered in the page first (no 400 round trip; the server still checks)
 
   on(event, fn) { (listeners[event] = listeners[event] || new Set()).add(fn); return () => listeners[event].delete(fn); },
 
@@ -97,6 +99,10 @@ export const edits = {
   async save({ confirm = false } = {}) {
     await edits.queue;
     if (!edits.jobId || edits.busy) return null;
+    for (const [track, check] of Object.entries(edits.saveChecks)) {
+      let problem = null; try { problem = check(); } catch { problem = null; }
+      if (problem) { const p = { ...problem, status: 400, body: { track } }; notice(p.message, { fix: p.fix, key: 'edits', actions: edits.saveActions[track] ? edits.saveActions[track](p) : [] }); return null; }
+    }
     edits.busy = true; emit('change');
     try {
       const r = await send(base() + '/save', confirm ? { confirm_cost: 'true' } : {});

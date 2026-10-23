@@ -278,4 +278,20 @@ footer{margin-top:30px;color:var(--muted);font-size:12px}
 .sb-summary{display:grid;gap:2px;flex:1 1 240px;font-size:13px}
 .sb-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .savebar .line{flex:1 1 100%;margin:0}
+/* Mask track panel (static/track-mask.js) */
+.mask-track{display:grid;gap:8px;min-width:0}
+.mt-row{display:flex;gap:6px 8px;align-items:center;flex-wrap:wrap;min-width:0}
+.mt-row select{max-width:100%;padding:6px 8px}
+.mt-list{list-style:none;margin:0;padding:0;display:grid;gap:2px;max-height:168px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fff}
+.mt-list li{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:2px 4px 2px 0;border-bottom:1px solid var(--line)}
+.mt-list li:last-child{border-bottom:0}
+.mt-list li.here{background:var(--accent-soft)}
+.mt-jump{flex:1 1 auto;min-width:0;text-align:left;justify-content:flex-start;border:0;background:transparent;color:var(--text);font:12px var(--mono);padding:5px 8px}
+.mt-jump:hover{color:var(--accent);filter:none}
+.mt-del{border:0;background:transparent;color:var(--muted);padding:4px 8px;font-size:13px}
+.mt-del:hover{color:var(--err);filter:none}
+.mt-accept{padding:6px 8px;border:1px dashed var(--accent-line);border-radius:8px;background:#fff}
+.mt-ticks{font-size:12px;color:var(--text);flex:0 1 auto}
+.mt-note,.mt-info{margin:0}
+.mt-classic{font-size:12px;margin-left:auto}
 @media(max-width:520px){.tl{grid-template-columns:58px minmax(0,1fr)}.tl-label{padding:0 6px;font-size:10px}.tr-counter{flex-basis:100%;order:3}}
