@@ -77,13 +77,16 @@ export const edits = {
     return edits.queue.then(() => edits);
   },
 
-  async step(direction) {
-    await edits.queue;
-    if (!edits.jobId || (direction === 'undo' ? !edits.canUndo : !edits.canRedo)) return edits;
-    try { adopt(await send(base() + '/' + direction, { rev: edits.rev })); }
-    catch (e) { const p = plain(e); showError(e, { key: 'edits' }); if (p.status === 409) await edits.load(); return edits; }
-    emit('change');
-    return edits;
+  step(direction) {   // queued like commits, so a fast Cmd+Z Cmd+Z sends the second undo with the rev the first one returned (no 409)
+    const run = async () => {
+      if (!edits.jobId || (direction === 'undo' ? !edits.canUndo : !edits.canRedo)) return edits;
+      try { adopt(await send(base() + '/' + direction, { rev: edits.rev })); }
+      catch (e) { const p = plain(e); showError(e, { key: 'edits' }); if (p.status === 409) await edits.load(); return edits; }
+      emit('change');
+      return edits;
+    };
+    const done = edits.queue.then(run, run); edits.queue = done.then(() => {}, () => {});
+    return done;
   },
   undo() { return edits.step('undo'); },
   redo() { return edits.step('redo'); },

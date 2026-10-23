@@ -294,4 +294,11 @@ footer{margin-top:30px;color:var(--muted);font-size:12px}
 .mt-ticks{font-size:12px;color:var(--text);flex:0 1 auto}
 .mt-note,.mt-info{margin:0}
 .mt-classic{font-size:12px;margin-left:auto}
+/* Face track panel (static/track-face.js) */
+.ft-sliders{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:4px 14px;min-width:0}
+.ft-slider{display:grid;grid-template-columns:minmax(0,9em) minmax(0,1fr) 3.2em;align-items:center;gap:6px;font-size:12px;color:var(--text);min-width:0}
+.ft-slider input{width:100%;min-width:0}
+.ft-slider output{font-size:11px;text-align:right;color:var(--muted)}
+.ft-where{margin:0}
+@media(max-width:520px){.ft-sliders{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:520px){.tl{grid-template-columns:58px minmax(0,1fr)}.tl-label{padding:0 6px;font-size:10px}.tr-counter{flex-basis:100%;order:3}}
