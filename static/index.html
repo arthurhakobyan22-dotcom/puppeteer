@@ -1,49 +1,225 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Puppeteer</title><style>
-@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Schibsted+Grotesk:wght@600;700;800;900&display=swap');
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Puppeteer</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Schibsted+Grotesk:wght@600;700;800;900&display=swap">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<main>
+  <header class="top">
+    <a class="brand" href="/" data-nav>Puppeteer <span class="eyebrow">/ motion control</span></a>
+    <nav class="views" aria-label="Depth">
+      <a href="/?view=quick" data-view="quick" data-nav>Quick</a>
+      <a href="/?view=studio" data-view="studio" data-nav>Studio</a>
+      <a href="/?view=lab" data-view="lab" data-nav>Lab</a>
+      <a href="/?view=runs" data-view="runs" data-nav>Runs</a>
+    </nav>
+  </header>
 
-:root{color-scheme:dark;--bg:#101114;--card:#191a20;--line:#303139;--muted:#999ba9;--accent:#c5bdff}*{box-sizing:border-box;min-width:0}body{margin:0;background:var(--bg);color:#f4f4f7;font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1120px;margin:auto;padding:32px 28px 80px}header{display:flex;justify-content:space-between;align-items:center;padding-bottom:24px;border-bottom:1px solid var(--line)}.brand{font-size:20px;font-weight:850;letter-spacing:-1px}.eyebrow{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}h1{font-size:clamp(30px,4vw,46px);letter-spacing:-1.8px;margin:32px 0 10px}h2{font-size:21px;letter-spacing:-.5px;margin:0}h3{font-size:14px;margin:0 0 12px}p{color:var(--muted);line-height:1.6;margin:8px 0 20px}.steps{display:grid;grid-template-columns:repeat(4,1fr);margin:28px 0;gap:8px}.steps a{background:#1b1c22;border:1px solid var(--line);border-radius:10px;padding:14px;color:#d6d6df;text-decoration:none;font-size:13px}.steps b{color:var(--accent);margin-right:8px}.panel{padding:26px;border:1px solid var(--line);border-radius:18px;background:var(--card);margin:18px 0;scroll-margin-top:20px}.heading{display:flex;gap:14px;align-items:center;margin-bottom:18px}.number{display:grid;place-items:center;width:30px;height:30px;flex-shrink:0;border:1px solid #4a465e;border-radius:9px;color:var(--accent);font-size:12px}.badge{display:inline-block;padding:6px 10px;border-radius:6px;background:#292638;color:var(--accent);font-size:11px;letter-spacing:.5px}.row{display:flex;gap:14px;align-items:center;flex-wrap:wrap}.split{display:grid;grid-template-columns:1fr 1fr;gap:18px}.upload{display:flex;align-items:center;gap:16px;border:1px dashed #4b4b59;border-radius:12px;padding:22px;background:#14151a;cursor:pointer;position:relative;overflow:hidden}.upload:hover{border-color:var(--accent);background:#1f1d2b}.upload input{position:absolute;inset:0;opacity:0;width:100%;cursor:pointer}.upload:focus-within{outline:2px solid var(--accent)}.upload .icon{font-size:25px;color:var(--accent);flex-shrink:0}.upload strong,.upload small{display:block;overflow-wrap:anywhere}.upload small{color:var(--muted);margin-top:6px;font-size:12px}.upload img{width:62px;height:70px;object-fit:contain;background:#fff;border-radius:8px}.upload img[hidden]{display:none}button,.button{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--accent);border:1px solid transparent;color:#211b3a;padding:12px 18px;border-radius:9px;font:600 14px inherit;font-family:inherit;font-size:14px;font-weight:650;cursor:pointer;text-decoration:none;max-width:100%;white-space:normal;text-align:center}button:hover,.button:hover{filter:brightness(1.1)}button:disabled{opacity:.45;cursor:wait}.secondary{background:transparent;color:#dedde7;border-color:#44434f}label.field{display:grid;gap:9px;font-size:13px;color:#dedee5}input:not([type=file]),select,textarea{width:100%;font:inherit;color:#eeeef5;background:#111216;border:1px solid #3a3b46;border-radius:9px;padding:12px;outline:none}textarea{line-height:1.65;min-height:190px;resize:vertical}textarea:focus,input:focus,select:focus{border-color:var(--accent)}details{margin-top:18px;border-top:1px solid var(--line);padding-top:16px}summary{cursor:pointer;color:#b7b6c3;font-size:13px}details .split{margin-top:16px}.actions{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-top:20px}.hint{font-size:12px;color:var(--muted);line-height:1.6}.status{padding:16px 20px;border:1px solid #424050;border-radius:12px;background:#201e2a;display:flex;gap:12px;align-items:center;font-size:13px;line-height:1.6;overflow-wrap:anywhere}.status.error{border-color:#74494e;background:#2b1e22}.dot{width:8px;height:8px;background:var(--accent);border-radius:50%;flex-shrink:0}.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}.tabs button{background:transparent;color:var(--muted);padding:9px 12px;font-size:12px}.tabs button.active{background:#333042;color:#f2efff}.viewer{background:#09090c;border:1px solid #303039;border-radius:12px;overflow:hidden}video{display:block;width:100%;max-height:480px;background:#09090c}.viewer-foot{display:flex;justify-content:space-between;gap:12px;padding:14px 16px;align-items:center}.viewer-foot a{font-size:12px;color:var(--accent)}.empty{padding:48px 24px;text-align:center;color:var(--muted);font-size:13px;border:1px dashed #373740;border-radius:12px}.meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px}.meta span{font-size:12px;color:#b7b6c3;background:#25252e;padding:8px 12px;border-radius:7px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.7 inherit;color:#b8b7c5}.download{display:flex;gap:14px;flex-wrap:wrap;margin-top:16px}.download a{font-size:12px;color:var(--muted)}[hidden]{display:none!important}footer{margin-top:30px;color:var(--muted);font-size:12px}#upgrade-status{margin-top:12px;color:var(--accent);font-size:13px}button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}@media(max-width:640px){main{padding:20px 14px 50px}.panel{padding:18px}.split{grid-template-columns:1fr}.steps{grid-template-columns:1fr 1fr}.upload{padding:17px}h1{letter-spacing:-1px}.actions button{width:100%}.viewer-foot{flex-wrap:wrap}}
+  <!-- Deep links keep the old shape: '/?job=' + the run id (plus &view=quick|studio|lab) and '/?view=runs'. The app is in /static/app.js; styles in /static/app.css. -->
+  <!-- Page notices: anything that is not the status of the job in the URL (upload failures, saved presets, network trouble). -->
+  <div id="notices" class="notices" aria-live="polite"></div>
 
-:root{color-scheme:light;--bg:#fafafb;--card:#fff;--line:#ececef;--muted:#7a7e8a;--accent:#1f18c0}body{color:#2b2f3a;font-family:'Hanken Grotesk',sans-serif}h1{font-family:'Schibsted Grotesk',sans-serif;font-weight:800;color:#16181f}h2,h3,.brand{font-family:'Space Grotesk',sans-serif;color:#16181f;letter-spacing:-.04em}.eyebrow,.number,.badge{font-family:'IBM Plex Mono',monospace}.panel{border-radius:16px;box-shadow:0 1px 2px #16181f0d,0 12px 32px -12px #16181f14}.steps a{background:#fff;color:#2b2f3a}.upload{background:#fafafb;border-color:#d7d9e0}.upload:hover{background:#eef0fb;border-color:#1f18c0}.upload small{color:#7a7e8a}button,.button{background:#1f18c0;color:#fff;border-radius:8px}.secondary{background:#fff;color:#2b2f3a;border-color:#dfe2e8}.badge,.number{background:#eef0fb;color:#1f18c0;border-color:#e3e3f4}label.field{color:#2b2f3a}input:not([type=file]),select,textarea{background:#fafafb;color:#2b2f3a;border-color:#dfe2e8}.status{background:#eef0fb;border-color:#e0e1f0;color:#2b2f3a}.status.error{background:#fff3f3;border-color:#edd1d1}.tabs button{color:#7a7e8a}.tabs button.active{background:#eef0fb;color:#1f18c0}.meta span{background:#f4f4f7;color:#656977}.viewer-foot{background:#fff}.viewer{border-color:#ececef}summary,pre{color:#656977}.empty{border-color:#dfe2e8}.hero{display:flex;align-items:center;justify-content:space-between;gap:20px}header{height:64px;padding-bottom:12px}.brand{font-size:26px}@media(max-width:640px){.hero h1{font-size:30px}}.runs{display:grid;gap:6px;margin-top:12px}.runs a{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px 14px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:inherit;text-decoration:none;font-size:13px}.runs a:hover{border-color:var(--accent)}.runs a.current{border-color:var(--accent);background:#eef0fb}.runs .state{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.5px;text-transform:uppercase;padding:4px 8px;border-radius:6px;background:#f4f4f7;color:#656977}.runs .state.done{background:#e6f4ea;color:#1e6b3a}.runs .state.error{background:#fff3f3;color:#b3261e}.runs .state.running{background:#eef0fb;color:#1f18c0}.runs .when{font-size:12px;color:var(--muted);white-space:nowrap}.runs .detail{grid-column:1/-1;font-size:12px;color:var(--muted);overflow-wrap:anywhere}.runs .id{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)}@media(max-width:420px){.steps{grid-template-columns:1fr}.runs a{grid-template-columns:minmax(0,1fr) auto}.runs .when{grid-column:1/-1}.row button,.actions .button{width:100%}.meta span{flex:1 1 auto;text-align:center}.viewer-foot{flex-direction:column;align-items:flex-start}h1{font-size:28px;letter-spacing:-.6px}.panel{padding:16px}}
-</style></head><body><main>
-<header><div class="brand">Puppeteer <span class="eyebrow">/ motion control</span></div></header>
-<div class="hero"><div><span class="eyebrow">PUPPETEER · MOTION CONTROL</span><h1>Your performance.<br>Your character.</h1><p>Drive a character with a video you own: prepare the motion clip, review it, draft, then finalize.</p></div></div>
-<nav class="steps" aria-label="Workflow"><a href="#source"><b>01</b>Upload</a><a href="#review"><b>02</b>Review input</a><a href="#draft"><b>03</b>Create draft</a><a href="#final"><b>04</b>Approve & export</a></nav>
-<div id="status" class="status" role="status"><span class="dot"></span><span id="status-text">Start by choosing your original video.</span></div>
-<section class="panel" id="runs-panel"><details id="runs-details"><summary id="runs-summary">Runs</summary><p class="hint" style="margin:10px 0 0">Every job under <code>runs/</code>, newest first. Click one to open its review and draft view; the job id stays in the page URL so a reload keeps it.</p><div class="runs" id="runs"></div></details></section><section class="panel" id="source"><div class="heading"><span class="number">01</span><h2>Start with your video</h2></div>
-<form id="form"><label class="upload"><span class="icon">↑</span><span><strong>Choose original video</strong><small data-filename>MP4 or MOV · up to 30 seconds</small></span><input aria-label="Original video" required type="file" name="video" accept="video/*"></label>
-<label class="field" style="margin-top:20px">Preparation method<select name="mode"><option value="depth">Advanced · Depth + SAM</option><option value="face_mesh">Fast · Face mesh (no depth or SAM)</option><option value="depth_mesh">Advanced + Face mesh · Depth + SAM + facial motion</option></select><span class="hint">Fast mode overlays facial motion on the original video and embeds the original audio. Both mesh options currently support one centered speaker and require face-mesh setup. Advanced + Face mesh adds facial motion over the depth composite.</span></label><details><summary>Preparation settings · depth mode only</summary><div class="split"><label class="field">Subject to replace<input name="prompt" value="person" required><span class="hint">One short noun phrase, e.g. “person” (all people) or “man in a dark suit”. Comma-separated subjects run as separate SAM jobs (each billed) and are combined.</span></label><label class="field">Depth provider<select name="provider"><option value="replicate">Replicate · Depth Anything Video</option><option value="huggingface">Hugging Face · Video Depth Anything</option><option value="replicate-chenxwh">Replicate · alternate model</option></select></label></div><p class="hint">Depth colors are preserved. Preparation runs at 24 fps, up to 960 px. Media is uploaded to the selected providers.</p></details>
-<label class="row hint" style="margin-top:16px"><input type="checkbox" name="clean_dialogue" value="true" style="width:auto"> Clean dialogue (isolate vocals with Demucs before lip-sync)</label><div class="actions"><span class="hint">The prepared clip carries the original audio by default. The final export always restores the entire original track.</span><button id="go">Prepare video →</button></div></form></section>
-<section class="panel" id="review"><div class="heading"><span class="number">02</span><h2>Review the prepared input</h2></div><p class="hint">Review the full mask or face-mesh tracking, and listen to the embedded audio before generating.</p><div id="input-empty" class="empty">Your original video and prepared previews will appear here.</div><div id="input-ready" hidden><div class="tabs" id="tabs" role="group" aria-label="Preview selection"></div><div class="viewer"><video id="input-video" controls playsinline preload="metadata"></video><div class="viewer-foot"><span id="input-caption" class="hint"></span><a id="input-download" download>Download video ↓</a></div></div><div style="margin-top:20px;padding:18px;border:1px solid #555069;border-radius:12px"><h3>Required · Review the complete input</h3><p class="hint">Depth: check the entire mask for missing areas and background spill. Fast face mesh: check face tracking, eyes, mouth and alignment across every frame. Listen to the embedded audio.</p><p id="mask-review-status" role="status">Mask review required.</p><p id="tracking-summary" class="hint" hidden></p><label class="row hint"><input type="checkbox" id="review-check" style="width:auto"> I reviewed the entire prepared clip; its mask or face mesh is correctly aligned throughout.</label><div class="row" style="margin-top:14px"><button type="button" id="approve-mask" disabled>Approve input</button><button type="button" class="secondary" id="reject-mask">Input needs fixing</button></div></div><details><summary>Audio downloads</summary><div class="download" id="audio-links"></div></details></div></section>
-<section class="panel" id="draft"><div class="heading"><span class="number">03</span><h2>Create your draft</h2></div><div class="meta"><span id="provider-label">Provider · …</span><span id="mode-label">Seedance · Edit</span><span id="draft-quality">Draft · …</span><span id="final-quality">Final · …</span></div><form id="seedance"><div class="split"><label class="upload"><img id="char1-img" alt="Character 1 reference" hidden><span><strong>Character 1 · required</strong><small data-filename>Choose character reference</small></span><input type="file" name="char1" aria-label="Character 1 reference" accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm"></label><label class="upload"><img id="char2-img" alt="Character 2 reference" hidden><span><strong>Character 2 · optional</strong><small data-filename>Choose character reference</small></span><input type="file" name="char2" aria-label="Character 2 reference" accept="image/png,image/jpeg,image/webp"></label></div><label class="field" style="margin-top:22px">Seedance provider<select name="provider" id="provider" aria-label="Seedance provider"></select><span class="hint" id="provider-hint">Loading providers…</span></label><label class="field" style="margin-top:22px">Generation prompt<textarea name="prompt" required rows="7">@Image1 defines the character's identity only (face, hair, outfit, proportions); do not copy its pose, expression, props, background or lighting. Pose, motion, timing and lip-sync come from @Video1.</textarea></label><div class="actions"><span class="hint">Review this prompt first. Full quality is a separate approval below.</span><button id="draft-button" disabled>Create draft →</button></div></form></section>
-<section class="panel" id="final"><div class="heading"><span class="number">04</span><h2>Approve & export</h2></div><p class="hint">Every finished preview uses the entire original source audio, including voices and music.</p><div id="final-empty" class="empty">Your draft will appear here when generation finishes.</div><div id="final-ready" hidden><div class="viewer"><video id="final-video" controls playsinline preload="metadata"></video><div class="viewer-foot"><span class="badge" id="quality-label">DRAFT PREVIEW</span><a id="final-download" download>Download preview ↓</a></div></div><div class="actions"><div><h3 style="margin-bottom:4px">Happy with this draft?</h3><span class="hint" id="finalize-hint">Approve it to generate the full-resolution version.</span><br><span class="hint" id="finalize-warning" style="color:#d9a24a" hidden>Result will not be identical to the draft.</span></div><button id="upgrade" disabled>Approve & generate full resolution →</button></div><div id="upgrade-status" role="status"></div></div><details id="sent-details" hidden><summary>View submitted prompt & generation ID</summary><p class="hint" id="generation-id"></p><pre id="sent-prompt"></pre><a id="raw-link" class="hint">Download raw Seedance result</a></details><details><summary>Import a generated result manually</summary><form id="finish" style="margin-top:16px"><label class="upload"><span class="icon">↑</span><span><strong>Choose Seedance result</strong><small data-filename>We’ll restore the original source audio.</small></span><input name="video" aria-label="Seedance result" type="file" accept="video/*" required></label><div class="actions"><button class="secondary">Restore original audio</button></div></form></details></section><footer>Puppeteer · Original audio in your final export.</footer></main>
-<script>
-const $=s=>document.querySelector(s);let jobId=new URLSearchParams(location.search).get('job'),saved={},maskApproved=false,maskFingerprint="",selectedPreview="",busy=false,pollTimer;const base=()=>'/runs/'+jobId+'/';
-function status(t,error=false){$('#status-text').textContent=t;$('#status').classList.toggle('error',error)}
-let files=new Set();async function loadFiles(){try{files=new Set((await json('/jobs/'+jobId+'/files')).files)}catch(e){files=new Set()}}
-async function exists(file){return files.has(file)}
-async function json(url,options){const r=await fetch(url,options);const j=await r.json();if(!r.ok)throw Error(typeof j.detail==='string'?j.detail:'The request could not be completed.');return j}
-for(const input of document.querySelectorAll('input[type=file]'))input.onchange=()=>{const f=input.files[0];if(!f)return;input.closest('.upload').querySelector('[data-filename]').textContent=f.name;const img=input.closest('.upload').querySelector('img');if(input.name==='char1')$('#mode-label').textContent=f.type.startsWith('video/')?'Seedance · Omni reference':'Seedance · Edit';if(img&&!f.type.startsWith('video/')){img.src=URL.createObjectURL(f);img.hidden=false}};
-async function refresh(){if(!jobId)return;await loadFiles();const items=[['Prepared input','seedance-input.mp4','Prepared video with embedded audio'],['Original','original.mp4','Original video'],['Depth','depth.mp4','Exact depth colors from the model'],['Mask','mask.mp4','Full subject mask']];const present=await Promise.all(items.map(x=>exists(x[1])));$('#tabs').replaceChildren();items.forEach((x,i)=>{if(!present[i])return;const b=document.createElement('button');b.type='button';b.textContent=x[0];b.dataset.file=x[1];b.onclick=()=>{selectedPreview=x[1];document.querySelectorAll('#tabs button').forEach(t=>t.classList.remove('active'));b.classList.add('active');$('#input-video').src=base()+x[1];$('#input-caption').textContent=x[2];$('#input-download').href=base()+x[1]};$('#tabs').append(b)});if(present.some(Boolean)){$('#input-empty').hidden=true;$('#input-ready').hidden=false;([...document.querySelectorAll('#tabs button')].find(b=>b.dataset.file===selectedPreview)||$('#tabs button')).click()}const review=await json('/jobs/'+jobId+'/mask-review');maskApproved=review.approved;maskFingerprint=review.fingerprint||'';$('#mask-review-status').textContent=review.note||review.status;if(files.has('face-tracking.json')){try{const t=await json(base()+'face-tracking.json');$('#tracking-summary').textContent='Face tracking · Tracked '+t.tracked+' / Filled '+t.filled+' / Missing '+t.missing+' of '+t.frames+' frames'+(t.filled?' · Filled frames are interpolated and drawn dimmer.':'')+(t.ok?(t.warning?' · '+t.warning:''):' · '+t.message);$('#tracking-summary').style.color=t.ok?(t.warning?'#8a6d00':''):'#b3261e';$('#tracking-summary').hidden=false}catch(e){$('#tracking-summary').hidden=true}}else $('#tracking-summary').hidden=true;$('#review-check').checked=maskApproved;$('#approve-mask').disabled=true;$('#draft-button').disabled=!present[0]||busy||!maskApproved;
-$('#audio-links').replaceChildren();for(const [file,title] of [['vocals.wav','Isolated vocals'],['music.wav','Music stem']]){if(await exists(file)){const a=document.createElement('a');a.href=base()+file;a.download=file;a.textContent=title+' ↓';$('#audio-links').append(a)}}
-for(const name of ['char1','char2']){if(saved[name])continue;for(const ext of ['png','jpg','jpeg','webp','mp4','mov','webm']){const file=name+'-reference.'+ext;if(await exists(file)){saved[name]=file;const img=$('#'+name+'-img');if(!['mp4','mov','webm'].includes(ext)){img.src=base()+file;img.hidden=false;}img.closest('.upload').querySelector('small').textContent='Saved reference · click to replace';break}}}
-if(await exists('generation.json')){const g=await json(base()+'generation.json');$('#mode-label').textContent=g.mode==='multi_reference'?'Seedance · Omni reference':'Seedance · Edit';if(g.provider&&providers[g.provider]){$('#provider').value=g.provider;applyProvider(g.provider)}$('#sent-details').hidden=false;$('#generation-id').textContent=providerLabel(g.provider)+' · '+g.request_id;$('#sent-prompt').textContent=g.prompt; if(!$('#seedance textarea').dataset.loaded){$('#seedance textarea').value=g.prompt;$('#seedance textarea').dataset.loaded='true'}$('#raw-link').href=base()+'seedance-result.mp4';}
-const hd=await exists('hd/final-preview.mp4'),draft=await exists('final-preview.mp4');if(draft||hd){const url=base()+(hd?'hd/':'')+'final-preview.mp4';$('#final-empty').hidden=true;$('#final-ready').hidden=false;if($('#final-video').getAttribute('src')!==url)$('#final-video').src=url;$('#final-download').href=url;const finalRes=currentCaps().final_resolution||'full resolution';$('#quality-label').textContent=hd?finalRes.toUpperCase()+' · ORIGINAL AUDIO':'DRAFT · ORIGINAL AUDIO';$('#final-download').textContent=hd?'Download '+finalRes+' ↓':'Download draft ↓';$('#upgrade').disabled=busy||hd;}
-}
-async function watch(){clearTimeout(pollTimer);try{const j=await json('/jobs/'+jobId);busy=j.state==='running';status(j.status,j.state==='error');$('#go').disabled=busy;$('#draft-button').disabled=busy||$('#input-ready').hidden||!maskApproved; if(busy){$('#upgrade').disabled=true;pollTimer=setTimeout(watch,3000)}else{await refresh();loadRuns()}}catch(e){status(e.message,true)}}
-$('#form').onsubmit=async e=>{e.preventDefault();$('#go').disabled=true;try{status('Uploading and preparing your video…');const j=await json('/jobs',{method:'POST',body:new FormData(e.target)});location.href='/?job='+j.id}catch(e){status(e.message,true);$('#go').disabled=false}};
-$('#seedance').onsubmit=async e=>{e.preventDefault();if(!jobId)return;if(!maskApproved){status('Review and approve the mask first.',true);return}const button=$('#draft-button');button.disabled=true;try{const data=new FormData(e.target);for(const name of ['char1','char2']){if(!e.target.elements[name].files.length){if(!saved[name]){if(name==='char2'){data.delete(name);continue}throw Error("Choose Character 1's reference first.");}data.set(name,new File([await (await fetch(base()+saved[name])).blob()],saved[name]))}}status('Uploading references and creating your draft…');await json('/jobs/'+jobId+'/seedance',{method:'POST',body:data});await watch()}catch(e){status(e.message,true);button.disabled=false}};
-$('#finish').onsubmit=async e=>{e.preventDefault();if(!jobId){status('Prepare your original video first.',true);return}const b=e.target.querySelector('button');b.disabled=true;try{status('Restoring your entire original audio…');await json('/jobs/'+jobId+'/finish',{method:'POST',body:new FormData(e.target)});await refresh();status('Preview ready with original audio.')}catch(e){status(e.message,true)}finally{b.disabled=false}};
-$('#upgrade').onclick=async()=>{$('#upgrade').disabled=true;try{const j=await json('/jobs/'+jobId+'/hd',{method:'POST'});$('#upgrade-status').textContent='Generating your approved draft in '+(currentCaps().final_resolution||'full resolution')+'…';pollHD()}catch(e){$('#upgrade-status').textContent=e.message;$('#upgrade').disabled=false}};
-async function pollHD(){try{const j=await json('/jobs/'+jobId+'/hd');$('#upgrade-status').textContent=j.status;if(j.state==='running')setTimeout(pollHD,4000);else{await refresh();if(j.state==='error')$('#upgrade').disabled=false}}catch(e){$('#upgrade-status').textContent=e.message}}
-$('#review-check').onchange=()=>{$('#approve-mask').disabled=!$('#review-check').checked};
-async function saveReview(approved){try{const data=new FormData();data.set('approved',approved);data.set('fingerprint',maskFingerprint);data.set('note',approved?'Prepared input approved after full-clip visual review.':'Mask needs correction. Seedance submission is blocked.');await json('/jobs/'+jobId+'/mask-review',{method:'POST',body:data});await refresh()}catch(e){status(e.message,true)}}
-$('#approve-mask').onclick=()=>saveReview(true);$('#reject-mask').onclick=()=>saveReview(false);
-const MODES={depth:'Advanced · Depth + SAM',face_mesh:'Fast · Face mesh',depth_mesh:'Advanced + Face mesh',unknown:'Unknown mode'};
-async function loadRuns(){try{const j=await json('/jobs');const list=$('#runs');list.replaceChildren();$('#runs-summary').textContent='Runs · '+j.runs.length+(jobId?'':' · choose one or prepare a new video');$('#runs-details').open=!jobId||!j.runs.some(r=>r.id===jobId);for(const r of j.runs){const a=document.createElement('a');a.href='/?job='+r.id;if(r.id===jobId)a.classList.add('current');const title=document.createElement('span');title.textContent=(MODES[r.mode]||r.mode)+(r.final?' · final ready':r.draft?' · draft ready':r.request?' · draft submitted':r.reviewed?' · reviewed':'');const state=document.createElement('span');state.className='state '+r.state;state.textContent=r.state;const when=document.createElement('span');when.className='when';when.textContent=new Date(r.created).toLocaleString([],{dateStyle:'medium',timeStyle:'short'});const detail=document.createElement('span');detail.className='detail';detail.textContent=r.status;const id=document.createElement('span');id.className='id detail';id.textContent=r.id;a.append(title,state,when,detail,id);list.append(a)}if(!j.runs.length){const e=document.createElement('div');e.className='empty';e.textContent='No runs yet.';list.append(e)}}catch(e){$('#runs-summary').textContent='Runs · '+e.message}}
-let providers={},providerDefault='';const providerLabel=n=>(providers[n]&&providers[n].label)||n||'Provider';const currentCaps=()=>providers[$('#provider').value]||providers[providerDefault]||{};
-function applyProvider(name){const c=providers[name||$('#provider').value]||providers[providerDefault];if(!c)return;$('#provider-label').textContent='Provider · '+c.label;$('#draft-quality').textContent='Draft · '+c.draft_resolution;$('#final-quality').textContent='Final · '+c.final_resolution;$('#provider-hint').textContent=(c.configured?'':'Not configured: add its key to .env. ')+(c.needs_webhook?'Needs the cloudflared callback tunnel (or ENHANCOR_WEBHOOK_URL). ':'No webhook or tunnel needed. ')+'Hosting: '+(c.hosting==='fal_storage'?'fal storage':c.hosting)+'.';$('#upgrade').textContent=c.finalize_label||'Approve & generate full resolution →';$('#finalize-hint').textContent=c.finalize_hint||('Approve it to generate the '+c.final_resolution+' version through '+c.label+'.');$('#finalize-warning').hidden=c.finalize_identical!==false}
-async function loadProviders(){try{const j=await json('/providers');providers=j.providers;providerDefault=j.default;const sel=$('#provider');sel.replaceChildren();for(const [name,c] of Object.entries(providers)){const o=document.createElement('option');o.value=name;o.textContent=c.label+' · '+c.draft_resolution+' → '+c.final_resolution+(c.configured?'':' · not configured');o.disabled=!c.configured;sel.append(o)}const usable=(providers[providerDefault]&&providers[providerDefault].configured)?providerDefault:(Object.keys(providers).find(n=>providers[n].configured)||providerDefault);sel.value=usable;applyProvider(usable)}catch(e){$('#provider-hint').textContent=e.message}}
-$('#provider').onchange=()=>applyProvider();
-loadRuns();if(jobId){loadProviders().then(refresh).then(watch).catch(e=>status(e.message,true));fetch('/jobs/'+jobId+'/hd').then(r=>r.ok?r.json():null).then(j=>{if(j&&j.state==='running'){$('#upgrade').disabled=true;pollHD()}})}else loadProviders();
-</script></body></html>
+  <!-- Job banner: only ever the status of the job named in the URL. -->
+  <div id="job-banner" class="status" role="status" hidden><span class="dot"></span><div class="body"><span data-text></span><span class="fix" data-fix hidden></span><div class="actions-inline" data-actions hidden></div></div></div>
+
+  <div id="view"></div>
+
+  <footer>Puppeteer · Original audio in your final export.</footer>
+</main>
+
+<!-- ============================================================ Quick -->
+<template id="tpl-quick">
+ <div>
+  <div class="hero"><div><span class="eyebrow">Quick · upload, pick a preset, go</span><h1>Your performance.<br>Your character.</h1><p>Drive a character with a video you own: pick a preset, add the character reference, and go. You review the prepared clip next, then create the draft.</p></div></div>
+  <section class="panel" id="source">
+    <div class="heading"><span class="number">01</span><h2>Start with your video</h2></div>
+    <form data-form="quick">
+      <label class="upload"><span class="icon">↑</span><span><strong>Choose original video</strong><small data-filename>MP4 or MOV · up to 30 seconds</small></span><input aria-label="Original video" required type="file" name="video" accept="video/*"></label>
+      <h3 style="margin-top:20px">Preset</h3>
+      <div class="presets" data-presets></div>
+      <div class="split" style="margin-top:18px">
+        <label class="upload"><img data-thumb alt="Character 1 reference" hidden><span><strong>Character 1 · for the draft</strong><small data-filename>Image, or an identity video</small></span><input type="file" name="char1" aria-label="Character 1 reference" accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm"></label>
+        <label class="upload"><img data-thumb alt="Character 2 reference" hidden><span><strong>Character 2 · optional</strong><small data-filename>Image</small></span><input type="file" name="char2" aria-label="Character 2 reference" accept="image/png,image/jpeg,image/webp"></label>
+      </div>
+      <details><summary>More options</summary>
+        <div class="split">
+          <label class="field">Subject to replace<input name="prompt" value="person"><span class="hint">Depth presets only. One short noun phrase, e.g. “person” or “man in a dark suit”. Comma-separated subjects run as separate SAM jobs (each billed) and are combined.</span></label>
+          <label class="field">Depth provider<select name="provider"><option value="replicate">Replicate · Depth Anything Video</option><option value="huggingface">Hugging Face · Video Depth Anything (free quota)</option><option value="replicate-chenxwh">Replicate · alternate model</option></select></label>
+        </div>
+        <label class="check" style="margin-top:14px"><input type="checkbox" name="clean_dialogue" value="true"> Clean dialogue (isolate vocals with Demucs before lip-sync; paid)</label>
+      </details>
+      <div class="actions"><span class="hint" data-cost-hint>The prepared clip carries the original audio. The final export always restores the entire original track.</span><button type="submit" data-go>Prepare →</button></div>
+    </form>
+  </section>
+ </div>
+</template>
+
+<!-- ============================================================ Studio: new run with the legacy preparation method -->
+<template id="tpl-studio-new">
+  <section class="panel" id="studio-new">
+    <div class="heading"><span class="number">+</span><h2>Prepare a new video</h2></div>
+    <form data-form="legacy">
+      <label class="upload"><span class="icon">↑</span><span><strong>Choose original video</strong><small data-filename>MP4 or MOV · up to 30 seconds</small></span><input aria-label="Original video" required type="file" name="video" accept="video/*"></label>
+      <label class="field" style="margin-top:18px">Preparation method<select name="mode"><option value="depth">Advanced · Depth + SAM</option><option value="face_mesh">Fast · Face mesh (no depth or SAM)</option><option value="depth_mesh">Advanced + Face mesh · Depth + SAM + facial motion</option></select><span class="hint">Fast mode overlays facial motion on the original video and embeds the original audio; it needs face-mesh setup. Advanced + Face mesh adds facial motion over the depth composite and only warns about tracking gaps.</span></label>
+      <details><summary>Preparation settings · depth modes only</summary>
+        <div class="split">
+          <label class="field">Subject to replace<input name="prompt" value="person"><span class="hint">One short noun phrase. Comma-separated subjects run as separate SAM jobs (each billed) and are combined.</span></label>
+          <label class="field">Depth provider<select name="provider"><option value="replicate">Replicate · Depth Anything Video</option><option value="huggingface">Hugging Face · Video Depth Anything</option><option value="replicate-chenxwh">Replicate · alternate model</option></select></label>
+        </div>
+        <p class="hint">Depth colors are preserved. Preparation runs at 24 fps, up to 960 px. Media is uploaded to the selected providers.</p>
+      </details>
+      <label class="check" style="margin-top:14px"><input type="checkbox" name="clean_dialogue" value="true"> Clean dialogue (isolate vocals with Demucs before lip-sync)</label>
+      <div class="actions"><span class="hint" data-cost-hint>The prepared clip carries the original audio by default.</span><button type="submit" data-go>Prepare video →</button></div>
+    </form>
+  </section>
+</template>
+
+<!-- ============================================================ Run header (Quick with a job, Studio) -->
+<template id="tpl-run-head">
+  <section class="panel run-head">
+    <div class="title"><h2 data-title>Run</h2><span class="chip" data-state></span><span class="spent" data-spent>Spent so far: $0.00</span></div>
+    <div class="facts"><span data-created></span><span data-mode></span><span data-parent hidden></span><span data-changed hidden></span><span class="mono" data-id></span></div>
+    <div class="row" data-actions></div>
+    <form data-form="preset" class="row" hidden style="margin-top:6px">
+      <label class="field" style="flex:1 1 180px">Preset name<input name="name" required placeholder="e.g. Studio talking head"></label>
+      <label class="field" style="flex:2 1 240px">Description<input name="description" placeholder="One line: when to use it"></label>
+      <button type="submit" class="small">Save preset</button><button type="button" class="small secondary" data-cancel>Cancel</button>
+    </form>
+  </section>
+</template>
+
+<!-- ============================================================ Studio stage card -->
+<template id="tpl-stage-card">
+  <article class="card">
+    <div class="card-head"><span class="number" data-index></span><h3 data-label></h3><span class="chip" data-state></span><label class="toggle" data-toggle hidden><input type="checkbox" data-on> <span>on</span></label></div>
+    <div class="card-body">
+      <div class="controls">
+        <label class="field">Tool<select data-tool></select><span class="hint" data-description></span></label>
+        <div class="params" data-params></div>
+        <p class="health" data-health></p>
+        <div class="numbers" data-numbers></div>
+        <ul class="warnings" data-warnings hidden></ul>
+        <div class="line error" data-error hidden></div>
+      </div>
+      <div class="preview" data-preview></div>
+    </div>
+    <div class="card-foot"><span class="cost" data-cost></span><div class="row" data-fixes></div><button type="button" class="secondary small" data-rerun>Re-run from here</button></div>
+  </article>
+</template>
+
+<!-- ============================================================ Review panel (step 02). Agent 3: the mask wand goes into [data-review-tools]. -->
+<template id="tpl-review">
+  <section class="panel" id="review">
+    <div class="heading"><span class="number">02</span><h2>Review the prepared input</h2></div>
+    <p class="hint">Review the full mask or face-mesh tracking, and listen to the embedded audio before generating.</p>
+    <div class="status" data-progress hidden><span class="dot"></span><div class="body"><span data-text></span><span class="fix" data-fix hidden></span><div class="actions-inline" data-actions hidden></div></div></div>
+    <div class="empty" data-empty>Your original video and prepared previews will appear here.</div>
+    <div data-ready hidden>
+      <div class="tabs" data-tabs role="group" aria-label="Preview selection"></div>
+      <div class="viewer"><video data-video controls playsinline preload="metadata"></video><div class="viewer-foot"><span class="hint" data-caption></span><a data-download download>Download video ↓</a></div></div>
+      <div data-review-tools></div>
+      <div class="review-box">
+        <h3>Required · Review the complete input</h3>
+        <p class="hint">Depth: check the entire mask for missing areas and background spill. Face mesh: check face tracking, eyes, mouth and alignment across every frame. Listen to the embedded audio.</p>
+        <p class="line" data-review-status role="status"></p>
+        <p class="line" data-tracking hidden></p>
+        <label class="check"><input type="checkbox" data-check> I reviewed the entire prepared clip; its mask or face mesh is correctly aligned throughout.</label>
+        <div class="row" style="margin-top:12px"><button type="button" data-approve disabled>Approve input</button><button type="button" class="secondary" data-reject>Input needs fixing</button></div>
+      </div>
+      <details><summary>Audio downloads</summary><div class="download" data-audio></div></details>
+    </div>
+  </section>
+</template>
+
+<!-- ============================================================ Draft panel (step 03) -->
+<template id="tpl-draft">
+  <section class="panel" id="draft">
+    <div class="heading"><span class="number">03</span><h2>Create your draft</h2></div>
+    <div class="meta"><span data-provider-label>Provider · …</span><span data-mode-label>Seedance · Edit</span><span data-draft-quality>Draft · …</span><span data-final-quality>Final · …</span></div>
+    <form data-form="seedance">
+      <div class="split">
+        <label class="upload"><img data-thumb alt="Character 1 reference" hidden><span><strong>Character 1 · required</strong><small data-filename>Choose character reference</small></span><input type="file" name="char1" aria-label="Character 1 reference" accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm"></label>
+        <label class="upload"><img data-thumb alt="Character 2 reference" hidden><span><strong>Character 2 · optional</strong><small data-filename>Choose character reference</small></span><input type="file" name="char2" aria-label="Character 2 reference" accept="image/png,image/jpeg,image/webp"></label>
+      </div>
+      <label class="field" style="margin-top:20px">Seedance provider<select name="provider" aria-label="Seedance provider"></select><span class="hint" data-provider-hint>Loading providers…</span></label>
+      <label class="field" style="margin-top:20px">Generation prompt<textarea name="prompt" required rows="7"></textarea></label>
+      <div class="actions"><span class="hint">Review this prompt first. Full quality is a separate approval below.</span><button type="submit" data-draft-button disabled>Create draft →</button></div>
+    </form>
+  </section>
+</template>
+
+<!-- ============================================================ Final panel (step 04) -->
+<template id="tpl-final">
+  <section class="panel" id="final">
+    <div class="heading"><span class="number">04</span><h2>Approve &amp; export</h2></div>
+    <p class="hint">Every finished preview uses the entire original source audio, including voices and music.</p>
+    <div class="empty" data-empty>Your draft will appear here when generation finishes.</div>
+    <div data-ready hidden>
+      <div class="viewer"><video data-video controls playsinline preload="metadata"></video><div class="viewer-foot"><span class="badge" data-quality>DRAFT PREVIEW</span><a data-download download>Download preview ↓</a></div></div>
+      <div class="actions"><div><h3 style="margin-bottom:4px">Happy with this draft?</h3><span class="hint" data-finalize-hint>Approve it to generate the full-resolution version.</span><br><span class="hint" data-finalize-warning style="color:#d9a24a" hidden>Result will not be identical to the draft.</span></div><button type="button" data-upgrade disabled>Approve &amp; generate full resolution →</button></div>
+      <div class="line" data-upgrade-status role="status" hidden></div>
+    </div>
+    <details data-sent hidden><summary>View submitted prompt &amp; generation ID</summary><p class="hint" data-generation-id></p><pre data-sent-prompt></pre><a data-raw-link class="hint">Download raw Seedance result</a></details>
+    <details><summary>Import a generated result manually</summary>
+      <form data-form="finish" style="margin-top:14px"><label class="upload"><span class="icon">↑</span><span><strong>Choose Seedance result</strong><small data-filename>We’ll restore the original source audio.</small></span><input name="video" aria-label="Seedance result" type="file" accept="video/*" required></label><div class="actions"><button class="secondary" type="submit">Restore original audio</button></div></form>
+    </details>
+  </section>
+</template>
+
+<!-- ============================================================ Lab -->
+<template id="tpl-lab">
+  <section class="panel" id="lab">
+    <div class="heading"><span class="number">A/B</span><h2>Lab · compare runs side by side</h2></div>
+    <p class="hint">Pick two to four runs or branches, choose which output to compare, and play them in sync. Your pick is saved per comparison.</p>
+    <div class="split">
+      <div><h3>Runs to compare <span class="hint" data-count>(0 of 4)</span></h3><div class="lab-picker" data-picker></div></div>
+      <div><label class="field">Output to compare<select data-stage></select></label><label class="field" style="margin-top:12px">Note for your pick (optional)<input data-note placeholder="e.g. B keeps the hands"></label></div>
+    </div>
+    <div class="lab-controls" data-controls hidden>
+      <button type="button" class="small" data-play>Play</button>
+      <span class="row speed"><button type="button" class="small secondary active" data-speed="1">1×</button><button type="button" class="small secondary" data-speed="0.25">0.25×</button></span>
+      <input type="range" min="0" max="1000" value="0" step="1" data-scrub aria-label="Position">
+      <span class="time" data-time>0.00 / 0.00 s</span>
+    </div>
+    <div class="tiles" data-tiles></div>
+    <div class="empty" data-empty>Choose at least two runs above.</div>
+  </section>
+</template>
+
+<template id="tpl-lab-tile">
+  <article class="tile">
+    <div class="row"><span class="letter" data-letter>A</span><strong data-name class="wrap"></strong><span class="chip" data-state></span></div>
+    <span class="mono" data-id></span>
+    <video data-video playsinline preload="metadata" muted></video>
+    <div class="empty" data-missing hidden></div>
+    <ul class="diff" data-diff></ul>
+    <div class="numbers" data-numbers></div>
+    <div class="row"><button type="button" class="small secondary" data-pick>Pick this one</button><span class="hint" data-picked hidden>Your pick</span><a class="hint" data-open>Open in Studio</a></div>
+  </article>
+</template>
+
+<!-- ============================================================ Runs page -->
+<template id="tpl-runs">
+  <section class="panel" id="runs">
+    <div class="heading"><span class="number">≡</span><h2 data-title>Runs</h2></div>
+    <div class="runs-tools"><label class="toggle"><input type="checkbox" data-flat> flat list</label><span class="hint">Every job under <code>runs/</code>. Branches sit under the run they were made from, newest roots first. Open a run in Studio, or add it to the Lab to compare.</span><a class="button small" data-open-lab hidden>Open Lab</a></div>
+    <div class="runs" data-list></div>
+  </section>
+</template>
+
+<template id="tpl-run-row">
+  <div class="run-row">
+    <span class="name"><span class="branch" data-branch hidden>└</span><a data-title data-nav></a> <span class="chip" data-state></span></span>
+    <span class="when" data-when></span>
+    <span class="detail" data-changed></span>
+    <span class="links"><span class="cost" data-spent></span><a data-studio data-nav>Open in Studio</a><a data-quick data-nav>Quick view</a><button type="button" class="linkish small" data-lab>Add to Lab</button></span>
+  </div>
+</template>
+
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>
