@@ -6,28 +6,30 @@ subject, or a face mesh, or both), you review the prepared clip, you add a chara
 and when you like the draft you approve it for the full-resolution version. The original sound stays exactly as it
 was: it drives the lip-sync and is put back over the finished video. Use it only with footage you own or have licensed.
 
-## The three depths
+## The screens
 
-The app has one page with a switch at the top: **Quick**, **Studio**, **Lab**, plus a **Runs** page.
+The app has three screens: **Runs**, the **workspace** of one run and **Compare**. Dark by default; the header
+toggle switches to a light theme.
 
-- **Quick**: upload, pick a preset, add the character reference, click Go. One click takes you to the review step;
-  the page shows progress while the clip is prepared and opens the review as soon as it is done. Use it when you
-  just want a result.
-- **Studio**: the same run as a rack of cards, one per stage (input check, audio, depth, mask, composite, face mesh,
-  prompt, generate, finish). Each card shows the tool in use, its settings, a preview of what it produced, a plain
-  health line ("Face tracked on 163 of 195 frames; lost 0.42–0.71 s, the depth composite stands in there") and the
-  numbers behind it. Change a tool or a setting and click **Re-run from here**. Studio also hosts the review, draft
-  and finalize steps, the old "Preparation method" form, and **Save as preset**. Use it when something is not right
-  and you want to change one step.
-- **Lab**: compare two to four runs side by side. Pick which output to look at (prepared input, original, depth,
-  mask, composite, draft, final), play them in sync at 1× or 0.25×, see how each run's settings differ from the
-  first tile and its numbers, and pick the one you prefer. Picks are saved (for the scoring phase later) and survive
-  a reload. Use it to decide between variants.
-- **Runs**: every run, as a tree. A run you branched sits under the run it came from with a one-line "what changed",
-  its state, date and total spent. Open any run in Studio or add it to the Lab. A "flat list" toggle shows the old
-  newest-first list.
+- **Runs**: every run as a card with its picture, name (click the pencil to rename), state, spent, prep method and
+  its versions on demand. Search, filter by state, "Pick to compare", **New run** at the top. A list view is one
+  click away.
+- **New run**: pick a preset, add Character 1 (and 2), choose the clip. The free Talking head preset starts on its
+  own when you choose the clip; a paid preset shows "Prepare · about $x" and waits for that click.
+- **Workspace**: five steps on a rail, one at a time: **Prep** (the prepared clip, the input check, face found /
+  lost, progress and fix buttons), **Edit** (the timeline editor: views, lanes Mask · Face · Words with their tools,
+  Save as new version, Approve the prepared clip), **World & Look** (Set · Look · Light, the background behind the
+  person, the prompt), **Generate** (generator, references, Create draft, Make the final) and **Export** (a zip for
+  Seedance web, Kling, ComfyUI, After Effects / Nuke or your own list, subtitles, every file). The **Details**
+  button (far right, on every step and every Runs card) opens the nine stages with their methods and settings
+  ("Make a new version from here", "Use my own file…"), the reports and log, and the costs. Each step is a browser
+  history entry, so Back and Forward move between steps.
+- **Compare**: two to four versions side by side, played in sync (Normal or Slow ¼), with their recipe differences
+  and numbers; pick the one you prefer and continue with it.
 
-Links keep working: `/?job=<id>` opens a run (add `&view=studio` or `&view=lab`), `/?view=runs` is the Runs page.
+Links keep working: `/?job=<id>` opens a run at the most useful step (`&step=prep|edit|world|generate|export` names
+one), `/?view=runs` is the Runs page, `/?view=new` the New run form, `/?view=compare` Compare; the old
+`&view=quick`, `&view=studio` and `&view=lab` links land on the matching screen.
 
 ## The four presets
 
@@ -38,12 +40,12 @@ Links keep working: `/?job=<id>` opens a run (add `&view=studio` or `&view=lab`)
 | **Expressive** | Advanced + face mesh: the depth cutout with the facial motion drawn on top. Tracking gaps only warn; the depth composite stands in where the face is lost. | Dialogue with a lot of expression, where you want both the body and the face guided. | paid (same as Full body) |
 | **Profile-heavy** | Advanced with the face mesh off. | The speaker turns away from the camera a lot (a mesh would lose the face anyway). | paid (same as Full body) |
 
-Any run's chain can be saved as your own preset (Studio → Save as preset); it then appears in Quick next to the
+Any run's recipe can be saved as your own preset (Prep → More → Save this recipe as a preset); it then appears in New run next to the
 built-ins with the description you gave it.
 
 ## How branching works
 
-A run is never changed after it has run. When you change a stage in Studio and click **Re-run from here**, the app
+A run is never changed after it has run. When you change a stage in Details · Stages and click **Make a new version from here**, the app
 makes a new **child run**: everything before that stage is linked in from the parent (not copied, not re-done), that
 stage and everything after it run again, and the parent stays exactly as it was. The child shows "Branched from …"
 and a one-line "what changed" ("face: mediapipe_mesh pad: 1.8 → 2.0"), and the Runs page shows it under its parent.

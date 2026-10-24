@@ -47,7 +47,7 @@ export function mountGenerate(host) {
     tiles.char1.querySelector('input').accept = g.caps.slots.identity_video ? 'image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm' : 'image/png,image/jpeg,image/webp';
     worldPrompt.setProvider(g.name);
   } });
-  wireUploads(form, (input, file) => { if (file && worldPrompt.refresh) setTimeout(() => worldPrompt.refresh(true), 300); generator.refresh(); });
+  wireUploads(form, (input, file) => { if (file && worldPrompt.refresh) setTimeout(() => worldPrompt.refresh(true), 300); generator.refresh(); update(); });
   select.onchange = () => applyProvider(select.value);
   worldPrompt.onChange(r => { promptPre.textContent = (r && (r.full_prompt || r.text)) || worldPrompt.text() || ''; });
 
@@ -67,7 +67,9 @@ export function mountGenerate(host) {
       el('span', {}, 'Draft · ' + ((c && c.draft_resolution) || '') + ' · ', el('b', { text: usd(draft) })),
       c && c.finalize !== false && fin != null ? el('span', {}, 'Final · ' + ((c && c.final_resolution) || '1080p') + ' · ', el('b', { text: usd(fin) })) : null,
       el('span', {}, 'Spent so far · ', el('b', { text: spent(run.cost_usd_total) })));
-    withCost(button, 'Create draft', usd(draft));
+    const hasDraft = (state.files || new Set()).has('final-preview.mp4') || (state.files || new Set()).has('hd/final-preview.mp4');
+    withCost(button, hasDraft ? 'Create another draft' : 'Create draft', usd(draft));
+    button.classList.toggle('primary', !hasDraft);   // one accent button per screen: after a draft, "Make the final" is it
     providerHint.textContent = c ? c.label + ' · ' + (c.configured ? 'set up' : 'not set up: add its key to .env and restart the app') + ' · ' + (c.needs_webhook ? 'needs the callback tunnel (or ENHANCOR_WEBHOOK_URL)' : 'no tunnel needed') + ' · files are hosted on ' + (c.hosting === 'fal_storage' ? 'fal storage' : c.hosting) + '.' : 'No generator is set up yet. Add FAL_KEY or ENHANCOR_API_KEY to .env and restart the app.';
   }
   function providerName() { const g = state.generation; return (g && g.provider && state.providers[g.provider]) ? g.provider : (select.value || usableProvider()); }

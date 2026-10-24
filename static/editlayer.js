@@ -15,7 +15,7 @@
 //   edits.pending                  {mask, mesh, words, total}; edits.summary: plain lines; edits.canUndo/canRedo, undoLabel/redoLabel, stale
 import { getJSON, send, plain } from './api.js';
 import { notice, showError, usd } from './ui.js';
-import { state, navigate } from './state.js';
+import { state, navigate, setLabRuns } from './state.js';
 
 const EMPTY = () => ({ mask: {}, mesh: {}, words: null });
 const listeners = { change: new Set() };
@@ -147,14 +147,15 @@ export const edits = {
     try {
       const r = await send(base() + '/save', confirm ? { confirm_cost: 'true' } : {});
       edits.busy = false; announce();   // the session is closed: other tabs on this run re-read an empty layer
-      navigate({ job: r.id, view: state.view === 'studio' ? 'studio' : 'quick' });   // render() clears the notices, so the note comes after
-      notice('Your edits were saved as a new version (this one). The run you edited stays as it was; review this version before creating a draft.', { kind: 'ok', key: 'edits' });
+      const parent = edits.jobId;
+      navigate({ job: r.id, step: 'edit' });   // render() clears the notices, so the note comes after
+      notice('Your edits were saved as a new version (this one). The run you edited stays as it was; watch and approve this version before creating a draft.', { kind: 'ok', key: 'edits', actions: [{ label: 'Compare with the one it came from', secondary: true, run: async () => { setLabRuns([parent, r.id]); navigate({ view: 'compare', runs: [parent, r.id], stage: 'seedance-input.mp4' }); } }] });
       return r;
     } catch (e) {
       edits.busy = false; emit('change');
       const p = plain(e);
       const track = p.body && p.body.track;
-      const actions = p.status === 402 ? [{ label: 'Run anyway · ' + usd(p.body.estimated_cost_usd), run: () => edits.save({ confirm: true }) }]
+      const actions = p.status === 402 ? [{ label: 'Yes, spend ' + usd(p.body.estimated_cost_usd), run: () => edits.save({ confirm: true }), primary: true }]
         : track && edits.saveActions[track] ? edits.saveActions[track](p) : [];
       showError(e, { key: 'edits', actions });
       return null;

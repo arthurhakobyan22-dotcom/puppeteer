@@ -68,7 +68,7 @@ export function mountGenerator(host, { select = null, facts = () => ({}), onChan
       const opt = [...sel.options].find(o => o.value === option); if (!opt) continue;
       const ok = !!caps.slots[slot]; const limit = limitFor(slot === 'look_ref' ? 'look' : 'set');
       opt.disabled = !ok && sel.value !== option;
-      opt.title = ok ? '' : (limit ? limit.message + ' ' + limit.fix : caps.label + ' has no ' + (slot === 'look_ref' ? 'style' : 'set') + ' reference slot.');
+      opt.title = ok ? '' : (limit ? limit.message + ' ' + limit.fix : caps.label + ' takes no ' + (slot === 'look_ref' ? 'look' : 'set') + ' image here.');
       opt.textContent = opt.textContent.replace(/ · not with .*$/, '') + (ok ? '' : ' · not with ' + caps.label);
     }
   }

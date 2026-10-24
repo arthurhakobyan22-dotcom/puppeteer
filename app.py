@@ -387,7 +387,7 @@ async def set_run_name(ident:str,request:Request):
     if run is None:return fail(400,'This run was made before run records existed, so it has no name to save.','It keeps its default name; new runs and versions can be renamed.')
     if name:run['name']=name
     else:run.pop('name',None)
-    stages.save_run(folder,run)
+    stages.fresh(folder/'run.json');stages.save_run(folder,run)   # a hard-linked copy of a run must never write into the run it was linked from
     return run_summary(folder)
 
 @app.get('/jobs/{ident}/run')

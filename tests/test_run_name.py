@@ -47,6 +47,17 @@ class RunNameTests(unittest.TestCase):
             r=client.put('/jobs/'+'a'*32+'/name',json={'name':'x'});self.assertEqual(r.status_code,400);self.assertIn('fix',r.json())
             self.assertFalse((legacy/'run.json').exists())
 
+class HardLinkTests(unittest.TestCase):
+    def test_rename_never_writes_through_a_hard_link(self):
+        import os
+        with tempfile.TemporaryDirectory() as d,patch.object(application,'RUNS',Path(d)):
+            folder=run_with_record(d);copy=Path(d)/('b'*32);copy.mkdir()
+            for p in folder.iterdir():os.link(p,copy/p.name)   # cp -al
+            client=TestClient(application.app)
+            self.assertEqual(client.put('/jobs/'+'b'*32+'/name',json={'name':'Copy'}).status_code,200)
+            self.assertEqual(json.loads((copy/'run.json').read_text()).get('name'),'Copy')
+            self.assertNotIn('name',json.loads((folder/'run.json').read_text()))
+
 class ReadmeNameTests(unittest.TestCase):
     def ctx(self,**kw):
         return {'name':'seedance-web-1','preset_label':'Seedance web','created':'2026-10-24','run':HEX,'exported_run':HEX,'requested_run':HEX,

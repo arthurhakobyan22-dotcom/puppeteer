@@ -100,11 +100,11 @@ label.check input{margin-top:1px}
 
 /* ---------------------------------------------------------------- level-2 collapsible */
 details.more{border:1px solid var(--border);border-radius:var(--r-2);background:var(--surface);min-width:0}
-details.more>summary{list-style:none;cursor:pointer;display:flex;gap:10px;align-items:center;padding:10px 14px;font-weight:600;font-size:var(--t-sm);color:var(--text);min-height:44px}
+details.more>summary{list-style:none;cursor:pointer;display:flex;gap:10px;align-items:center;padding:10px 14px;font-weight:600;font-size:var(--t-sm);color:var(--text);min-height:44px;white-space:nowrap;min-width:0}
 details.more>summary::-webkit-details-marker{display:none}
 details.more>summary::before{content:'';width:7px;height:7px;border-right:1.75px solid var(--muted);border-bottom:1.75px solid var(--muted);transform:rotate(-45deg);transition:transform var(--dur-2) var(--ease);flex:none;margin-left:3px}
 details.more[open]>summary::before{transform:rotate(45deg)}
-details.more>summary .hint{margin-left:auto;font-weight:400;font-family:var(--font-mono);font-size:var(--t-xs)}
+details.more>summary .hint{margin-left:auto;font-weight:400;font-family:var(--font-mono);font-size:var(--t-xs);flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 details.more>.body{padding:0 14px 14px;display:grid;gap:var(--s-3);min-width:0}
 details.more.flat{border:0;background:transparent;border-radius:0}
 details.more.flat>summary{padding:8px 0}

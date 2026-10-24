@@ -1,49 +1,61 @@
-# The UI (Foundation phase, Agent 2)
+# The UI (tidy pass, 2026-10-24)
 
-For Agent 3 (mask wand) and the reviewer. The frontend is plain HTML + CSS + ES modules under `static/`, served by
-`app.py` (`GET /` → `static/index.html`, `/static/*`). No build step, no framework. Everything the old single-file
-page did still works; it is now split into readable files and has three depths (Quick / Studio / Lab) plus a Runs page.
+The frontend is plain HTML + CSS + ES modules under `static/`, served by `app.py` (`GET /` → `static/index.html`,
+`/static/*`). No build step, no framework. Three screens: **Runs**, the **Workspace** of one run (five steps: Prep ·
+Edit · World & Look · Generate · Export, plus the **Details** drawer) and **Compare**; New run is the empty state of a
+run. The look is `docs/tidy/directions/hybrid.html`; the names are `docs/GLOSSARY.md`; what moved where in the tidy
+pass is `docs/tidy/AGENT3-NOTES.md` (feature map with levels). Sections 3 and up below describe the modules in the
+detail the earlier agents wrote them; module names in them changed as follows: `review.js` → `edit.js`, `draft.js` →
+`world.js` + `generate.js`, `runhead.js` → `workspace.js`, `quick.js` → `start.js`, `studio.js` → `drawer.js`,
+`lab.js` → `compare.js`, `promptkit.js` → `world.js`; `wand.js` is gone (the Mask lane is the one mask tool).
 
 ## 1. Files
 
 | file | what it holds |
 |---|---|
-| `static/index.html` | Markup only: the shell (header with the view switch, `#notices`, `#job-banner`, `#view`) and one `<template>` per panel: `tpl-quick`, `tpl-studio-new`, `tpl-run-head`, `tpl-stage-card`, `tpl-review`, `tpl-editor`, `tpl-draft`, `tpl-final`, `tpl-lab`, `tpl-lab-tile`, `tpl-runs`, `tpl-run-row`. No inline script or style. |
-| `static/app.css` | The light theme (same fonts, colours and card look as before), works from 380 px up. |
-| `static/app.js` | Entry: loads the shared data (`/stages`, `/presets`, `/providers`, `/costs`), wires in-app navigation (`a[data-nav]`, `popstate`), renders the view for the URL. Exposes `window.puppeteer = {state, api, navigate, loadJob, registerReviewTool}`. |
-| `static/state.js` | The `state` object, URL parsing (`?job=`, `&view=`, `&runs=`, `&stage=`), `navigate()` / `render()`, the token + timer registry (see §3). |
-| `static/api.js` | `getJSON` (silent retry, up to 3 times with backoff, on network failures and 5xx), `send` (POST, never retried), `ApiError {message, fix, status, body}`, `plain(error)` → `{message, fix}` for anything thrown. The `api` object lists every endpoint the UI calls. |
-| `static/ui.js` | DOM helpers (`tpl`, `el`, `$`), formatting (`usd`, `spent`, `when`, `ranges`), chips, page notices (`notice`, `showError`), file-input wiring, `videoSeconds(file)`. |
-| `static/jobdata.js` | Loads and polls the job in the URL (`loadJob`, `poll`, `pollHD`), renders the job banner, `fixActions()` for failed jobs. |
-| `static/review.js` | Step 02, the review panel (`mountReview`) and `registerReviewTool` (the mask-wand hook), `trackingLine()`. |
-| `static/editor.js` | The timeline editor inside the review panel (`mountEditor`): view switch, stacked synced videos, overlay canvas, transport, keyboard, track panel, Save bar (`tpl-editor`). |
-| `static/timeline.js` | Track registry (`registerTrack`, `tracks`) and the timeline component (ruler, playhead, range, zoom, lanes, markers). |
-| `static/editlayer.js` | The `edits` client: pending edits (`GET/PUT/DELETE /jobs/{id}/edits`), undo/redo, save as one branch. |
-| `static/tracks.js` | One line per editor track (Mask, Face, Words); `static/track-placeholders.js` holds the placeholders until `track-mask.js` / `track-face.js` / `track-words.js` replace them. |
-| `static/track-face.js`, `static/meshedit.js` | The face mesh track (mesh off on a range, transform handles + keys, expression sliders, reset, the "Mesh edit" view) and the pure JS port of `stages/meshedit.py` it draws with; `static/face-connections.json` = MediaPipe's connection lists (exported once by `face_connections.py`). |
-| `static/track-words.js` | The words track (Agent 4): Transcribe (free local Whisper, or fal with its estimate), word blocks (click, double-click to edit, drag edges), split / merge / add / delete, .srt / words.json / mouth-guidance.json downloads. |
-| `static/draft.js` | Steps 03 and 04 (`mountDraft`, `mountFinal`): providers, saved references, the paid buttons with their estimate, manual import; "Insert dialogue beats" (step 03) and the subtitles block (step 04: "Burn subtitles into final", off by default, .srt export). |
-| `static/stagecard.js` | One Studio card per stage (`mountStageCard`). |
-| `static/export.js` | The export kit under step 04 (`mountExport`, `tpl-export`; World stage Agent 4): tick boxes per item (unavailable ones disabled with the reason), target preset with a "What's in it" line, the alpha format, the pending-edits note, "Export · free, local", progress, README + zip link, earlier exports. `docs/EXPORT.md`. |
-| `static/runhead.js` | The run header (`mountRunHead`): name, state chip, spent so far, parent, what changed, Add to Lab, Save as preset. |
-| `static/quick.js` | The Quick view (`renderQuick`) and `mountPanels` / `mountFlow` (the step 02–04 panels shared with Studio). |
-| `static/studio.js` | The Studio view (`renderStudio`) and the legacy "Preparation method" form (`mountLegacyForm`). |
-| `static/lab.js` | The compare view (`renderLab`): picker, synced playback, chain diff, picks. |
-| `static/runs.js` | The Runs page (`renderRuns`): tree and flat list. |
+| `static/index.html` | Markup only: the header (Runs · This run · Compare, the theme toggle, New run), `#notices` (toasts), `#job-banner` (failures of the run in the URL), `#view`, the `#details` drawer, and one `<template>` per screen or step: `tpl-start`, `tpl-ws-head`, `tpl-prep`, `tpl-edit`, `tpl-editor`, `tpl-world`, `tpl-generate`, `tpl-export`, `tpl-stage-card`, `tpl-runs`, `tpl-run-card`, `tpl-version-row`, `tpl-compare`, `tpl-compare-tile`. No inline script or style. |
+| `static/theme.js` | Blocking head script: applies the stored theme (`localStorage pp-theme`) before first paint. Dark is the default regardless of the system setting. |
+| `static/tokens.css` | Every colour, type size, spacing step, radius, shadow and motion token; dark on `:root`, light under `:root[data-theme="light"]`. |
+| `static/components.css` | Buttons (a plain `<button>` is the secondary look; `.primary` is the one accent-filled action per screen; `.cost` suffix), chips, inputs, `details.more` (level-2 collapsible), cards, the step rail, status line, viewer / views / transport, timeline, lane panels, save / approve bars, generator options, references, assets, export targets, stage rows, the drawer, toasts, the banner, presets, compare. |
+| `static/app.css` | Layout only: header, page wrap, Runs grid, workspace head and step bodies, the Edit / World / Generate / Export grids, Compare, 380 px rules. |
+| `static/app.js` | Entry: loads `/stages`, `/presets`, `/providers`, `/costs`, wires `a[data-nav]` + `popstate`, the theme toggle and the drawer, renders the screen for the URL. A step change inside the same run does not remount. Exposes `window.puppeteer = {state, api, navigate, loadJob, registerReviewTool, goStep, openDetails}` (+ `editor`, `edits` once the editor is mounted). |
+| `static/state.js` | `state`, URL parsing (`?job=`, `&step=`, `&view=runs|new|compare`, old `view=quick|studio|lab`, `&details=`, `&runs=`, `&stage=`, `&flat=1`), `navigate()`, `goStep()` (one history entry per step), `render()`, the token + timer registry (§3). |
+| `static/api.js` | `getJSON` (silent retries on glitches and 5xx), `send` (never retried), `ApiError`, `plain(error)`, the `api` object (every endpoint the UI calls, including `rename` = `PUT /jobs/{id}/name`). |
+| `static/ui.js` | DOM helpers (`tpl`, `el`, `$`, `icon`, `withCost`), formatting (`usd`, `spent`, `when`, `ago`, `ranges`), the plain names (`modeLabel`, `stageName`, `methodName`, `runName`, `runStatus`), `remember()` for level-2 panels, `help(term)` (Agent 4's tooltip hook), toasts (`notice`, `showError`, `costActions` = the one 402 wording), `runThumb`, file-input wiring. |
+| `static/jobdata.js` | Loads and polls the run in the URL (`loadJob`, `poll`, `pollHD`), the failure banner, `fixActions()` (lenient gaps; open the failed stage in Details). |
+| `static/runs.js` | The Runs page: cards (thumbnail, name with inline rename, status chip, versions on demand, Open, Details), search, filters, pick to compare, 24 a page, the list view. |
+| `static/start.js` | New run: presets (the free one starts on the clip pick), characters, More options, the paid price button, `POST /jobs`. |
+| `static/workspace.js` | The run header, the step rail with one line of status per step, the status line with the Next button, the five step bodies; `facts()`, `defaultStep()`, `stepStates()`, `statusFor()`. |
+| `static/prep.js` | The Prep step of an existing run (summary card, progress, fix buttons, save as preset) and `trackingLine()`. |
+| `static/edit.js` | The Edit step: mounts the editor, the approve bar (the step's completion), the Downloads panel; `registerReviewTool`. |
+| `static/editor.js`, `static/timeline.js`, `static/editlayer.js`, `static/tracks.js`, `static/track-mask.js`, `static/track-face.js`, `static/track-words.js`, `static/meshedit.js` | The timeline editor as before (contract in `docs/TIMELINE-SPEC.md` §3 / §A1): views (+ "More views"), viewer, transport, lanes, the selected lane's tools, the Save bar; the Mask lane is the one mask tool (method, quality, Find hands in Tool settings); the Face and Words lanes use the glossary names. |
+| `static/world.js`, `static/slots.js` | World & Look: Set / Look / Light, the background behind the person (placement canvas + Apply as background), Describe with Claude vision, the prompt preview and "Edit prompt" (text, rebuild, spoken lines, references). `slots.js` keeps the helpers (assets, fit maths, `backgroundControls`, mode names). `worldPrompt` is how Generate reads the prompt. |
+| `static/generate.js`, `static/generator.js` | Generate: generator cards, cost line, references, Create draft, the draft / final, More (a render made elsewhere, generator details, request files). |
+| `static/export.js` | Export: target cards, Choose files, alpha format, Export, README + zip, earlier exports, Subtitles (burn in), Downloads (every file). |
+| `static/compare.js` | Compare: tray + search, view select, synced playback, recipe differences, picks, Continue with this version. |
+| `static/drawer.js`, `static/stagecard.js` | The Details drawer (Run · Stages · Reports & log · Costs) and the stage rows it shows (method, settings, health, numbers, warnings, preview, Make a new version from here, Use my own file…). `mountStageCard(parent, def, index, src)` takes a `src = {id(), info(), files(), job()}` so any run can be shown. |
 
-## 2. URLs, views and state
+## 2. URLs, screens and state
 
-- `/?job=<32 hex>` opens a run (the old deep link; unchanged). `&view=quick|studio|lab` picks the depth; no
-  `view` means `quick`. `/?view=runs` is the Runs page (`&flat=1` for the old flat list). The Lab keeps its selection
-  in `&runs=<id>,<id>&stage=<file>` (and in `sessionStorage` as a fallback).
-- Navigation is in-app: `a[data-nav]` links and `navigate(params)` call `history.pushState` then `render()`. A render
-  clears the notices, the job listeners and the job data, and mounts the view into `#view`.
-- `state` (in `state.js`): `jobId`, `view`, the shared data (`registry` = `GET /stages`, `presets`, `providers`,
-  `providerDefault`, `costs`), the job data (`job` = status dict, `run` = `GET /jobs/{id}/run`, `files` = Set of
-  `GET /jobs/{id}/files`, `review`, `tracking` = `face-tracking.json`, `generation` = `generation.json`, `hd`),
-  `selectedPreview` (the review tab, kept stable across refreshes), `labRuns`, `labStage`.
-- Views that show a job call `onJobData(fn)` once and then `loadJob()`; `fn` is called after every load and every
-  poll. Panels are mounted once and have an `update()` that re-reads `state`, so videos are not reset while polling.
+- `/` and `/?view=runs` are the Runs page (`&flat=1` the list view); `/?view=new` is New run. `/?job=<32 hex>` opens
+  the workspace at the most useful step (Prep while preparing or failed, Edit when the prepared clip is not approved,
+  Generate once approved or when a draft exists); `&step=prep|edit|world|generate|export` names a step, and every step
+  switch is a history entry (Back / Forward move between steps without remounting). `&details=run|stages|reports|costs`
+  opens the drawer. Old links keep working: `view=quick` → the workspace (or New run without a job), `view=studio` →
+  the workspace with Details open on Stages, `view=lab` → Compare. Compare keeps its selection in
+  `&runs=<id>,<id>&stage=<file>` (and `sessionStorage` as a fallback).
+- Navigation is in-app: `a[data-nav]` links, `navigate(params)` and `goStep(step)` call `history.pushState` then
+  `render()`. A render of a different screen or run clears the notices, the job listeners and the job data and mounts
+  the screen into `#view`; a step change only swaps the visible step body.
+- `state` (in `state.js`): `jobId`, `view`, `step`, `details`, `flat`, the shared data (`registry` = `GET /stages`,
+  `presets`, `providers`, `providerDefault`, `costs`), the job data (`job`, `run`, `files`, `review`, `tracking`,
+  `generation`, `hd`), `selectedPreview`, `labRuns`, `labStage`.
+- The workspace calls `onJobData(fn)` once and then `loadJob()`; `fn` runs after every load and poll. Step bodies are
+  mounted once and have an `update()` that re-reads `state`, so videos are not reset while polling.
+- Editor keys (Edit, ignored while typing): `←` `→` one frame, `Shift+←` `→` one second, `Space` play / pause (a
+  focused button, link, summary or label takes Space itself), `Home` / `End`, `[` `]` previous / next marker of the
+  selected lane, `Esc` clears the range (then closes the drawer), `Cmd/Ctrl+Z` undo, `Shift+Cmd/Ctrl+Z` and `Ctrl+Y`
+  redo, `Cmd/Ctrl+S` save as new version, `Ctrl/Cmd + wheel` over the timeline zooms.
 
 ## 3. The job banner vs page notices (the stale banner fix)
 

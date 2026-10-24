@@ -144,8 +144,9 @@ export function mountWorkspace(container) {
 
   function showStep(step) {
     const f = facts();
-    if (!step) { step = defaultStep(f); if (state.run) history.replaceState(null, '', hrefFor({ job: state.jobId, step })); }
+    if (!step) step = defaultStep(f);
     if (!STEPS.includes(step)) step = 'prep';
+    if (!state.step && state.run) { state.step = step; history.replaceState(null, '', hrefFor({ job: state.jobId, step })); }   // the URL names the step that opened, so a reload and Back land on it
     current = step;
     for (const [key, body] of Object.entries(bodies)) body.classList.toggle('on', key === step);
     paintHead(); paintRail();

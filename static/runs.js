@@ -6,7 +6,7 @@ import { $, $$, el, spent, ago, when, runName, runLabel, runStatus, setChip, sho
 import { state, setLabRuns, hrefFor, runHref, navigate } from './state.js';
 import { openDetails } from './drawer.js';
 
-const PAGE = 24;
+const PAGE = typeof matchMedia === 'function' && matchMedia('(max-width: 640px)').matches ? 12 : 24;   // a phone shows 12 cards a page
 const FILTERS = [['all', 'All'], ['review', 'Needs review'], ['ready', 'Ready'], ['draft', 'Draft done'], ['final', 'Final done'], ['preparing', 'Preparing'], ['failed', 'Failed']];
 
 const familyText = r => [runName(r), r.preset, runLabel(r), r.changed, r.status, r.name, r.id.slice(0, 8)].filter(Boolean).join(' ').toLowerCase();
