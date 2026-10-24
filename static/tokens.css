@@ -1,0 +1,35 @@
+/* Puppeteer design tokens (tidy pass, hybrid direction: docs/tidy/directions/hybrid.html).
+   Dark is the HARD default on :root (the system preference is ignored on purpose); the light "paper" theme is
+   :root[data-theme="light"], switched by the header toggle and stored in localStorage as pp-theme (static/theme.js
+   applies it before first paint). Every colour, type size, spacing step, radius, shadow and motion value used by
+   components.css and app.css is defined here and nowhere else. */
+:root{
+  color-scheme:dark;
+  --bg:#0f1115;--surface:#171a21;--surface-2:#1e222b;--surface-3:#262b36;--text:#e6e8ee;--muted:#9aa1b0;
+  --accent:#7cc4ff;--accent-ink:#0b1d2e;--accent-soft:#1a2a3a;
+  --ok:#6fd39a;--ok-soft:#16281f;--warn:#f0c35a;--warn-soft:#2d2614;--danger:#ff7b72;--danger-soft:#2f1b1a;
+  --border:#2a2f3a;--border-strong:#3a4150;
+  --lane-mask:var(--accent);--lane-face:var(--ok);--lane-words:#c9b6ff;--lane-words-soft:#2a2340;--playhead:var(--danger);
+  --thumb-bg:#000;--video-bg:#000;--scrim:#0008;
+  --shadow-1:0 1px 2px #0008;--shadow-2:0 10px 30px -10px #000c,0 2px 6px #0008;--shadow-3:0 24px 60px -20px #000e;
+  --font-display:'Fraunces',Georgia,'Times New Roman',serif;
+  --font-ui:'Source Sans 3','Source Sans Pro',-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --t-xs:12px;--lh-xs:16px;--t-sm:13px;--lh-sm:18px;--t-base:15px;--lh-base:24px;--t-md:17px;--lh-md:26px;
+  --t-lg:20px;--lh-lg:28px;--t-xl:26px;--lh-xl:32px;--t-2xl:34px;--lh-2xl:40px;
+  --s-1:4px;--s-2:8px;--s-3:12px;--s-4:16px;--s-6:24px;--s-8:32px;--s-10:40px;--s-12:48px;--s-16:64px;
+  --r-1:6px;--r-2:10px;--r-3:16px;--r-4:22px;--r-pill:999px;
+  --ease:cubic-bezier(.2,.7,.2,1);--dur-1:150ms;--dur-2:240ms;
+  /* canvas colours (the timeline and lanes draw with these; read through getComputedStyle in static/ui.js) */
+  --canvas-ruler:#1e222b;--canvas-ruler-text:#9aa1b0;--canvas-tick:#3a4150;--canvas-tick-strong:#5a6275;--canvas-band:#1a1e26;
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --bg:#f6f2ea;--surface:#fffdf9;--surface-2:#f1ebdf;--surface-3:#e8e0d2;--text:#27241f;--muted:#6b655c;
+  --accent:#9a4a21;--accent-ink:#ffffff;--accent-soft:#f8e8de;
+  --ok:#2f6b44;--ok-soft:#e3efe6;--warn:#8a5a00;--warn-soft:#fbf0d6;--danger:#b3261e;--danger-soft:#fbe7e5;
+  --border:#e5dccd;--border-strong:#cdc2ae;
+  --lane-words:#7a5c9e;--lane-words-soft:#f0e9f6;--thumb-bg:#1a1512;--scrim:#3a2a1a55;
+  --shadow-1:0 1px 2px #3a2a1a0a,0 8px 24px -12px #3a2a1a1f;--shadow-2:0 2px 4px #3a2a1a0f,0 18px 40px -16px #3a2a1a33;--shadow-3:0 24px 60px -20px #3a2a1a55,0 4px 10px #3a2a1a14;
+  --canvas-ruler:#f1ebdf;--canvas-ruler-text:#6b655c;--canvas-tick:#cdc2ae;--canvas-tick-strong:#a89c86;--canvas-band:#f6f2ea;
+}

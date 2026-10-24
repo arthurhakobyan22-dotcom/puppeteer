@@ -9,12 +9,14 @@
 // baked mesh (depth composite, or the original in Fast mode) so only the live edited mesh is on screen; selecting the
 // track switches to it, leaving the track switches back.
 import { getJSON } from './api.js';
-import { el, ariaFor, showError } from './ui.js';
+import { el, ariaFor, showError, cssVar } from './ui.js';
 import { registerTrack } from './timeline.js';
 import { EXPR, RANGES, IDENTITY, normalize, transformAt, editFrame, editPoints, centroid, offSet, sortedKeys, exprRuns, mergeRanges, subtractRange, isIdentity } from './meshedit.js';
 
 const VIEW = 'mesh-edit';
-const STATUS = { tracked: '#3aa76d', filled: '#e0b341', missing: '#d9534f', off: '#9a9eab' };
+const STATUS_VARS = { tracked: '--lane-face', filled: '--warn', missing: '--danger', off: '--muted' };
+const STATUS_FALLBACK = { tracked: '#6fd39a', filled: '#f0c35a', missing: '#ff7b72', off: '#9aa1b0' };
+const colour = k => cssVar(STATUS_VARS[k]) || STATUS_FALLBACK[k] || '#ccc';
 const COLOURS = { tessellation: [50, 170, 205], lips: [255, 135, 100], left_eye: [130, 255, 150], right_eye: [130, 255, 150] };   // as mesh_worker.py
 const DRAW = [['tessellation', 1], ['lips', 2], ['left_eye', 2], ['right_eye', 2]];
 const SLIDERS = [['jaw', 'Jaw open'], ['smile', 'Mouth smile'], ['pucker', 'Mouth pucker'], ['blink_l', 'Blink left (their left)'], ['blink_r', 'Blink right (their right)'], ['brow', 'Brow up']];
@@ -92,8 +94,8 @@ function reset(ctx, t, what) {
 // ---------------------------------------------------------------- the Mesh edit view (base clip without the baked mesh)
 function syncView(ctx) {
   const file = baseFile(ctx);
-  ctx.editor.addView({ id: VIEW, label: 'Mesh edit', order: 15, layers: [{ file }], download: file, downloadLabel: file === 'original.mp4' ? 'Download the original (no mesh)' : 'Download the depth composite (no mesh)', available: c => c.files.has('face-landmarks.json') && c.files.has(baseFile(c)),
-    caption: (file === 'original.mp4' ? 'Original frames' : 'Depth composite') + ' without the baked mesh · the edited mesh is drawn live on top' });
+  ctx.editor.addView({ id: VIEW, label: 'Face mesh · editable', order: 15, more: true, layers: [{ file }], download: file, downloadLabel: file === 'original.mp4' ? 'Download the original (no mesh)' : 'Download the motion clip (no mesh)', available: c => c.files.has('face-landmarks.json') && c.files.has(baseFile(c)),
+    caption: (file === 'original.mp4' ? 'Original frames' : 'Motion clip') + ' without the baked mesh · your edited mesh is drawn live on top' });
 }
 function onSelect(id) {
   const ctx = st.ctx; if (!ctx || !ctx.files.has('face-landmarks.json')) return;
@@ -103,29 +105,29 @@ function onSelect(id) {
 }
 
 // ---------------------------------------------------------------- panel
-const button = (text, title, onclick, cls = 'small secondary', disabled = false) => el('button', { type: 'button', class: cls, text, title, 'aria-label': ariaFor(text, title), onclick, disabled });
+const button = (text, title, onclick, cls = 'sm', disabled = false) => el('button', { type: 'button', class: cls, text, title, 'aria-label': ariaFor(text, title), onclick, disabled });
 function render() {
   const ctx = st.ctx, box = st.panel; if (!ctx || !box) return;
   const ed = ctx.editor, f = ed.frame, can = editable(ctx), n = norm(ctx), t = target(ctx), off = offSet(n.off), ks = sortedKeys(n.keys);
   const face = can ? faceAt(ctx, f, n) : null, key = n.keys.get(f), cur = transformAt(n.keys, f) || { ...IDENTITY };
-  const where = !can ? '' : off.has(f) ? 'Mesh off on this frame (the base clip only).' + (key ? ` ◆ Transform key on frame ${f} (it still blends into the frames around it).` : '') : !face || !face.points ? `No face on frame ${f} (${(frames()[f] || {}).status || 'missing'}), so there are no handles here. ` + (key ? `◆ Transform key on frame ${f}: it blends into the tracked frames around it.` : 'You can still place a key here with the fields or "Set key here"; it blends into the tracked frames around it.') :
-    key ? `◆ Transform key on frame ${f}.` : transformAt(n.keys, f) ? `Blended between keys ${ks.filter(k => k < f).pop()} and ${ks.find(k => k > f)} (ease-in-out).` : 'No correction on this frame.';
+  const where = !can ? '' : off.has(f) ? 'The mesh is hidden on this frame (the base clip only).' + (key ? ` ◆ An adjustment sits on frame ${f} (it still blends into the frames around it).` : '') : !face || !face.points ? `No face on frame ${f} (${(frames()[f] || {}).status || 'lost'}), so there is nothing to drag here. ` + (key ? `◆ An adjustment sits on frame ${f}: it blends into the frames around it where the face was found.` : 'You can still place an adjustment here with the fields or "Adjust from here"; it blends into the frames around it.') :
+    key ? `◆ An adjustment sits on frame ${f}.` : transformAt(n.keys, f) ? `Blended between the adjustments on frames ${ks.filter(k => k < f).pop()} and ${ks.find(k => k > f)}.` : 'No correction on this frame.';
   const prevKey = [...ks].reverse().find(k => k < f), nextKey = ks.find(k => k > f);
-  const help = el('p', { class: 'hint', text: !ctx.files.has('face-landmarks.json') ? 'This run has no face landmarks, so there is no mesh to edit.' : st.base && st.base.failed ? 'The face landmarks could not be loaded.' : !st.base ? 'Loading the face landmarks…' : running(ctx) ? 'The run is still preparing; mesh edits open when it finishes.' :
-    'Drag inside the mesh to move it, the corner square to scale, the top circle to rotate: each drag sets a key on this frame, and keys blend with an ease-in-out across the frames between them. Everything is drawn locally and free; nothing changes until "Save edits".' });
+  const help = el('p', { class: 'hint', text: !ctx.files.has('face-landmarks.json') ? 'This run has no face mesh data, so there is nothing to edit.' : st.base && st.base.failed ? 'The face mesh data could not be loaded.' : !st.base ? 'Loading the face mesh…' : running(ctx) ? 'The run is still preparing; mesh edits open when it finishes.' :
+    'Drag inside the mesh to move it, the corner square to scale, the top circle to rotate: each drag is one adjustment on this frame, and adjustments blend smoothly across the frames between them. Everything is drawn here, free; nothing changes until "Save as new version".' });
   const targetRow = el('div', { class: 'mt-row' }, el('strong', { text: 'Applies to ' + t.long }), ed.range ? null : el('span', { class: 'hint', text: 'drag across the ruler to pick a range' }));
   const offRow = el('div', { class: 'mt-row' },
-    button(ed.range ? 'Mesh off on range' : 'Mesh off on this frame', 'Those frames show the base clip only (no mesh drawn)', () => meshOff(ctx, false), 'small secondary', !can),
-    button('Mesh on', 'Draw the mesh again on ' + t.text, () => meshOff(ctx, true), 'small secondary', !can || ![...Array(t.to - t.from + 1)].some((_, i) => off.has(t.from + i))),
-    n.off.length ? el('span', { class: 'hint', text: 'off: ' + n.off.map(([a, b]) => (a === b ? a : a + '–' + b)).join(', ') }) : null);
+    button(ed.range ? 'Hide the mesh on the range' : 'Hide the mesh on this frame', 'Those frames show the base clip only (no mesh drawn)', () => meshOff(ctx, false), 'sm', !can),
+    button('Show the mesh', 'Draw the mesh again on ' + t.text, () => meshOff(ctx, true), 'sm', !can || ![...Array(t.to - t.from + 1)].some((_, i) => off.has(t.from + i))),
+    n.off.length ? el('span', { class: 'hint', text: 'hidden: ' + n.off.map(([a, b]) => (a === b ? a : a + '–' + b)).join(', ') }) : null);
   const field = (k, label, step, title) => {
     const i = el('input', { type: 'number', step: String(step), 'aria-label': label, title, class: 'ft-num', style: 'width:76px;padding:5px 6px', disabled: !can });   // any frame, faceless too: a key there blends into its tracked neighbours
     i.value = String(k === 'scale' ? round(cur.scale, 3) : k === 'rot' ? round(cur.rot, 1) : round(cur[k], 4));
     i.onchange = () => { const v = Number(i.value); if (!Number.isFinite(v)) return; setKey(ctx, f, { ...cur, [k]: v }, `Set ${label} on frame ${f}`); };
     return el('label', { class: 'wand-inline' }, label + ' ', i);
   };
-  const tRow = el('div', { class: 'mt-row ft-transform' }, field('dx', 'dx', 0.005, 'Shift right, in frame widths'), field('dy', 'dy', 0.005, 'Shift down, in frame heights'), field('scale', 'scale', 0.01, 'Size factor'), field('rot', 'rot °', 0.5, 'Degrees, clockwise'),
-    button('Set key here', key ? `Frame ${f} already has a key; change the fields to edit it` : `Place a transform key on frame ${f} with the values shown (the current blend, or no correction), so later changes start from it`, () => setKey(ctx, f, cur, `Set a transform key on frame ${f}`), 'small secondary', !can || !!key));
+  const tRow = el('div', { class: 'mt-row ft-transform' }, field('dx', 'right', 0.005, 'Shift right, in frame widths'), field('dy', 'down', 0.005, 'Shift down, in frame heights'), field('scale', 'size', 0.01, 'Size factor'), field('rot', 'turn °', 0.5, 'Degrees, clockwise'),
+    button('Adjust from here', key ? `Frame ${f} already has an adjustment; change the fields to edit it` : `Place an adjustment on frame ${f} with the values shown (the current blend, or no correction), so later changes start from it`, () => setKey(ctx, f, cur, `Place an adjustment on frame ${f}`), 'sm', !can || !!key));
   const sliders = el('div', { class: 'ft-sliders' }, SLIDERS.map(([name, label]) => {
     const [lo, hi] = RANGES[name], e = n.expr.get(f) || {}, v = st.exprDraft && st.exprDraft.name === name ? st.exprDraft.value : e[name] || 0;
     const out = el('output', { class: 'mono', text: v.toFixed(2) });
@@ -136,17 +138,14 @@ function render() {
     return el('label', { class: 'ft-slider' }, el('span', { text: label }), r, out);
   }));
   const navRow = el('div', { class: 'mt-row' },
-    button('◀ Prev key', 'Previous transform key ([ jumps between all face marks)', () => ed.seek(prevKey), 'small secondary', prevKey == null),
-    button('Next key ▶', 'Next transform key', () => ed.seek(nextKey), 'small secondary', nextKey == null),
-    button('Reset frame', `Remove every face edit on frame ${f}`, () => reset(ctx, { from: f, to: f, text: `frame ${f}` }), 'small secondary', !can || !(n.keys.has(f) || n.expr.has(f) || off.has(f))),
-    button('Reset range', ed.range ? `Remove every face edit on frames ${t.from}–${t.to}` : 'Select a range first', () => reset(ctx, t), 'small secondary', !can || !ed.range));
-  const viewRow = el('div', { class: 'mt-row' }, el('span', { class: 'hint', text: 'View' }),
-    button('Mesh edit', 'Base clip without the baked mesh; your edited mesh drawn live', () => ed.setView(VIEW, { chosen: true }), 'small ' + (ed.view === VIEW ? '' : 'secondary'), !ctx.files.has('face-landmarks.json')),
-    button('Prepared input', 'The clip as prepared (mesh baked in, before your edits)', () => ed.setView('seedance-input.mp4', { chosen: true }), 'small ' + (ed.view === 'seedance-input.mp4' ? '' : 'secondary'), !ctx.files.has('seedance-input.mp4')));
-  const counts = [n.off.length ? plural(n.off.length, 'off range') : '', n.keys.size ? plural(n.keys.size, 'key') : '', n.expr.size ? `expressions on ${plural(n.expr.size, 'frame')}` : ''].filter(Boolean).join(' · ');
-  const status = el('p', { class: 'hint ft-where', 'aria-live': 'polite', text: [where, counts ? 'This session: ' + counts + '.' : ''].filter(Boolean).join(' ') });
-  const legend = el('div', { class: 'legend' }, ...Object.entries(STATUS).map(([k, c]) => el('span', {}, el('i', { style: `background:${c}` }), k)), el('span', { text: '◆ key' }), el('span', { text: '● expression' }), el('span', { text: '▨ mesh off' }));
-  const kids = [help, can ? targetRow : null, can ? offRow : null, can ? tRow : null, can ? sliders : null, can ? navRow : null, viewRow, can ? status : null, legend];
+    button('◀ Prev adjustment', 'Previous adjustment ([ jumps between all face marks)', () => ed.seek(prevKey), 'ghost sm', prevKey == null),
+    button('Next adjustment ▶', 'Next adjustment', () => ed.seek(nextKey), 'ghost sm', nextKey == null),
+    button('Reset frame', `Remove every face edit on frame ${f}`, () => reset(ctx, { from: f, to: f, text: `frame ${f}` }), 'sm', !can || !(n.keys.has(f) || n.expr.has(f) || off.has(f))),
+    button('Reset range', ed.range ? `Remove every face edit on frames ${t.from}–${t.to}` : 'Select a range first', () => reset(ctx, t), 'sm', !can || !ed.range));
+  const counts = [n.off.length ? plural(n.off.length, 'hidden range') : '', n.keys.size ? plural(n.keys.size, 'adjustment') : '', n.expr.size ? `expressions on ${plural(n.expr.size, 'frame')}` : ''].filter(Boolean).join(' · ');
+  const status = el('p', { class: 'hint ft-where', 'aria-live': 'polite', text: [where, counts ? 'Unsaved: ' + counts + '.' : ''].filter(Boolean).join(' ') });
+  const legend = el('div', { class: 'legend' }, ...[['tracked', 'found'], ['filled', 'filled'], ['missing', 'lost'], ['off', 'hidden']].map(([k, label]) => el('span', {}, el('i', { style: `background:${colour(k)}` }), label)), el('span', { text: '◆ adjustment' }), el('span', { text: '● expression' }), el('span', { text: '▨ hidden' }));
+  const kids = [help, can ? targetRow : null, can ? offRow : null, can ? tRow : null, can ? sliders : null, can ? navRow : null, can ? status : null, legend];
   const focused = box.contains(document.activeElement) && document.activeElement.type === 'range';
   if (focused && st.exprDraft) return;   // keep the slider being dragged alive
   box.replaceChildren(...kids.filter(Boolean));   // replaceChildren would print a null as text
@@ -177,7 +176,7 @@ function drawCanvas(c, box, frame) {
   const h = handles(face.points, box.width, box.height, box.dpr);
   c.setLineDash([6 * box.dpr, 4 * box.dpr]); c.lineWidth = 1.5 * box.dpr; c.strokeStyle = 'rgba(255,255,255,.85)'; c.strokeRect(h.x0, h.y0, h.x1 - h.x0, h.y1 - h.y0); c.setLineDash([]);
   c.beginPath(); c.moveTo((h.x0 + h.x1) / 2, h.y0); c.lineTo(h.rotate[0], h.rotate[1]); c.stroke();
-  c.fillStyle = '#1f18c0'; c.strokeStyle = '#fff'; c.lineWidth = 2 * box.dpr;
+  c.fillStyle = cssVar('--accent') || '#7cc4ff'; c.strokeStyle = '#fff'; c.lineWidth = 2 * box.dpr;
   c.fillRect(h.corner[0] - h.r, h.corner[1] - h.r, 2 * h.r, 2 * h.r); c.strokeRect(h.corner[0] - h.r, h.corner[1] - h.r, 2 * h.r, 2 * h.r);
   c.beginPath(); c.arc(h.rotate[0], h.rotate[1], h.r, 0, Math.PI * 2); c.fill(); c.stroke();
   if (st.draft && st.draft.frame === frame) { const k = st.draft.key; c.fillStyle = 'rgba(0,0,0,.6)'; c.font = `${12 * box.dpr}px sans-serif`; const text = `dx ${k.dx.toFixed(3)} dy ${k.dy.toFixed(3)} × ${k.scale.toFixed(2)} ${k.rot.toFixed(1)}°`; c.fillRect(h.x0, h.y1 + 6 * box.dpr, c.measureText(text).width + 10 * box.dpr, 18 * box.dpr); c.fillStyle = '#fff'; c.fillText(text, h.x0 + 5 * box.dpr, h.y1 + 19 * box.dpr); }
@@ -207,7 +206,7 @@ const pointer = {
     const d = st.drag; if (!d) return;
     st.drag = null; const k = st.draft && st.draft.key;
     if (k && ['dx', 'dy', 'scale', 'rot'].some(n => Math.abs(k[n] - d.T0[n]) > 1e-6)) {
-      const verb = { move: 'Move', scale: 'Scale', rotate: 'Rotate' }[d.mode];
+      const verb = { move: 'Move', scale: 'Resize', rotate: 'Turn' }[d.mode];
       setKey(st.ctx, d.frame, k, `${verb} the mesh on frame ${d.frame}`);
     }
     st.draft = null; st.ctx.editor.redraw(); render();
@@ -225,18 +224,20 @@ function statuses(ctx) {
 }
 function drawLane(lane, v) {
   const ctx = st.ctx, c = v.ctx2d, s = statuses(ctx);
-  if (!s) { c.fillStyle = '#9a9eab'; c.font = '11px sans-serif'; c.textBaseline = 'middle'; c.fillText('No face tracking in this run', 8, v.height / 2); return; }
+  if (!s) { c.fillStyle = colour('off'); c.font = '11px sans-serif'; c.textBaseline = 'middle'; c.fillText('No face mesh in this run', 8, v.height / 2); return; }
   const first = Math.max(0, v.frameAt(0)), last = Math.min(s.length - 1, v.frameAt(v.width) + 1), w = Math.max(1, v.pxPerFrame - (v.pxPerFrame > 4 ? 1 : 0));
-  for (let f = first; f <= last; f++) { c.fillStyle = STATUS[s[f]] || '#ccc'; c.globalAlpha = s[f] === 'tracked' ? 0.7 : 0.9; c.fillRect(v.x(f), 12, w, v.height - 22); }
+  const cols = { tracked: colour('tracked'), filled: colour('filled'), missing: colour('missing'), off: colour('off') };
+  for (let f = first; f <= last; f++) { c.fillStyle = cols[s[f]] || '#ccc'; c.globalAlpha = s[f] === 'tracked' ? 0.7 : 0.9; c.fillRect(v.x(f), 12, w, v.height - 22); }
   c.globalAlpha = 1;
   const n = norm(ctx), ks = sortedKeys(n.keys);
-  if (ks.length > 1) { c.fillStyle = 'rgba(31,24,192,.55)'; c.fillRect(v.x(ks[0]) + v.pxPerFrame / 2, v.height - 9, v.x(ks[ks.length - 1]) - v.x(ks[0]), 3); }   // the blended span
+  const accent = cssVar('--accent') || '#7cc4ff', text = cssVar('--text') || '#e6e8ee';
+  if (ks.length > 1) { c.save(); c.globalAlpha = 0.55; c.fillStyle = accent; c.fillRect(v.x(ks[0]) + v.pxPerFrame / 2, v.height - 9, v.x(ks[ks.length - 1]) - v.x(ks[0]), 3); c.restore(); }   // the blended span
   c.save(); c.beginPath(); for (const [a, b] of n.off) c.rect(v.x(a), 10, v.x(b + 1) - v.x(a), v.height - 18); c.clip();   // mesh off: hatched
   c.fillStyle = 'rgba(40,40,48,.45)'; c.fillRect(0, 0, v.width, v.height); c.strokeStyle = 'rgba(255,255,255,.8)'; c.lineWidth = 1.2; c.beginPath();
   for (let x = -v.height; x < v.width + v.height; x += 6) { c.moveTo(x, v.height); c.lineTo(x + v.height, 0); } c.stroke(); c.restore();
-  c.fillStyle = '#7b3fbf';
+  c.fillStyle = cssVar('--lane-words') || '#c9b6ff';
   for (const f of n.expr.keys()) { const x = v.x(f) + v.pxPerFrame / 2; if (x < -4 || x > v.width + 4) continue; c.beginPath(); c.arc(x, v.height - 5, 2.6, 0, Math.PI * 2); c.fill(); }
-  c.fillStyle = '#1f18c0'; c.strokeStyle = '#fff'; c.lineWidth = 1;
+  c.fillStyle = text; c.strokeStyle = cssVar('--surface') || '#171a21'; c.lineWidth = 1;
   for (const f of ks) { const x = v.x(f) + v.pxPerFrame / 2; if (x < -6 || x > v.width + 6) continue; c.beginPath(); c.moveTo(x, 2); c.lineTo(x + 5, 7); c.lineTo(x, 12); c.lineTo(x - 5, 7); c.closePath(); c.fill(); c.stroke(); }
 }
 
@@ -244,7 +245,7 @@ function drawLane(lane, v) {
 function reset0(ctx) { Object.assign(st, { jobId: ctx.jobId, base: null, baseKey: null, drag: null, draft: null, exprDraft: null, prevView: null, info: '' }); }
 let offSelect = null;
 registerTrack({
-  id: 'face', label: 'Face', order: 20, height: 44, markerColor: '#1f18c0',
+  id: 'face', label: 'Face', hint: 'hide, move, scale, turn, expressions', order: 20, height: 44, markerColor: '--lane-face',
   available: ctx => ctx.files.has('face-tracking.json') || ctx.files.has('face-landmarks.json'),
   mount(row, panel, ctx) {
     if (st.jobId !== ctx.jobId) reset0(ctx);

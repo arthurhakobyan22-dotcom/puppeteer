@@ -1,12 +1,13 @@
-// Loading and polling the job named in the URL. The job banner is written only from here, only after checking
-// that the answer still belongs to the job in the URL (token + id), so another run's status can never leak in.
+// Loading and polling the run named in the URL. The run banner is written only from here, only after checking
+// that the answer still belongs to the run in the URL (token + id), so another run's status can never leak in.
+// The banner shows failures only (the step rail and the status line carry the running state).
 import { api, plain } from './api.js';
-import { $, $$, el, usd } from './ui.js';
+import { $, el, usd, showError } from './ui.js';
 import { state, later, current, navigate } from './state.js';
 
 const POLL_MS = 2500;
 let listeners = [];
-/** Views register one callback that re-renders their job panels after a (re)load. */
+/** The workspace registers one callback that re-renders its step bodies after a (re)load. */
 export function onJobData(fn) { listeners = [fn]; }
 export function clearJobListeners() { listeners = []; }
 
@@ -15,20 +16,20 @@ export function resetJob() {
   renderBanner();
 }
 
-/** The status dict of the job: the live job, else the saved status, else what run.json says. */
+/** The status dict of the run: the live job, else the saved status, else what run.json says. */
 async function fetchStatus(id) {
   try { return await api.job(id); }
   catch (e) {
     const p = plain(e);
     if (p.status === 404) {
       if (state.run && state.run.status) return state.run.status;
-      return { state: 'unknown', status: 'No status was saved for this run (it was interrupted before preparation finished).', fix: 'Open it in Studio and re-run the stage that did not finish.' };
+      return { state: 'unknown', status: 'No status was saved for this run (it was interrupted before preparation finished).', fix: 'Open Details · Stages and make a new version from the stage that did not finish.' };
     }
     throw e;
   }
 }
 
-/** Load everything the panels need for the job in the URL. Safe to call again; results are dropped when the page moved on. */
+/** Load everything the steps need for the run in the URL. Safe to call again; results are dropped when the page moved on. */
 export async function loadJob({ quiet = false } = {}) {
   const id = state.jobId; const token = state.token;
   if (!id) return;
@@ -54,15 +55,16 @@ export async function loadJob({ quiet = false } = {}) {
   for (const fn of listeners) fn();
   if (state.job && state.job.state === 'running') later(() => poll(), POLL_MS);
   if (state.hd && state.hd.state === 'running') later(() => pollHD(), 4000);
+  void quiet;
 }
 
-/** While the job runs: refresh its status (and the stage reports) every few seconds; on completion reload everything. */
+/** While the run prepares: refresh its status (and the stage reports) every few seconds; on completion reload everything. */
 async function poll() {
   const id = state.jobId; const token = state.token;
   if (!id) return;
   let status;
   try { status = await fetchStatus(id); }
-  catch (e) { if (!current(token, id)) return; later(() => poll(), POLL_MS * 2); return; }   // a glitch: keep polling, never show another job's words
+  catch (e) { if (!current(token, id)) return; later(() => poll(), POLL_MS * 2); return; }   // a glitch: keep polling, never show another run's words
   if (!current(token, id)) return;
   if (status.state === 'running') {
     state.job = status;
@@ -95,7 +97,7 @@ export function failedStage() {
   return null;
 }
 
-/** Fix actions for a failed job: open the failed stage in Studio; for a strict face-tracking failure, re-run leniently (free). */
+/** Fix actions for a failed run: re-run leniently (free) for a strict face-tracking failure; open the failed stage in Details. */
 export function fixActions() {
   const actions = [];
   const stage = failedStage();
@@ -106,28 +108,27 @@ export function fixActions() {
   if (stage === 'face' && face.tool === 'mediapipe_mesh' && face.params && face.params.strict && /lost face|tracking gap/.test(text)) {
     actions.push({ label: 'Re-run with lenient gaps · free', run: async () => {
       const r = await api.branch(state.jobId, { stage: 'face', tool: 'mediapipe_mesh', params: { strict: false } });
-      navigate({ job: r.id, view: state.view === 'studio' ? 'studio' : 'quick' });
+      navigate({ job: r.id, step: 'prep' });
     } });
   }
-  if (stage && state.view !== 'studio') actions.push({ label: 'Open the failed stage in Studio', secondary: true, run: async () => navigate({ job: state.jobId, view: 'studio' }, { hash: 'stage-' + stage }) });
+  if (stage) actions.push({ label: 'Open the failed stage', secondary: true, run: async () => { const { openDetails } = await import('./drawer.js'); openDetails({ id: state.jobId, tab: 'stages', stage }); } });
   return actions;
 }
 
-/** The banner shows the status of the job in the URL and nothing else. */
+/** The banner shows a failure of the run in the URL and nothing else. */
 export function renderBanner() {
   const banner = $('#job-banner');
   if (!banner) return;
   const job = state.jobId ? state.job : null;
-  if (!job) { banner.hidden = true; return; }
+  if (!job || job.state !== 'error') { banner.hidden = true; return; }
   const text = $('[data-text]', banner), fix = $('[data-fix]', banner), actions = $('[data-actions]', banner);
-  const kind = job.state === 'error' ? 'error' : job.state === 'running' ? 'running' : job.state === 'done' ? 'done' : '';
-  banner.className = 'status ' + kind;
-  text.textContent = job.status || (job.state === 'running' ? 'Working…' : job.state || '');
-  const fixText = job.state === 'error' ? (job.fix || (job.unreachable ? '' : 'Re-run the stage that failed from Studio; where the app can do it for you, a button is shown below.')) : '';
+  banner.className = 'banner error';
+  text.textContent = job.unreachable ? job.status : 'Preparation failed: ' + (job.status || 'no reason was saved');
+  const fixText = job.fix || (job.unreachable ? '' : 'Make a new version from the stage that failed (Details · Stages); where the app can do it for you, a button is shown here.');
   fix.textContent = fixText; fix.hidden = !fixText;
   actions.replaceChildren();
-  const list = job.state === 'error' && !job.unreachable ? fixActions() : [];
-  for (const a of list) actions.append(el('button', { type: 'button', class: 'small ' + (a.secondary ? 'secondary' : ''), text: a.label, onclick: async (ev) => { ev.target.disabled = true; try { await a.run(); } catch (e) { const { showError } = await import('./ui.js'); showError(e); ev.target.disabled = false; } } }));
+  const list = !job.unreachable ? fixActions() : [];
+  for (const a of list) actions.append(el('button', { type: 'button', class: 'sm ' + (a.secondary ? '' : 'primary'), text: a.label, onclick: async (ev) => { ev.target.disabled = true; try { await a.run(); } catch (e) { showError(e); ev.target.disabled = false; } } }));
   actions.hidden = !list.length;
   banner.hidden = false;
 }

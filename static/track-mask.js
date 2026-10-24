@@ -1,24 +1,28 @@
-// Mask track (Agent 2): the batch wand on the timeline (docs/TIMELINE-SPEC.md §4, §A2).
+// Mask lane: the ONE mask tool (docs/TIMELINE-SPEC.md §4, §A2; the classic wand was merged into it in the tidy pass).
 //
 // Clicks on the picture (+ include; Alt-click, right-click or the "− exclude" toggle = exclude) and brush strokes only
-// add PENDING fixes to the edit layer (layer.mask.points / .strokes); each one previews on its own frame at once
-// (POST /jobs/{id}/edits/mask/preview: the free seed step, no propagation, nothing paid, no branch). "Apply to clip"
-// sends every pending fix of every frame in one pass (POST /jobs/{id}/edits/mask/apply): quick first (240 px), then
-// "Accept · full quality" re-runs the same fixes and replaces that entry. Problem ticks (GET /jobs/{id}/mask/problems)
-// are red on the lane over the mask-area sparkline; Grab hands (POST …/edits/mask/hands) runs the free local MediaPipe
-// pass on the flagged frames or the selected range. Views: Mask (B/W; the session mask once applied), Composite, Tint.
-// Undo / redo / save go through the shared edit layer; the old "Fix the mask" wand (static/wand.js) still works.
+// add UNSAVED fixes to the edit layer (layer.mask.points / .strokes); each one previews on its own frame at once
+// (POST /jobs/{id}/edits/mask/preview: the free seed step, nothing paid, no new version). "Apply to the clip" sends
+// every unsaved fix of every frame in one pass (POST /jobs/{id}/edits/mask/apply) at the quality picked in Tool
+// settings: quick (240 px, free, local even for a paid method) or full (480 px; the paid methods show their price on
+// the button). After a quick apply, "Accept at full quality" re-runs the same fixes and replaces that entry.
+// Level 1: fix type, the fix count, Apply, the flagged frames. Level 2 ("Tool settings", remembered): the method
+// (free local · SAM 3 on fal · SAM 2 on Replicate · Brush), the quality, Find hands, Clear all fixes.
+// Views: Mask (B/W; your applied fixes once applied) and Overlay (the original with the mask tinted green, level 2).
 import { send, getJSON, plain } from './api.js';
-import { el, ariaFor, usd, showError } from './ui.js';
+import { el, ariaFor, usd, showError, stored, costActions, withCost } from './ui.js';
 import { registerTrack } from './timeline.js';
 
-const TOOLS = [['local_propagate', 'Local propagation · free', false], ['sam3_points_fal', 'SAM 3 on fal · paid', true], ['sam2_points_replicate', 'SAM 2 on Replicate · paid', true]];
+const TOOLS = [['local_propagate', 'Free, local (rougher edges)', false], ['sam3_points_fal', 'SAM 3 on fal · paid', true], ['sam2_points_replicate', 'SAM 2 on Replicate · paid', true], ['brush', 'Brush · paint or erase by hand', false]];
 const TINT = { mixBlendMode: 'screen', opacity: '0.8', filter: 'url(#mask-tint)' };
 const MASK_VIEWS = ['mask.mp4', 'mask-tint'];
 const st = {
-  jobId: null, ctx: null, panel: null, mode: 'include', tool: 'local_propagate', brush: { on: false, mode: 'paint', radius: 0.03, frames: 5 }, stroke: null,
+  jobId: null, ctx: null, panel: null, mode: 'include', tool: stored('mask-method') || 'local_propagate', quality: stored('mask-quality') || 'quick', brush: { mode: 'paint', radius: 0.03, frames: 5 }, stroke: null,
   previews: new Map(), tokens: new Map(), problems: null, problemsKey: null, busy: '', info: '', estimate: null, estimateKey: '', viewKey: '', lastLatency: null,
 };
+if (!TOOLS.some(t => t[0] === st.tool)) st.tool = 'local_propagate';
+const isBrush = () => st.tool === 'brush';
+const applyTool = () => (isBrush() ? 'local_propagate' : st.tool);
 
 // ---------------------------------------------------------------- layer helpers
 const value = ctx => { const v = ctx && ctx.edits.layer.mask; return v && typeof v === 'object' ? v : {}; };
@@ -43,7 +47,7 @@ function tintFilter() {   // white mask → green, black → nothing (screen ble
   filter.append(matrix); svg.append(filter); document.body.append(svg);
 }
 
-// ---------------------------------------------------------------- views: Mask (B/W, session aware) and Tint
+// ---------------------------------------------------------------- views: Mask (B/W, session aware) and Overlay
 function syncViews(ctx) {
   const key = resultKey(ctx) || '', id = ctx.jobId + '|' + key;
   if (st.viewKey === id && st.viewEditor === ctx.editor) return;   // a re-render of the same run mounts a new editor: add the views to it again
@@ -52,13 +56,13 @@ function syncViews(ctx) {
   const mask = session ? { src: '/runs/' + session } : { file: 'mask.mp4' };
   const download = session ? '../' + session : 'mask.mp4';
   ctx.editor.addView({ id: 'mask.mp4', label: 'Mask', order: 30, layers: [mask], download, available: c => c.files.has('mask.mp4') || !!key,
-    caption: session ? 'Mask with your applied fixes (B/W) · not saved yet' : 'Full subject mask' });
-  ctx.editor.addView({ id: 'mask-tint', label: 'Tint', order: 45, layers: [{ file: 'original.mp4' }, { ...mask, style: TINT }], download, downloadLabel: session ? 'Download the edited mask (B/W video)' : 'Download the mask (B/W video)', available: c => c.files.has('original.mp4') && (c.files.has('mask.mp4') || !!key),
-    caption: session ? 'Original with your edited mask tinted green · not saved yet' : 'Original with the mask tinted green' });
+    caption: session ? 'Mask with your applied fixes · not saved yet' : 'White where the person is, black elsewhere' });
+  ctx.editor.addView({ id: 'mask-tint', label: 'Overlay', order: 45, more: true, layers: [{ file: 'original.mp4' }, { ...mask, style: TINT }], download, available: c => c.files.has('original.mp4') && (c.files.has('mask.mp4') || !!key),
+    caption: session ? 'Original with your edited mask as a green overlay · not saved yet' : 'Original with the mask as a green overlay' });
   if (MASK_VIEWS.includes(ctx.editor.view)) ctx.editor.setView(ctx.editor.view);
 }
 
-// ---------------------------------------------------------------- problems (ticks + area sparkline)
+// ---------------------------------------------------------------- flagged frames (ticks + area sparkline)
 async function loadProblems(ctx, force = false) {
   const key = ctx.jobId + '|' + (resultKey(ctx) || '');
   if (!force && st.problemsKey === key) return;
@@ -68,7 +72,7 @@ async function loadProblems(ctx, force = false) {
 }
 const ticks = () => [...new Set(((st.problems && st.problems.frames) || []).map(p => p.frame))].sort((a, b) => a - b);
 
-// ---------------------------------------------------------------- previews (one frame, no propagation)
+// ---------------------------------------------------------------- previews (one frame, nothing else)
 async function preview(ctx, frame, t0 = null) {
   const points = pointsOn(ctx, frame), strokes = strokesOn(ctx, frame), key = fixKey(ctx, frame);
   if (!points.length && !strokes.length) { st.previews.delete(frame); ctx.editor.redraw(); return; }
@@ -81,7 +85,7 @@ async function preview(ctx, frame, t0 = null) {
     img.onload = () => {
       if (st.tokens.get(frame) !== token) return;
       st.previews.set(frame, { key, img, selections: r.selections });
-      if (t0 != null) { st.lastLatency = (performance.now() - t0) / 1000; st.info = `Preview on frame ${frame} in ${st.lastLatency.toFixed(2)} s (this frame only; nothing is propagated until Apply). ` + r.selections.map(s => (s.mode === 'include' ? 'Adds ' : 'Removes ') + (s.fraction * 100).toFixed(1) + '% of the frame').join(' · ') + '.'; render(); }
+      if (t0 != null) { st.lastLatency = (performance.now() - t0) / 1000; st.info = `Frame ${frame}: ` + r.selections.map(s => (s.mode === 'include' ? 'adds ' : 'removes ') + (s.fraction * 100).toFixed(1) + '% of the frame').join(' · ') + '. This frame only; apply to follow it through the clip.'; render(); }
       ctx.editor.redraw();
     };
     img.onerror = () => { if (st.tokens.get(frame) === token) showError(new Error('The preview picture could not be loaded.'), { key: 'mask-track' }); };
@@ -89,13 +93,13 @@ async function preview(ctx, frame, t0 = null) {
   } catch (e) { if (st.tokens.get(frame) === token) showError(e, { key: 'mask-track' }); }
 }
 
-// ---------------------------------------------------------------- pending fixes (edit layer commits)
+// ---------------------------------------------------------------- unsaved fixes (edit layer commits)
 function commitMask(ctx, label, fn) {
   return ctx.edits.commit(label, 'mask', d => { const v = d && typeof d === 'object' ? d : {}; v.points = v.points || []; v.strokes = v.strokes || []; v.applied = v.applied || []; fn(v); return v; });
 }
 function addPoint(ctx, pt, exclude) {
   const t0 = performance.now(), p = { id: uid('p'), frame: pt.frame, x: Number(pt.x.toFixed(4)), y: Number(pt.y.toFixed(4)), label: exclude ? 0 : 1, t: Date.now() };
-  commitMask(ctx, `Add ${exclude ? '−' : '+'} point on frame ${p.frame}`, v => { v.points.push(p); });
+  commitMask(ctx, `Add ${exclude ? '−' : '+'} fix on frame ${p.frame}`, v => { v.points.push(p); });
   preview(ctx, p.frame, t0); render();
 }
 function addStroke(ctx, s) {
@@ -105,37 +109,37 @@ function addStroke(ctx, s) {
 }
 function removeItem(ctx, item) {
   const isStroke = 'frame_from' in item;
-  commitMask(ctx, isStroke ? `Remove brush stroke on frames ${item.frame_from}–${item.frame_to}` : `Remove point on frame ${item.frame}`, v => { if (isStroke) v.strokes = v.strokes.filter(s => s.id !== item.id); else v.points = v.points.filter(p => p.id !== item.id); });
+  commitMask(ctx, isStroke ? `Remove brush stroke on frames ${item.frame_from}–${item.frame_to}` : `Remove fix on frame ${item.frame}`, v => { if (isStroke) v.strokes = v.strokes.filter(s => s.id !== item.id); else v.points = v.points.filter(p => p.id !== item.id); });
   st.previews.delete(isStroke ? ctx.editor.frame : item.frame); preview(ctx, ctx.editor.frame); render();
 }
 function undoLast(ctx) {
   const { points, strokes } = pending(ctx); const all = [...points, ...strokes].sort((a, b) => (a.t || 0) - (b.t || 0));
   if (all.length) removeItem(ctx, all[all.length - 1]);
 }
-function clearAll(ctx) { commitMask(ctx, 'Clear the pending mask fixes', v => { v.points = []; v.strokes = []; }); st.previews.clear(); ctx.editor.redraw(); render(); }
+function clearAll(ctx) { commitMask(ctx, 'Clear the unsaved mask fixes', v => { v.points = []; v.strokes = []; }); st.previews.clear(); ctx.editor.redraw(); render(); }
 
-// ---------------------------------------------------------------- Apply to clip, Accept · full quality, Grab hands
-async function apply(ctx, quality, { replace = null, tool = st.tool, confirm = false } = {}) {
+// ---------------------------------------------------------------- Apply to the clip, Accept at full quality, Find hands
+async function apply(ctx, quality, { replace = null, tool = applyTool(), confirm = false } = {}) {
   await ctx.edits.queue;
   if (st.busy) return false;
-  st.busy = replace ? 'Re-running the same fixes at full quality…' : quality === 'quick' ? 'Applying to the clip (quick preview)…' : 'Applying to the clip at full quality…'; render();
+  st.busy = replace ? 'Running the same fixes at full quality…' : quality === 'quick' ? 'Applying to the clip (quick)…' : 'Applying to the clip at full quality…'; render();
   const t0 = performance.now();
   try {
     const body = { quality, tool, rev: ctx.edits.rev }; if (replace) body.replace = replace; if (confirm) body.confirm_cost = 'true';
     const r = await send('/jobs/' + ctx.jobId + '/edits/mask/apply', body);
     st.busy = ''; st.previews.clear(); await ctx.edits.load();
     const a = r.apply, secs = ((performance.now() - t0) / 1000).toFixed(1);
-    st.info = `${replace ? 'Accepted at full quality' : 'Applied'} in ${secs} s: ${plural(a.frames_changed, 'frame')} of the mask changed (${a.quality}${a.reused ? ', same fixes as before, reused' : ''}). The Mask and Tint views show it; nothing is saved until "Save edits".`;
+    st.info = `${replace ? 'Accepted at full quality' : 'Applied'} in ${secs} s: ${plural(a.frames_changed, 'frame')} of the mask changed${a.reused ? ' (same fixes as before, reused)' : ''}. The Mask and Overlay views show it; nothing is saved until "Save as new version".`;
     if (!MASK_VIEWS.includes(ctx.editor.view)) ctx.editor.setView('mask-tint');
     return true;
   } catch (e) {
     st.busy = ''; const p = plain(e);
-    showError(e, { key: 'mask-track', actions: p.status === 402 ? [{ label: 'Run anyway · ' + usd(p.body.estimated_cost_usd), run: () => apply(ctx, quality, { replace, tool, confirm: true }) }] : [] });
+    showError(e, { key: 'mask-track', actions: costActions(e, () => apply(ctx, quality, { replace, tool, confirm: true })) });
     if (p.status === 409) await ctx.edits.load();
     return false;
   } finally { st.busy = ''; render(); }
 }
-async function grabHands(ctx, source) {
+async function findHands(ctx, source) {
   await ctx.edits.queue;
   if (st.busy) return;
   const r0 = ctx.editor.range, body = { source, rev: ctx.edits.rev };
@@ -145,20 +149,20 @@ async function grabHands(ctx, source) {
   try {
     const r = await send('/jobs/' + ctx.jobId + '/edits/mask/hands', body);
     st.busy = ''; st.previews.clear(); await ctx.edits.load();
-    const h = r.hands; st.info = `Grab hands (${((performance.now() - t0) / 1000).toFixed(1)} s): hands found on ${plural(h.hands_on.length, 'frame')} of ${h.frames.length}, ${plural(h.frames_changed, 'frame')} changed. Only those frames were touched; pending clicks still apply on top.`;
+    const h = r.hands; st.info = `Find hands (${((performance.now() - t0) / 1000).toFixed(1)} s): hands found on ${plural(h.hands_on.length, 'frame')} of ${h.frames.length}, ${plural(h.frames_changed, 'frame')} changed. Only those frames were touched; unsaved fixes still apply on top.`;
     if (!MASK_VIEWS.includes(ctx.editor.view)) ctx.editor.setView('mask-tint');
   } catch (e) { st.busy = ''; showError(e, { key: 'mask-track' }); if (plain(e).status === 409) await ctx.edits.load(); }
   finally { st.busy = ''; render(); }
 }
-async function refreshEstimate(ctx) {   // the paid tools show their estimate on the button before anything runs
+async function refreshEstimate(ctx) {   // the paid methods show their price on the button before anything runs
   const { points } = pending(ctx), last = lastApplied(ctx);
-  const paidTool = toolInfo(st.tool)[2], acceptPaid = last && last.quality === 'quick' && last.intended_tool;
-  const key = [ctx.jobId, st.tool, points.map(p => p.id).join(','), acceptPaid ? last.id : ''].join('|');
+  const paidTool = toolInfo(applyTool())[2], acceptPaid = last && last.quality === 'quick' && last.intended_tool;
+  const key = [ctx.jobId, applyTool(), st.quality, points.map(p => p.id).join(','), acceptPaid ? last.id : ''].join('|');
   if (st.estimateKey === key) return;
   st.estimateKey = key; st.estimate = null;
   const ask = async body => { try { return await send('/jobs/' + ctx.jobId + '/edits/mask/apply', { ...body, estimate_only: 'true' }); } catch (e) { return { error: plain(e).message }; } };
   const out = {};
-  if (paidTool && points.length) out.apply = await ask({ quality: 'full', tool: st.tool });
+  if (paidTool && points.length && st.quality === 'full') out.apply = await ask({ quality: 'full', tool: applyTool() });
   if (acceptPaid) out.accept = await ask({ quality: 'full', replace: last.id, tool: last.intended_tool });
   if (st.estimateKey === key) { st.estimate = out; render(); }
 }
@@ -172,53 +176,58 @@ async function quietSave(work) {   // "Apply now" / "Save without them": the sav
 }
 
 // ---------------------------------------------------------------- panel
-const button = (text, title, onclick, cls = 'small secondary', disabled = false) => el('button', { type: 'button', class: cls, text, title, 'aria-label': ariaFor(text, title), onclick, disabled });
+const button = (text, title, onclick, cls = 'sm', disabled = false) => el('button', { type: 'button', class: cls, text, title, 'aria-label': ariaFor(text, title), onclick, disabled });
+const seg = (items, value, onPick, label) => el('div', { class: 'seg-ctl', role: 'group', 'aria-label': label }, items.map(([v, text, cls]) => el('button', { type: 'button', class: (v === value ? 'on ' : '') + (cls || ''), text, 'aria-pressed': v === value ? 'true' : 'false', onclick: () => onPick(v) })));
 function render() {
   const ctx = st.ctx, box = st.panel; if (!ctx || !box) return;
   const ed = ctx.editor, can = editable(ctx), busy = !!st.busy, { points, strokes, applied } = pending(ctx), n = points.length + strokes.length;
-  const tool = toolInfo(st.tool), est = st.estimate || {}, last = lastApplied(ctx);
-  const modeRow = el('div', { class: 'mt-row', role: 'group', 'aria-label': 'What a click on the picture does' },
-    button('+ include', 'Click adds the region (a missed hand, a prop)', () => { st.mode = 'include'; st.brush.on = false; render(); }, 'small ' + (!st.brush.on && st.mode === 'include' ? '' : 'secondary')),
-    button('− exclude', 'Click removes spill (Alt-click or right-click does the same)', () => { st.mode = 'exclude'; st.brush.on = false; render(); }, 'small ' + (!st.brush.on && st.mode === 'exclude' ? 'danger' : 'secondary')),
-    button('Brush', 'Paint or erase by hand on a few frames', () => { st.brush.on = !st.brush.on; render(); }, 'small ' + (st.brush.on ? '' : 'secondary')),
-    st.brush.on ? el('span', { class: 'mt-row' },
-      button('Paint', 'Brush adds to the mask', () => { st.brush.mode = 'paint'; render(); }, 'small ' + (st.brush.mode === 'paint' ? '' : 'secondary')),
-      button('Erase', 'Brush removes from the mask', () => { st.brush.mode = 'erase'; render(); }, 'small ' + (st.brush.mode === 'erase' ? 'danger' : 'secondary')),
-      el('label', { class: 'wand-inline' }, 'radius ', (() => { const r = el('input', { type: 'range', min: '0.005', max: '0.15', step: '0.005', 'aria-label': 'Brush radius' }); r.value = String(st.brush.radius); r.oninput = () => { st.brush.radius = Number(r.value); }; return r; })()),
-      el('label', { class: 'wand-inline' }, 'on ', (() => { const i = el('input', { type: 'number', min: '1', max: '500', step: '1', 'aria-label': 'Frames the stroke covers', style: 'width:60px' }); i.value = String(st.brush.frames); i.onchange = () => { st.brush.frames = Math.max(1, Math.round(Number(i.value) || 1)); }; return i; })(), ' frames from here'))
-      : el('span', { class: 'hint', text: 'Alt-click = exclude' }));
+  const tool = toolInfo(applyTool()), est = st.estimate || {}, last = lastApplied(ctx), brush = isBrush();
+  const help = el('p', { class: 'hint', text: can ? (brush ? 'Draw on the picture to paint (green) or erase (red); the stroke covers this frame and the next ones. ' : 'Click on the picture: + adds what you click (a missed hand, a prop), − removes spill. ') + 'Each fix shows on its frame at once; nothing is sent or saved until you apply.' : 'Mask fixes need a finished motion clip with masks.' });
+  // level 1: fix type (or brush controls), fixes, apply, flagged frames
+  const fixRow = el('div', { class: 'mt-row' });
+  if (brush) fixRow.append(seg([['paint', 'Paint'], ['erase', 'Erase', 'minus']], st.brush.mode, v => { st.brush.mode = v; render(); }, 'Brush mode'),
+    el('label', { class: 'wand-inline' }, 'radius ', (() => { const r = el('input', { type: 'range', min: '0.005', max: '0.15', step: '0.005', 'aria-label': 'Brush radius' }); r.value = String(st.brush.radius); r.oninput = () => { st.brush.radius = Number(r.value); }; return r; })()),
+    el('label', { class: 'wand-inline' }, 'on ', (() => { const i = el('input', { type: 'number', min: '1', max: '500', step: '1', 'aria-label': 'Frames the stroke covers' }); i.value = String(st.brush.frames); i.onchange = () => { st.brush.frames = Math.max(1, Math.round(Number(i.value) || 1)); }; return i; })(), ' frames from here'));
+  else fixRow.append(seg([['include', '+ include'], ['exclude', '− exclude', 'minus']], st.mode, v => { st.mode = v; render(); }, 'What a click on the picture does'), el('span', { class: 'hint', text: 'Alt-click = exclude' }));
   const rows = [...points.map(p => ({ ...p, sort: p.frame, text: `frame ${p.frame} · ${p.label ? '+ include' : '− exclude'}` })), ...strokes.map(s => ({ ...s, sort: s.frame_from, text: `frames ${s.frame_from}–${s.frame_to} · brush ${s.mode}` }))].sort((a, b) => a.sort - b.sort || (a.t || 0) - (b.t || 0));
-  const list = el('ul', { class: 'mt-list', 'aria-label': 'Pending mask fixes' }, rows.map(r => el('li', { class: ed.frame === r.sort ? 'here' : '' },
+  const list = el('ul', { class: 'mt-list', 'aria-label': 'Unsaved mask fixes' }, rows.map(r => el('li', { class: ed.frame === r.sort ? 'here' : '' },
     el('button', { type: 'button', class: 'mt-jump', title: 'Go to this frame', text: r.text, onclick: () => ed.seek(r.sort) }),
     el('button', { type: 'button', class: 'mt-del', title: 'Remove this fix', 'aria-label': 'Remove ' + r.text, text: '✕', disabled: busy, onclick: () => removeItem(ctx, r) }))));
   const frames = new Set(points.map(p => p.frame));
-  const pendingRow = el('div', { class: 'mt-row' }, el('strong', { text: n ? `${plural(n, 'pending fix', 'pending fixes')}` + (points.length ? ` (${plural(points.length, 'click')} on ${plural(frames.size, 'frame')})` : '') : 'No pending fixes' }),
-    button('Undo last', 'Remove the newest pending fix', () => undoLast(ctx), 'small secondary', !n || busy), button('Clear all', 'Remove every pending fix', () => clearAll(ctx), 'small secondary', !n || busy));
-  const select = el('select', { 'aria-label': 'Mask tool for Apply' }); for (const [name, label] of TOOLS) select.append(el('option', { value: name, text: label })); select.value = st.tool;
-  select.onchange = () => { st.tool = select.value; refreshEstimate(ctx); render(); };
-  const fullLabel = tool[2] ? (est.apply && est.apply.estimated_cost_usd != null ? `Apply with ${tool[1].split(' · ')[0]} · ${usd(est.apply.estimated_cost_usd)}` : est.apply && est.apply.error ? 'Apply (cost unknown)' : 'Apply (estimating…)') : 'Apply at full quality · free';
-  const applyRow = el('div', { class: 'mt-row' }, el('label', { class: 'wand-inline' }, 'Tool ', select),
-    button(busy ? st.busy : 'Apply to clip · quick preview · free', 'Every pending fix of every frame in one pass at a low working size (240 px); free and local even for a paid tool', () => apply(ctx, 'quick'), 'small', !n || busy || !can),
-    button(fullLabel, tool[2] ? 'The estimate on this button is the confirmation: clicking sends confirm_cost=true.' : 'Every pending fix in one pass at full working size (480 px)', () => apply(ctx, 'full', { confirm: tool[2] }), 'small secondary', !n || busy || !can || (tool[2] && !(est.apply && est.apply.estimated_cost_usd != null))));
+  const pendingRow = el('div', { class: 'mt-row' }, el('strong', { text: n ? `${plural(n, 'unsaved fix', 'unsaved fixes')}` + (points.length ? ` (${plural(points.length, 'click')} on ${plural(frames.size, 'frame')})` : '') : 'No fixes yet' }),
+    button('Undo last', 'Remove the newest fix', () => undoLast(ctx), 'ghost sm', !n || busy));
+  const paid = tool[2] && st.quality === 'full';
+  const applyLabel = paid ? ['Apply with ' + tool[1].split(' · ')[0], est.apply && est.apply.estimated_cost_usd != null ? usd(est.apply.estimated_cost_usd) : est.apply && est.apply.error ? 'price unknown' : 'working out the price…'] : ['Apply to the clip', st.quality === 'quick' ? 'free · quick' : 'free'];
+  const applyButton = el('button', { type: 'button', class: 'primary', title: paid ? 'The price on this button is the confirmation: clicking sends it.' : st.quality === 'quick' ? 'Every unsaved fix of every frame in one pass at a low working size (240 px); free and local' : 'Every unsaved fix in one pass at full working size (480 px)', disabled: !n || busy || !can || (paid && !(est.apply && est.apply.estimated_cost_usd != null)), onclick: () => apply(ctx, st.quality, { confirm: paid }) });
+  withCost(applyButton, busy ? st.busy : applyLabel[0], busy ? '' : applyLabel[1]);
+  const applyRow = el('div', { class: 'mt-row' }, applyButton, n ? null : el('span', { class: 'reason', text: can ? 'Click the picture to add a fix first.' : '' }));
   const acceptRow = last && last.kind !== 'hands' && last.quality === 'quick' ? el('div', { class: 'mt-row mt-accept' },
     el('span', { class: 'hint', text: `Quick result shown (${plural(last.frames_changed || 0, 'frame')} changed).` }),
-    (() => { const paid = !!last.intended_tool, e2 = est.accept; const label = paid ? (e2 && e2.estimated_cost_usd != null ? `Accept · full quality · ${usd(e2.estimated_cost_usd)}` : 'Accept · full quality (estimating…)') : 'Accept · full quality · free';
-      return button(label, paid ? 'Re-runs the same fixes with ' + toolInfo(last.intended_tool)[1] + '; the estimate on this button is the confirmation.' : 'Re-runs the same fixes at full quality and replaces this result', () => apply(ctx, 'full', { replace: last.id, tool: last.intended_tool || 'local_propagate', confirm: paid }), 'small', busy || (paid && !(e2 && e2.estimated_cost_usd != null))); })(),
-    button('Undo', 'Undo the last edit (Cmd/Ctrl+Z)', () => ctx.edits.undo(), 'small secondary', busy || !ctx.edits.canUndo)) : null;
+    (() => { const paid2 = !!last.intended_tool, e2 = est.accept; const b = button('', paid2 ? 'Runs the same fixes with ' + toolInfo(last.intended_tool)[1] + '; the price on this button is the confirmation.' : 'Runs the same fixes at full quality and replaces this result', () => apply(ctx, 'full', { replace: last.id, tool: last.intended_tool || 'local_propagate', confirm: paid2 }), 'sm', busy || (paid2 && !(e2 && e2.estimated_cost_usd != null)));
+      withCost(b, 'Accept at full quality', paid2 ? (e2 && e2.estimated_cost_usd != null ? usd(e2.estimated_cost_usd) : 'working out the price…') : 'free'); return b; })()) : null;
   const tk = ticks(), prob = st.problems, here = prob && (prob.frames || []).filter(p => p.frame === ed.frame);
   const prevTick = tk.slice().reverse().find(f => f < ed.frame), nextTick = tk.find(f => f > ed.frame);
   const flagged = (prob && prob.flagged) || [];
-  const problemRow = el('div', { class: 'mt-row' }, el('span', { class: 'mt-ticks', text: !prob ? 'Checking the mask…' : prob.failed ? 'The mask could not be checked.' : tk.length ? `${plural(tk.length, 'problem tick')} (${plural(flagged.length, 'flagged frame')})` : 'No problem ticks' }),
-    button('◀ Prev tick', 'Previous problem tick', () => ed.seek(prevTick), 'small secondary', prevTick == null), button('Next tick ▶', 'Next problem tick', () => ed.seek(nextTick), 'small secondary', nextTick == null),
-    button('Grab hands on flagged frames · free', 'Finds hands with the local MediaPipe model on the flagged frames only and adds them to the mask', () => grabHands(ctx, 'problems'), 'small secondary', busy || !can || !flagged.length),
-    button(ed.range ? `Grab hands on ${ed.range.from}–${ed.range.to} · free` : 'Grab hands on a range', ed.range ? 'Finds hands on the selected frames only' : 'Drag across the ruler to select frames first', () => grabHands(ctx, 'range'), 'small secondary', busy || !can || !ed.range));
-  const viewRow = el('div', { class: 'mt-row' }, el('span', { class: 'hint', text: 'View' }),
-    ...[['mask.mp4', 'B/W'], ['composite.mp4', 'Composite'], ['mask-tint', 'Tint']].map(([id, label]) => button(label, 'Show the ' + label + ' view (keeps the frame)', () => ed.setView(id, { chosen: true }), 'small ' + (ed.view === id ? '' : 'secondary'), id === 'composite.mp4' && !ctx.files.has('composite.mp4'))),
-    el('a', { href: '#', class: 'mt-classic', text: 'Classic wand (one version per apply)', onclick: e => { e.preventDefault(); const b = document.querySelector('[data-wand-open]'); if (b) { b.scrollIntoView({ block: 'center' }); b.focus(); } } }));
+  const problemRow = el('div', { class: 'mt-row' }, el('span', { class: 'mt-ticks', text: !prob ? 'Checking the mask…' : prob.failed ? 'The mask could not be checked.' : tk.length ? `${plural(flagged.length, 'flagged frame')} in ${plural(tk.length, 'place')}` : 'No flagged frames' }),
+    button('◀ Prev', 'Previous flagged frame ([)', () => ed.seek(prevTick), 'ghost sm', prevTick == null), button('Next ▶', 'Next flagged frame (])', () => ed.seek(nextTick), 'ghost sm', nextTick == null));
+  // level 2: tool settings
+  const select = el('select', { 'aria-label': 'Method' }); for (const [name, label] of TOOLS) select.append(el('option', { value: name, text: label })); select.value = st.tool;
+  select.onchange = () => { st.tool = select.value; stored('mask-method', st.tool); st.stroke = null; refreshEstimate(ctx); render(); ed.redraw(); };
+  const qualitySeg = seg([['quick', 'Quick preview · 240 px'], ['full', 'Full · 480 px']], st.quality, v => { st.quality = v; stored('mask-quality', v); refreshEstimate(ctx); render(); }, 'Apply quality');
+  const settings = el('details', { class: 'more', dataset: { remember: 'mask-settings' } }, el('summary', {}, 'Tool settings', el('span', { class: 'hint', text: tool[1].split(' · ')[0] + ' · ' + (st.quality === 'quick' ? 'quick' : 'full') })),
+    el('div', { class: 'body' },
+      el('label', { class: 'lbl' }, 'Method', select, el('span', { class: 'hint', text: 'How the fix is followed through the clip. The paid methods show their price on the Apply button when the quality is Full; quick applies are always free and local.' })),
+      el('label', { class: 'lbl' }, 'Quality', qualitySeg),
+      el('div', { class: 'mt-row' },
+        button('Find hands on flagged frames · free', 'Finds hands with the local model on the flagged frames only and adds them to the mask', () => findHands(ctx, 'problems'), 'sm', busy || !can || !flagged.length),
+        button(ed.range ? `Find hands on ${ed.range.from}–${ed.range.to} · free` : 'Find hands on a range · free', ed.range ? 'Finds hands on the selected frames only' : 'Drag across the ruler to select frames first', () => findHands(ctx, 'range'), 'sm', busy || !can || !ed.range),
+        button('Clear all fixes', 'Remove every unsaved fix', () => clearAll(ctx), 'ghost sm', !n || busy)),
+      applied.length ? el('p', { class: 'hint', text: `${plural(applied.length, 'applied step')} so far: ` + applied.map(a => a.kind === 'hands' ? `hands on ${plural((a.hands_on || []).length, 'frame')}` : `${plural((a.points || []).length + (a.strokes || []).length, 'fix', 'fixes')} (${a.quality})`).join(' → ') }) : null));
+  const saved = (() => { try { return localStorage.getItem('pp-open-mask-settings'); } catch { return null; } })(); if (saved === '1') settings.open = true;
+  settings.addEventListener('toggle', () => { try { localStorage.setItem('pp-open-mask-settings', settings.open ? '1' : '0'); } catch { /* private mode */ } });
   const notes = here && here.length ? el('p', { class: 'line warn mt-note', text: 'Frame ' + ed.frame + ': ' + here.map(p => p.note).join('; ') + '.' }) : null;
-  const help = el('p', { class: 'hint', text: can ? (st.brush.on ? 'Draw on the picture to paint (green) or erase (red); the stroke covers this frame and the next ones. ' : 'Click on the picture: + adds what you click, − removes spill. ') + 'Each fix previews on its frame at once; nothing is propagated, paid or saved until you apply.' : 'Mask fixes need a finished depth run with masks.' });
   const info = st.info ? el('p', { class: 'hint mt-info', 'aria-live': 'polite', text: st.info }) : null;
-  box.replaceChildren(...[help, modeRow, pendingRow, rows.length ? list : null, applyRow, acceptRow, applied.length ? el('p', { class: 'hint', text: `${plural(applied.length, 'applied step')} in this session: ` + applied.map(a => a.kind === 'hands' ? `hands on ${plural((a.hands_on || []).length, 'frame')}` : `${plural((a.points || []).length + (a.strokes || []).length, 'fix', 'fixes')} (${a.quality})`).join(' → ') }) : null, problemRow, notes, viewRow, info].filter(Boolean));   // replaceChildren would print a null as text
+  box.replaceChildren(...[help, fixRow, pendingRow, rows.length ? list : null, applyRow, acceptRow, problemRow, notes, settings, info].filter(Boolean));
   if (st.busy) box.querySelectorAll('button').forEach(b => { if (!b.classList.contains('mt-jump')) b.disabled = true; });
 }
 
@@ -239,9 +248,10 @@ function drawFixes(c, box, frame) {
   }
 }
 
-// ---------------------------------------------------------------- the track
+// ---------------------------------------------------------------- the lane
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 registerTrack({
-  id: 'mask', label: 'Mask', order: 10, height: 44, markerColor: '#1f18c0',
+  id: 'mask', label: 'Mask', hint: 'what a fix needs, nothing else', order: 10, height: 44, markerColor: '--lane-mask',
   available: ctx => ctx.files.has('mask.mp4') || ctx.files.has('mask-cleanup-report.json'),
   mount(row, panel, ctx) {
     st.ctx = ctx; st.panel = el('div', { class: 'mask-track' }); panel.append(st.panel);
@@ -268,24 +278,25 @@ registerTrack({
   onFrame(frame, ctx) { st.ctx = ctx; if (ctx.editor.playing) return; preview(ctx, frame); render(); },   // no DOM work per frame during playback
   markers(ctx) { const { points, strokes } = pending(ctx); return [...new Set([...points.map(p => p.frame), ...strokes.map(s => s.frame_from), ...ticks()])].sort((a, b) => a - b); },
   draw(lane, v) {
-    const c = v.ctx2d, prob = st.problems, areas = (prob && prob.areas) || [];
-    if (!areas.length) { c.fillStyle = '#9a9eab'; c.font = '11px sans-serif'; c.textBaseline = 'middle'; c.fillText(prob && prob.failed ? 'The mask could not be checked' : prob ? 'No masks in this run' : 'Checking the mask…', 8, v.height / 2); return; }
+    const c = v.ctx2d, prob = st.problems, areas = (prob && prob.areas) || [], accent = css('--lane-mask') || css('--accent') || '#7cc4ff', ok = css('--ok') || '#6fd39a', danger = css('--danger') || '#ff7b72', muted = css('--muted') || '#9aa1b0';
+    if (!areas.length) { c.fillStyle = muted; c.font = '11px sans-serif'; c.textBaseline = 'middle'; c.fillText(prob && prob.failed ? 'The mask could not be checked' : prob ? 'No masks in this run' : 'Checking the mask…', 8, v.height / 2); return; }
     const first = Math.max(0, v.frameAt(0)), last = Math.min(areas.length - 1, v.frameAt(v.width) + 1), H = v.height - 10, max = Math.max(1, ...areas);
-    c.fillStyle = 'rgba(179,38,30,.10)';
+    c.save(); c.globalAlpha = 0.12; c.fillStyle = danger;
     for (const p of prob.frames || []) { const x0 = v.x(p.span[0]), x1 = v.x(p.span[1] + 1); if (x1 >= 0 && x0 <= v.width) c.fillRect(x0, 8, x1 - x0, v.height - 8); }
+    c.restore();
     c.beginPath(); c.moveTo(v.x(first), v.height);
     for (let f = first; f <= last; f++) { const y = v.height - 2 - ((areas[f] || 0) / max) * H; c.lineTo(v.x(f), y); c.lineTo(v.x(f + 1), y); }
-    c.lineTo(v.x(last + 1), v.height); c.closePath(); c.fillStyle = resultKey(st.ctx) ? 'rgba(40,160,80,.18)' : 'rgba(31,24,192,.16)'; c.fill(); c.strokeStyle = resultKey(st.ctx) ? 'rgba(30,130,60,.8)' : 'rgba(31,24,192,.7)'; c.lineWidth = 1; c.stroke();
-    c.fillStyle = 'rgba(179,38,30,.9)';
+    c.lineTo(v.x(last + 1), v.height); c.closePath(); c.save(); c.globalAlpha = 0.16; c.fillStyle = resultKey(st.ctx) ? ok : accent; c.fill(); c.restore(); c.strokeStyle = resultKey(st.ctx) ? ok : accent; c.lineWidth = 1.2; c.stroke();
+    c.fillStyle = danger;
     for (const f of ticks()) { const x = v.x(f); if (x < -2 || x > v.width + 2) continue; c.fillRect(Math.round(x), 8, Math.max(1.5, Math.min(3, v.pxPerFrame)), v.height - 8); }
-    const { points, strokes } = pending(st.ctx); c.fillStyle = '#1f18c0';
+    const { points, strokes } = pending(st.ctx); c.fillStyle = accent;
     for (const f of new Set([...points.map(p => p.frame), ...strokes.map(s => s.frame_from)])) { const x = v.x(f) + v.pxPerFrame / 2; if (x < -6 || x > v.width + 6) continue; c.beginPath(); c.arc(x, v.height - 6, 3.5, 0, Math.PI * 2); c.fill(); }
   },
   canvas(c, box, frame) { drawFixes(c, box, frame); },
   pointer: {
     down(e, pt) {
       const ctx = st.ctx; if (!editable(ctx) || st.busy) return;
-      if (st.brush.on) { st.stroke = { frame_from: pt.frame, frame_to: Math.min(ctx.editor.frames - 1, pt.frame + Math.max(1, st.brush.frames) - 1), mode: st.brush.mode, points: [[Number(pt.x.toFixed(4)), Number(pt.y.toFixed(4))]], radius: st.brush.radius }; ctx.editor.redraw(); return; }
+      if (isBrush()) { st.stroke = { frame_from: pt.frame, frame_to: Math.min(ctx.editor.frames - 1, pt.frame + Math.max(1, st.brush.frames) - 1), mode: st.brush.mode, points: [[Number(pt.x.toFixed(4)), Number(pt.y.toFixed(4))]], radius: st.brush.radius }; ctx.editor.redraw(); return; }
       addPoint(ctx, pt, e.altKey || e.button === 2 || st.mode === 'exclude');
     },
     move(e, pt) {

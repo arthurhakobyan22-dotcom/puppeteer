@@ -17,7 +17,7 @@
 // A later registerTrack with the same id replaces the earlier one (that is how a placeholder is swapped out).
 // Elements a track puts inside its lane that handle their own pointer events carry `data-tl-item`; everywhere
 // else a drag selects a range and a click moves the playhead.
-import { el } from './ui.js';
+import { el, cssVar } from './ui.js';
 
 const registry = new Map();
 export function registerTrack(def) {
@@ -87,7 +87,7 @@ export function createTimeline(host, editor) {
       if (!row) {
         const canvas = el('canvas', { class: 'tl-lane-canvas' });
         const lane = el('div', { class: 'tl-lane', dataset: { track: t.id }, style: `height:${t.height}px` }, canvas); lane.canvas = canvas;
-        const label = el('button', { type: 'button', class: 'tl-label', dataset: { track: t.id }, style: `height:${t.height}px`, title: 'Select the ' + t.label + ' track (shows its tools below)', 'aria-label': t.label + ' track', text: t.label, onclick: () => editor.select(editor.selected === t.id ? null : t.id) });
+        const label = el('button', { type: 'button', class: 'tl-label', dataset: { track: t.id }, style: `height:${t.height}px`, title: 'Select the ' + t.label + ' lane (its tools show below)', 'aria-label': t.label + ' lane', 'aria-pressed': 'false', text: t.label, onclick: () => editor.select(editor.selected === t.id ? null : t.id) });
         row = { track: t, label, lane, canvas, shown: false, mounted: false }; rows.set(t.id, row);
       }
       row.shown = shown; row.label.hidden = !shown; row.lane.hidden = !shown;
@@ -97,7 +97,7 @@ export function createTimeline(host, editor) {
     tl.draw();
   };
   tl.visibleRows = () => [...rows.values()].filter(r => r.shown).sort((a, b) => a.track.order - b.track.order);
-  tl.highlight = id => { for (const [key, row] of rows) { row.label.classList.toggle('active', key === id); row.lane.classList.toggle('selected', key === id); } };
+  tl.highlight = id => { for (const [key, row] of rows) { row.label.classList.toggle('active', key === id); row.label.setAttribute('aria-pressed', key === id ? 'true' : 'false'); row.lane.classList.toggle('selected', key === id); } };
 
   // ---------------------------------------------------------------- drawing
   tl.draw = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(drawNow); };
@@ -124,30 +124,30 @@ export function createTimeline(host, editor) {
   function secondStep() { const pxPerSecond = tl.ppf * tl.fps; return [1, 2, 5, 10, 15, 30, 60].find(s => s * pxPerSecond >= 46) || 60; }
   function drawRuler(v) {
     const c = v.ctx2d, first = Math.max(0, v.frameAt(0)), last = Math.min(tl.frames, v.frameAt(v.width) + 1);
-    c.fillStyle = '#f6f6f9'; c.fillRect(0, 0, v.width, RULER);
-    c.strokeStyle = '#c9ccd6'; c.fillStyle = '#5c6070'; c.font = '10px "IBM Plex Mono", ui-monospace, monospace'; c.textBaseline = 'top'; c.lineWidth = 1;
+    c.fillStyle = cssVar('--canvas-ruler') || '#1e222b'; c.fillRect(0, 0, v.width, RULER);
+    c.strokeStyle = cssVar('--canvas-tick') || '#3a4150'; c.fillStyle = cssVar('--canvas-ruler-text') || '#9aa1b0'; c.font = '10px "IBM Plex Mono", ui-monospace, monospace'; c.textBaseline = 'top'; c.lineWidth = 1;
     const showFrames = tl.ppf >= 3, numberEvery = [1, 2, 5, 10, 12, 24, 48].find(n => n * tl.ppf >= 30) || 48;
     c.beginPath();
     if (showFrames) for (let f = first; f < last; f++) { const x = Math.round(v.x(f)) + 0.5; const h = f % numberEvery === 0 ? 8 : 4; c.moveTo(x, RULER - h); c.lineTo(x, RULER); }
     else { const quarter = Math.max(1, Math.round(tl.fps / 4)); if (quarter * tl.ppf >= 5) for (let f = first - (first % quarter); f < last; f += quarter) { const x = Math.round(v.x(f)) + 0.5; c.moveTo(x, RULER - 4); c.lineTo(x, RULER); } }
     c.stroke();
-    const step = secondStep(); c.strokeStyle = '#8d91a0'; c.beginPath();
+    const step = secondStep(); c.strokeStyle = cssVar('--canvas-tick-strong') || '#5a6275'; c.beginPath();
     for (let s = Math.floor(first / tl.fps / step) * step; s * tl.fps < last; s += step) {
       const f = Math.round(s * tl.fps); const x = Math.round(v.x(f)) + 0.5; if (x < -40) continue;
       c.moveTo(x, 0); c.lineTo(x, RULER); c.fillText(s + ' s', x + 3, 2);
     }
     c.stroke();
-    if (showFrames && tl.ppf >= 10) { c.fillStyle = '#9a9eab'; for (let f = first; f < last; f++) if (f % numberEvery === 0 && f % Math.round(tl.fps) !== 0) c.fillText(String(f), Math.round(v.x(f)) + 2, 13); }
+    if (showFrames && tl.ppf >= 10) { c.fillStyle = cssVar('--muted') || '#9aa1b0'; for (let f = first; f < last; f++) if (f % numberEvery === 0 && f % Math.round(tl.fps) !== 0) c.fillText(String(f), Math.round(v.x(f)) + 2, 13); }
   }
   function drawLaneBase(v) {
     const c = v.ctx2d; c.clearRect(0, 0, v.width, v.height);
-    const step = secondStep(); c.fillStyle = '#f7f7fa';
+    const step = secondStep(); c.fillStyle = cssVar('--canvas-band') || '#1a1e26';
     for (let s = 0; s * tl.fps < tl.frames; s += step * 2) { const x0 = v.x(Math.round(s * tl.fps)), x1 = v.x(Math.round((s + step) * tl.fps)); if (x1 < 0 || x0 > v.width) continue; c.fillRect(x0, 0, x1 - x0, v.height); }
   }
   function drawMarkers(row, v) {
     let list = [];
     try { list = row.track.markers ? row.track.markers(editor.ctx()) || [] : []; } catch { list = []; }
-    const c = v.ctx2d; c.fillStyle = row.track.markerColor || '#1f18c0';
+    const c = v.ctx2d; c.fillStyle = row.track.markerColor ? (cssVar(row.track.markerColor) || row.track.markerColor) : cssVar('--accent');
     for (const f of list) { const x = v.x(f) + tl.ppf / 2; if (x < -6 || x > v.width + 6) continue; c.beginPath(); c.moveTo(x - 4, 0); c.lineTo(x + 4, 0); c.lineTo(x, 6); c.closePath(); c.fill(); }
     row.markers = list;
   }

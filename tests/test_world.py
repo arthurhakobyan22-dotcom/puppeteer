@@ -252,7 +252,7 @@ class SeedanceTaskTests(unittest.TestCase):
 class StaticTests(unittest.TestCase):
     def test_slots_module_and_template_are_served(self):
         client=TestClient(application.app);index=client.get('/').text
-        self.assertIn('tpl-slots',index);self.assertIn('data-slot="prompt-builder"',index);self.assertIn('data-slot="generator"',index)
+        self.assertIn('tpl-world',index);self.assertIn('data-prompt-preview',index);self.assertIn('data-generator',index)
         self.assertEqual(client.get('/static/slots.js').status_code,200)
 
 if __name__=='__main__':unittest.main()

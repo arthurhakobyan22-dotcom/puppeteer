@@ -1,31 +1,31 @@
-// World stage (Agent 1): set plates / look images (runs/_assets), the Background row on the composite card, and the
-// Set / Look / Light slots panel in the draft step (slots.json via GET/PUT /jobs/{id}/slots). Agents 2 and 3 mount the
-// prompt builder and the generator picker into [data-slot=prompt-builder] / [data-slot=generator] inside tpl-slots.
-import { api, plain, getJSON, send } from './api.js';
-import { $, el, showError, notice, tpl } from './ui.js';
-import { state, navigate, hrefFor } from './state.js';
+// World helpers: set / look images (runs/_assets), the fit maths shared with stages/plates.py, the Background
+// controls of the Motion clip stage (drawn under World & Look → Set and on the stage row in Details), and the plain
+// names of the backgrounds and the Set / Look modes. The Set / Look / Light panel itself is static/world.js.
+import { getJSON, send } from './api.js';
+import { el, showError } from './ui.js';
+import { state } from './state.js';
 
 export const BACKGROUNDS = [
-  ['original', 'Original frames', 'The depth person over the real frames (today’s output).'],
+  ['original', 'Original frames', 'The depth person over the real frames.'],
   ['full_depth', 'Full depth', 'The whole frame is the depth video.'],
   ['plain', 'Plain colour', 'A flat black or gray background.'],
-  ['set_image', 'Set image', 'A set plate behind the person, fitted to the frame.'],
+  ['set_image', 'Set image', 'A set image behind the person, fitted to the frame.'],
 ];
 export const BACKGROUND_LABEL = Object.fromEntries(BACKGROUNDS.map(b => [b[0], b[1]]));
 export const BACKGROUND_PARAMS = ['background', 'plain_color', 'set_image', 'set_fit'];
 export const SET_MODES = [
-  ['original', 'Original', 'Keep the room as it is in the clip.'],
-  ['original_depth', 'Depth only', 'Keep the room’s geometry as depth and regenerate its look (needs the Full depth background).'],
-  ['set_ref', 'Set reference', 'Attach a set image as a reference (@ImageN, set fence).'],
-  ['prompt', 'Described', 'Say what the set is in words.'],
-  ['true_swap', 'True swap', 'The set image is composited behind the person (needs the Set image background).'],
+  ['original', 'Keep the original', 'The room as it is in the clip.'],
+  ['prompt', 'Describe it', 'Say what the place is in words.'],
+  ['set_ref', 'Use a set image as reference', 'The generator sees the picture of the place next to the character.'],
+  ['true_swap', 'Put the set image behind the person', 'The picture becomes the real background of the motion clip (a new version).'],
+  ['original_depth', 'Depth only (regenerate the room)', 'Keep the room’s shape as depth and let the generator redraw its look (a new version with the full-depth background).'],
 ];
 export const LOOK_MODES = [
-  ['follow', 'Follow the references', 'The references decide the look.'],
-  ['style_ref', 'Style image', 'A style image defines palette, grain and contrast (@ImageN, look fence).'],
-  ['prompt', 'Described', 'Say what the rendering style is in words.'],
+  ['follow', 'Let the references decide', 'The character and set pictures set the look.'],
+  ['style_ref', 'Copy a look image', 'A picture whose colours, grain and contrast the result should copy.'],
+  ['prompt', 'Describe it', 'Say what the rendering style is in words.'],
 ];
-const BACKGROUND_FOR = { original_depth: 'full_depth', true_swap: 'set_image' };
+export const BACKGROUND_FOR = { original_depth: 'full_depth', true_swap: 'set_image' };
 const FIT_DEFAULT = { x: 0, y: 0, scale: 1 };
 
 /** Same maths as stages/plates.py fit_rect: cover the frame (scale to fill, centred), then fit.scale around the centre and fit.x / fit.y as frame fractions. */
@@ -41,7 +41,7 @@ export function parseFit(value) {
   const n = (v, d) => (Number.isFinite(Number(v)) && v !== null && v !== '' ? Number(v) : d);
   return { x: Math.max(-1, Math.min(1, n(data.x, 0))), y: Math.max(-1, Math.min(1, n(data.y, 0))), scale: Math.max(0.2, Math.min(5, n(data.scale, 1))) };
 }
-const fitText = fit => { const f = parseFit(fit); return f.x === 0 && f.y === 0 && f.scale === 1 ? '' : JSON.stringify({ scale: +f.scale.toFixed(4), x: +f.x.toFixed(4), y: +f.y.toFixed(4) }); };
+export const fitText = fit => { const f = parseFit(fit); return f.x === 0 && f.y === 0 && f.scale === 1 ? '' : JSON.stringify({ scale: +f.scale.toFixed(4), x: +f.x.toFixed(4), y: +f.y.toFixed(4) }); };
 
 // ---------------------------------------------------------------- assets
 
@@ -63,14 +63,14 @@ export async function uploadAsset(file, kind) {
 /** A picker: the stored images of `kind` as thumbnails plus an upload input. `onChange(name|null, meta)` on every choice. */
 export function assetPicker({ kind, value, label, onChange }) {
   const grid = el('div', { class: 'asset-grid', role: 'listbox', 'aria-label': label || kind + ' images' });
-  const input = el('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', 'aria-label': 'Upload a ' + (kind === 'look' ? 'style image' : 'set plate') });
+  const input = el('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', 'aria-label': 'Upload a ' + (kind === 'look' ? 'look image' : 'set image') });
   const status = el('span', { class: 'hint' });
-  const node = el('div', { class: 'asset-picker' }, grid, el('div', { class: 'row' }, el('label', { class: 'button small secondary asset-upload' }, 'Upload image…', input), status));
+  const node = el('div', { class: 'asset-picker' }, grid, el('div', { class: 'row' }, el('label', { class: 'button sm asset-upload' }, 'Upload an image…', input), status));
   let current = value || null;
   function draw(assets) {
     grid.replaceChildren();
     const mine = assets.filter(a => !kind || a.kind === kind || a.name === current);
-    if (!mine.length) grid.append(el('span', { class: 'hint', text: 'No ' + (kind === 'look' ? 'style images' : 'set plates') + ' yet. Upload a PNG, JPEG or WebP (up to 30 MB).' }));
+    if (!mine.length) grid.append(el('span', { class: 'hint', text: 'No ' + (kind === 'look' ? 'look images' : 'set images') + ' yet. Upload a PNG, JPEG or WebP (up to 30 MB).' }));
     for (const a of mine) {
       const b = el('button', { type: 'button', class: 'asset' + (a.name === current ? ' active' : ''), role: 'option', 'aria-selected': a.name === current ? 'true' : 'false', title: a.filename + ' · ' + a.width + '×' + a.height,
         onclick: () => { current = a.name === current ? null : a.name; draw(assets); onChange(current, current ? a : null); } },
@@ -103,11 +103,11 @@ export function backgroundControls(box, { tool, params, set, jobId }) {
   choice.value = current.background;
   const plain = el('select', { 'aria-label': 'Plain colour' }); for (const c of ['black', 'gray']) plain.append(el('option', { value: c, text: c })); plain.value = current.plain_color;
   const plainRow = el('label', { class: 'field' }, 'Plain colour', plain);
-  const canvas = el('canvas', { class: 'bg-canvas', width: 480, height: 270, 'aria-label': 'Set plate position preview: drag to move' });
-  const scale = el('input', { type: 'range', min: '0.2', max: '3', step: '0.01', 'aria-label': 'Set plate scale' }); scale.value = String(current.fit.scale);
+  const canvas = el('canvas', { class: 'bg-canvas', width: 480, height: 270, 'aria-label': 'Set image placement: drag to move' });
+  const scale = el('input', { type: 'range', min: '0.2', max: '3', step: '0.01', 'aria-label': 'Set image scale' }); scale.value = String(current.fit.scale);
   const fitLine = el('span', { class: 'hint' });
-  const reset = el('button', { type: 'button', class: 'small secondary', text: 'Centre & cover' });
-  const picker = assetPicker({ kind: 'set', value: current.set_image, label: 'Set plates', onChange: name => { current.set_image = name || ''; set('set_image', current.set_image); draw(); } });
+  const reset = el('button', { type: 'button', class: 'sm', text: 'Centre & cover' });
+  const picker = assetPicker({ kind: 'set', value: current.set_image, label: 'Set images', onChange: name => { current.set_image = name || ''; set('set_image', current.set_image); draw(); } });
   const plateRow = el('div', { class: 'bg-plate' }, picker.node, canvas, el('div', { class: 'row' }, el('label', { class: 'field', style: 'flex:1 1 160px' }, 'Scale', scale), reset), fitLine);
   box.append(el('label', { class: 'field' }, 'Background', choice, el('span', { class: 'hint', text: (spec.background || {}).hint || '' })), plainRow, plateRow);
 
@@ -123,7 +123,7 @@ export function backgroundControls(box, { tool, params, set, jobId }) {
     if (plate && plate.naturalWidth) { const r = fitRect(plate.naturalWidth, plate.naturalHeight, canvas.width, canvas.height, current.fit); ctx.drawImage(plate, r.x, r.y, r.w, r.h); }
     if (frame && frame.naturalWidth) { ctx.globalAlpha = 0.45; ctx.drawImage(frame, 0, 0, canvas.width, canvas.height); ctx.globalAlpha = 1; }
     const f = current.fit;
-    fitLine.textContent = current.set_image ? `Plate covers the frame, centred; moved ${(f.x * 100).toFixed(0)}% / ${(f.y * 100).toFixed(0)}%, scale ×${f.scale.toFixed(2)}. Drag the picture to move it. The first frame is shown half transparent over the plate; the person is cut out at full quality when it runs.` : 'Pick or upload a set plate; it is fitted to cover the frame and the person is placed over it.';
+    fitLine.textContent = current.set_image ? `The set image covers the frame, centred; moved ${(f.x * 100).toFixed(0)}% / ${(f.y * 100).toFixed(0)}%, scale ×${f.scale.toFixed(2)}. Drag the picture to move it. The first frame is shown half transparent over it; the person is cut out at full quality when it runs.` : 'Pick or upload a set image; it is fitted to cover the frame and the person is placed over it.';
   }
   function show() {
     plainRow.hidden = current.background !== 'plain'; plateRow.hidden = current.background !== 'set_image';
@@ -139,101 +139,4 @@ export function backgroundControls(box, { tool, params, set, jobId }) {
   canvas.onpointerup = canvas.onpointercancel = e => { if (!drag) return; drag = null; try { canvas.releasePointerCapture(e.pointerId); } catch { /* already released */ } commitFit(); };
   show(); draw();
   return { refresh() { frameImage.src = '/jobs/' + jobId + '/mask/frame?i=0&t=' + Date.now(); } };
-}
-
-/** The Background chip for the review panel: "Background · Set image", a deep link to the composite card in Studio. */
-export function backgroundChip(chain, jobId) {
-  const entry = (chain && chain.composite) || {};
-  if (entry.tool !== 'depth_cutout') return null;
-  const background = (entry.params || {}).background || 'original';
-  return el('a', { class: 'chip bg-chip', href: hrefFor({ job: jobId, view: 'studio' }) + '#stage-composite', 'data-nav': true, title: 'Change it on the composite card in Studio', text: 'Background · ' + (BACKGROUND_LABEL[background] || background) });
-}
-
-// ---------------------------------------------------------------- Set / Look / Light panel (draft step)
-
-export function mountSlots(before) {
-  const node = tpl('tpl-slots'); before.before(node);
-  const q = s => $(s, node);
-  const setBox = q('[data-set]'), lookBox = q('[data-look]'), light = q('input[name=light]'), taskLine = q('[data-task]'), saved = q('[data-saved]'), applyRow = q('[data-apply]');
-  const setSelect = el('select', { 'aria-label': 'Set' }), lookSelect = el('select', { 'aria-label': 'Look' });
-  for (const [name, label, hint] of SET_MODES) setSelect.append(el('option', { value: name, text: label + ' · ' + hint }));
-  for (const [name, label, hint] of LOOK_MODES) lookSelect.append(el('option', { value: name, text: label + ' · ' + hint }));
-  const setPrompt = el('textarea', { rows: 2, placeholder: 'e.g. a small kitchen with a window on the left, white tiles, wooden counter', 'aria-label': 'Set description' });
-  const lookPrompt = el('textarea', { rows: 2, placeholder: 'e.g. 16 mm film, muted palette, soft grain, high contrast', 'aria-label': 'Look description' });
-  const setPicker = assetPicker({ kind: 'set', label: 'Set images', onChange: name => { slots.set.image = name; save({ set: { image: name } }); } });
-  const lookPicker = assetPicker({ kind: 'look', label: 'Style images', onChange: name => { slots.look.image = name; save({ look: { image: name } }); } });
-  const setPickerRow = el('div', {}, setPicker.node), lookPickerRow = el('div', {}, lookPicker.node);
-  const setNote = el('p', { class: 'hint' }), applyButton = el('button', { type: 'button', class: 'small', text: 'Apply as background (new run) · free' });
-  setBox.append(el('label', { class: 'field' }, 'Set', setSelect), setPickerRow, el('label', { class: 'field' }, 'Set description', setPrompt), setNote);
-  lookBox.append(el('label', { class: 'field' }, 'Look', lookSelect), lookPickerRow, el('label', { class: 'field' }, 'Look description', lookPrompt));
-  applyRow.append(applyButton);
-  let slots = null, loadedFor = null, timer = 0, busy = false;
-
-  async function load(force = false) {
-    const id = state.jobId; if (!id || (loadedFor === id && !force)) return;
-    try { slots = await getJSON('/jobs/' + id + '/slots'); loadedFor = id; render(); }
-    catch (e) { showError(e, { key: 'slots' }); }
-  }
-  async function save(patch) {
-    const id = state.jobId; if (!id) return;
-    saved.textContent = 'Saving…';
-    try { slots = await send('/jobs/' + id + '/slots', patch, { method: 'PUT' }); saved.textContent = 'Saved with this run (slots.json). Nothing re-runs.'; render(); }
-    catch (e) { saved.textContent = ''; showError(e, { key: 'slots' }); }
-  }
-  const debounced = patch => { clearTimeout(timer); timer = setTimeout(() => save(patch), 500); };
-  setSelect.onchange = () => {
-    const patch = { mode: setSelect.value };
-    const plate = ((((state.run && state.run.run && state.run.run.chain) || {}).composite || {}).params || {}).set_image;
-    if (setSelect.value === 'true_swap' && !slots.set.image && plate) patch.image = plate;   // the run already has a plate behind the person: start from it
-    slots.set.mode = patch.mode; if (patch.image) slots.set.image = patch.image; save({ set: patch });
-  };
-  lookSelect.onchange = () => { slots.look.mode = lookSelect.value; save({ look: { mode: lookSelect.value } }); };
-  setPrompt.oninput = () => debounced({ set: { prompt: setPrompt.value } });
-  lookPrompt.oninput = () => debounced({ look: { prompt: lookPrompt.value } });
-  light.oninput = () => debounced({ light: light.value });
-
-  applyButton.onclick = async () => {
-    if (!slots) return;
-    const needed = BACKGROUND_FOR[slots.set.mode]; if (!needed) return;
-    const params = needed === 'set_image' ? { background: 'set_image', set_image: slots.set.image || '', set_fit: fitText(slots.set.fit) } : { background: 'full_depth' };
-    if (needed === 'set_image' && !slots.set.image) { notice('Choose or upload the set image first.', { kind: 'warn', fix: 'Pick a plate in the Set images list above; it is composited behind the person.', key: 'slots' }); return; }
-    applyButton.disabled = true; busy = true;
-    try {
-      const r = await api.branch(state.jobId, { stage: 'composite', tool: 'depth_cutout', params });
-      const patch = { set: { mode: slots.set.mode, image: slots.set.image, prompt: slots.set.prompt, fit: slots.set.fit }, look: slots.look, light: slots.light, generator: slots.generator };
-      try { await send('/jobs/' + r.id + '/slots', patch, { method: 'PUT' }); } catch (e) { showError(e, { key: 'slots' }); }
-      navigate({ job: r.id, view: state.view === 'studio' ? 'studio' : 'quick' });
-      notice('New run with the ' + BACKGROUND_LABEL[needed].toLowerCase() + ' background (this one). The composite and face stages re-run locally, free; the run you came from stays as it was.', { kind: 'ok', key: 'slots' });
-    } catch (e) {
-      const p = plain(e);
-      showError(e, { key: 'slots', actions: p.status === 402 ? [{ label: 'Run anyway · about $' + Number(p.body.estimated_cost_usd || 0).toFixed(2), run: async () => { const r = await api.branch(state.jobId, { stage: 'composite', tool: 'depth_cutout', params, confirm_cost: 'true' }); navigate({ job: r.id, view: state.view }); } }] : [] });
-    } finally { busy = false; applyButton.disabled = false; }
-  };
-
-  function render() {
-    if (!slots) return;
-    const run = (state.run && state.run.run) || {}, chain = run.chain || {}, composite = chain.composite || {};
-    setSelect.value = slots.set.mode; lookSelect.value = slots.look.mode;
-    if (document.activeElement !== setPrompt) setPrompt.value = slots.set.prompt || '';
-    if (document.activeElement !== lookPrompt) lookPrompt.value = slots.look.prompt || '';
-    if (document.activeElement !== light) light.value = slots.light || '';
-    setPicker.set(slots.set.image); lookPicker.set(slots.look.image);
-    const needsImage = ['set_ref', 'true_swap'].includes(slots.set.mode);
-    setPickerRow.hidden = !needsImage; setPrompt.closest('label').hidden = slots.set.mode !== 'prompt';
-    lookPickerRow.hidden = slots.look.mode !== 'style_ref'; lookPrompt.closest('label').hidden = slots.look.mode !== 'prompt';
-    const needed = BACKGROUND_FOR[slots.set.mode];
-    const canApply = !!needed && composite.tool === 'depth_cutout';
-    applyRow.hidden = !needed;
-    applyButton.disabled = busy || !canApply || (state.job && state.job.state === 'running');
-    if (!needed) setNote.textContent = slots.set.mode === 'set_ref' ? 'The set image goes with the request as a reference; the prompt builder adds its fence.' : '';
-    else if (composite.tool !== 'depth_cutout') setNote.textContent = 'This run has no depth person (composite tool: ' + (composite.tool || 'original') + '), so there is no background to change. Prepare the clip with a depth preset (Full body, Expressive) to use this set mode.';
-    else if (slots.background_applied) setNote.textContent = 'Applied in this run: the composite already uses the ' + BACKGROUND_LABEL[needed].toLowerCase() + ' background.';
-    else setNote.textContent = 'This set mode needs the ' + BACKGROUND_LABEL[needed].toLowerCase() + ' background in the composite (this run has ' + (slots.background === needed ? 'a different set plate' : (slots.background_label || 'original frames').toLowerCase()) + '). "Apply as background" makes a new run with it and saves these slots there.';
-    const provider = (state.generation && state.generation.provider) || (slots.generator && slots.generator.name) || '';
-    const caps = state.providers[provider] || (!provider && state.providerDefault === 'enhancor' && !(state.providers.fal && state.providers.fal.configured) ? state.providers.enhancor : null);
-    const noTask = !!(caps && Array.isArray(caps.tasks) && !caps.tasks.length);   // from the generator's capabilities (tasks: []), not a hard-coded provider name
-    const why = slots.task_source === 'user' ? 'chosen by you' : slots.set.mode === 'original' ? 'original set' : 'set changed';
-    taskLine.textContent = 'Task · ' + slots.task + ' (' + why + ')' + (noTask ? '. ' + caps.label + ' has no task setting' + (caps.control === 'pose' ? ' (it always keeps the pose and timing of the prepared clip)' : ' (it always edits the prepared clip)') + ', so this is recorded as not applicable there.' : '');
-  }
-  return { node, update() { if (state.jobId !== loadedFor) { slots = null; saved.textContent = ''; } load(); if (slots) render(); }, reload: () => load(true) };
 }

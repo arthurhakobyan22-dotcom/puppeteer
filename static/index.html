@@ -4,268 +4,341 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Puppeteer</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Schibsted+Grotesk:wght@600;700;800;900&display=swap">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Source+Sans+3:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="/static/theme.js"></script>
+<link rel="stylesheet" href="/static/tokens.css">
+<link rel="stylesheet" href="/static/components.css">
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
-<main>
-  <header class="top">
-    <a class="brand" href="/" data-nav>Puppeteer <span class="eyebrow">/ motion control</span></a>
-    <nav class="views" aria-label="Depth">
-      <a href="/?view=quick" data-view="quick" data-nav>Quick</a>
-      <a href="/?view=studio" data-view="studio" data-nav>Studio</a>
-      <a href="/?view=lab" data-view="lab" data-nav>Lab</a>
+<header class="top">
+  <div class="in">
+    <a class="brand" href="/?view=runs" data-nav><i></i>Puppeteer</a>
+    <nav class="pages" aria-label="Screens">
       <a href="/?view=runs" data-view="runs" data-nav>Runs</a>
+      <a href="/" data-view="workspace" data-nav hidden>This run</a>
+      <a href="/?view=compare" data-view="compare" data-nav>Compare</a>
     </nav>
-  </header>
+    <div class="right">
+      <button class="theme" type="button" id="theme" aria-label="Switch to the light theme"><svg class="i moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><span class="moon">Dark</span><span class="sun">Light</span></button>
+      <a class="btn primary sm" href="/?view=new" data-nav data-new-run><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New run</a>
+    </div>
+  </div>
+</header>
 
-  <!-- Deep links keep the old shape: '/?job=' + the run id (plus &view=quick|studio|lab) and '/?view=runs'. The app is in /static/app.js; styles in /static/app.css. -->
-  <!-- Page notices: anything that is not the status of the job in the URL (upload failures, saved presets, network trouble). -->
-  <div id="notices" class="notices" aria-live="polite"></div>
-
-  <!-- Job banner: only ever the status of the job named in the URL. -->
-  <div id="job-banner" class="status" role="status" hidden><span class="dot"></span><div class="body"><span data-text></span><span class="fix" data-fix hidden></span><div class="actions-inline" data-actions hidden></div></div></div>
-
+<main class="wrap">
+  <!-- Deep links keep the old shape: '/?job=' + the run id (+ &step=prep|edit|world|generate|export) and '/?view=runs|compare|new'.
+       Old URLs still work: view=quick and view=studio open the workspace (studio also opens Details on Stages), view=lab is Compare. -->
+  <!-- Page notices (toasts): anything that is not the status of the run in the URL. -->
+  <div id="notices" class="toasts" aria-live="polite"></div>
+  <!-- Run banner: only ever a failure of the run named in the URL (the step rail carries the running state). -->
+  <div id="job-banner" class="banner" role="status" hidden><span class="dot"></span><div class="body"><span data-text></span><span class="fix" data-fix hidden></span><div class="actions-inline" data-actions hidden></div></div></div>
   <div id="view"></div>
-
-  <footer>Puppeteer · Original audio in your final export.</footer>
 </main>
+<footer>Puppeteer · motion control for your character. Every final keeps the whole original audio.</footer>
 
-<!-- ============================================================ Quick -->
-<template id="tpl-quick">
- <div>
-  <div class="hero"><div><span class="eyebrow">Quick · upload, pick a preset, go</span><h1>Your performance.<br>Your character.</h1><p>Drive a character with a video you own: pick a preset, add the character reference, and go. You review the prepared clip next, then create the draft.</p></div></div>
-  <section class="panel" id="source">
-    <div class="heading"><span class="number">01</span><h2>Start with your video</h2></div>
-    <form data-form="quick">
-      <label class="upload"><span class="icon">↑</span><span><strong>Choose original video</strong><small data-filename>MP4 or MOV · up to 30 seconds</small></span><input aria-label="Original video" required type="file" name="video" accept="video/*"></label>
-      <h3 style="margin-top:20px">Preset</h3>
+<!-- ============================================================ Details drawer (level 3, the same on every step and every Runs card) -->
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="details" role="dialog" aria-modal="true" aria-labelledby="details-title" aria-hidden="true">
+  <div class="dh"><h2 id="details-title">Details</h2><button class="btn icon sm" type="button" id="details-close" aria-label="Close">×</button></div>
+  <div class="tabs" role="tablist" aria-label="Details">
+    <button type="button" role="tab" data-tab="run" class="on">Run</button>
+    <button type="button" role="tab" data-tab="stages">Stages</button>
+    <button type="button" role="tab" data-tab="reports">Reports &amp; log</button>
+    <button type="button" role="tab" data-tab="costs">Costs</button>
+  </div>
+  <div class="dbody" data-body></div>
+</aside>
+
+<!-- ============================================================ New run (Quick start) -->
+<template id="tpl-start">
+  <section class="panel start" id="start">
+    <div class="ph"><div><h2>New run</h2><p>Pick a preset, add the character, choose the clip. The free preset starts on its own; a paid one asks first.</p></div></div>
+    <form data-form="start">
+      <h4>Preset</h4>
       <div class="presets" data-presets></div>
-      <div class="split" style="margin-top:18px">
-        <label class="upload"><img data-thumb alt="Character 1 reference" hidden><span><strong>Character 1 · for the draft</strong><small data-filename>Image, or an identity video</small></span><input type="file" name="char1" aria-label="Character 1 reference" accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm"></label>
-        <label class="upload"><img data-thumb alt="Character 2 reference" hidden><span><strong>Character 2 · optional</strong><small data-filename>Image</small></span><input type="file" name="char2" aria-label="Character 2 reference" accept="image/png,image/jpeg,image/webp"></label>
+      <h4 style="margin-top:4px">Characters <span class="muted" style="text-transform:none;letter-spacing:0">· optional now, needed for the draft</span></h4>
+      <div class="split row" data-chars>
+        <label class="upload" style="flex:1 1 220px"><img data-thumb alt="" hidden><span><strong>Character 1</strong><small data-filename>A picture, or a short video of the character</small></span><input type="file" name="char1" aria-label="Character 1" accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm"></label>
+        <label class="upload" style="flex:1 1 220px"><img data-thumb alt="" hidden><span><strong>Character 2</strong><small data-filename>A picture · optional</small></span><input type="file" name="char2" aria-label="Character 2" accept="image/png,image/jpeg,image/webp"></label>
       </div>
-      <details><summary>More options</summary>
-        <div class="split">
-          <label class="field">Subject to replace<input name="prompt" value="person"><span class="hint">Depth presets only. One short noun phrase, e.g. “person” or “man in a dark suit”. Comma-separated subjects run as separate SAM jobs (each billed) and are combined.</span></label>
-          <label class="field">Depth provider<select name="provider"><option value="replicate">Replicate · Depth Anything Video</option><option value="huggingface">Hugging Face · Video Depth Anything (free quota)</option><option value="replicate-chenxwh">Replicate · alternate model</option></select></label>
+      <details class="more" data-remember="start-more"><summary>More options<span class="hint">subject, depth model, dialogue, method</span></summary>
+        <div class="body">
+          <label class="field">Subject to mask<input name="prompt" value="person"><span class="hint">Motion clip presets only. One short noun phrase, for example “person” or “man in a dark suit”. Comma-separated subjects run as separate mask jobs (each paid) and are combined.</span></label>
+          <label class="field">Depth model<select name="provider"><option value="replicate">Depth Anything on Replicate</option><option value="huggingface">Video Depth Anything on Hugging Face (free quota)</option><option value="replicate-chenxwh">Depth Any Video on Replicate (alternate)</option></select></label>
+          <label class="check"><input type="checkbox" name="clean_dialogue" value="true"> <span>Clean dialogue · isolate the voice before lip-sync <span class="muted">· paid</span></span></label>
+          <label class="field">Prep method<select name="mode"><option value="">From the preset</option><option value="face_mesh">Face mesh only · free</option><option value="depth">Motion clip · paid</option><option value="depth_mesh">Motion clip + face mesh · paid</option></select><span class="hint">Overrides the preset's method. Motion clip: a depth map plus a mask of the person; the face mesh draws the facial motion on top.</span></label>
         </div>
-        <label class="check" style="margin-top:14px"><input type="checkbox" name="clean_dialogue" value="true"> Clean dialogue (isolate vocals with Demucs before lip-sync; paid)</label>
       </details>
-      <div class="actions"><span class="hint" data-cost-hint>The prepared clip carries the original audio. The final export always restores the entire original track.</span><button type="submit" data-go>Prepare →</button></div>
-    </form>
-  </section>
- </div>
-</template>
-
-<!-- ============================================================ Studio: new run with the legacy preparation method -->
-<template id="tpl-studio-new">
-  <section class="panel" id="studio-new">
-    <div class="heading"><span class="number">+</span><h2>Prepare a new video</h2></div>
-    <form data-form="legacy">
-      <label class="upload"><span class="icon">↑</span><span><strong>Choose original video</strong><small data-filename>MP4 or MOV · up to 30 seconds</small></span><input aria-label="Original video" required type="file" name="video" accept="video/*"></label>
-      <label class="field" style="margin-top:18px">Preparation method<select name="mode"><option value="depth">Advanced · Depth + SAM</option><option value="face_mesh">Fast · Face mesh (no depth or SAM)</option><option value="depth_mesh">Advanced + Face mesh · Depth + SAM + facial motion</option></select><span class="hint">Fast mode overlays facial motion on the original video and embeds the original audio; it needs face-mesh setup. Advanced + Face mesh adds facial motion over the depth composite and only warns about tracking gaps.</span></label>
-      <details><summary>Preparation settings · depth modes only</summary>
-        <div class="split">
-          <label class="field">Subject to replace<input name="prompt" value="person"><span class="hint">One short noun phrase. Comma-separated subjects run as separate SAM jobs (each billed) and are combined.</span></label>
-          <label class="field">Depth provider<select name="provider"><option value="replicate">Replicate · Depth Anything Video</option><option value="huggingface">Hugging Face · Video Depth Anything</option><option value="replicate-chenxwh">Replicate · alternate model</option></select></label>
-        </div>
-        <p class="hint">Depth colors are preserved. Preparation runs at 24 fps, up to 960 px. Media is uploaded to the selected providers.</p>
-      </details>
-      <label class="check" style="margin-top:14px"><input type="checkbox" name="clean_dialogue" value="true"> Clean dialogue (isolate vocals with Demucs before lip-sync)</label>
-      <div class="actions"><span class="hint" data-cost-hint>The prepared clip carries the original audio by default.</span><button type="submit" data-go>Prepare video →</button></div>
+      <label class="upload big"><span class="icon"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0 5 5m-5-5-5 5M4 20h16"/></svg></span><span><strong data-clip-title>Choose the clip</strong><small data-filename>MP4 or MOV, someone talking, 5–30 seconds</small></span><input aria-label="The clip" required type="file" name="video" accept="video/*"></label>
+      <div class="row" data-go-row hidden><button type="submit" class="primary" data-go>Prepare</button><span class="reason" data-cost-hint></span></div>
+      <p class="reason" data-auto-hint></p>
     </form>
   </section>
 </template>
 
-<!-- ============================================================ Run header (Quick with a job, Studio) -->
-<template id="tpl-run-head">
-  <section class="panel run-head">
-    <div class="title"><h2 data-title>Run</h2><span class="chip" data-state></span><span class="spent" data-spent>Spent so far: $0.00</span></div>
-    <div class="facts"><span data-created></span><span data-mode></span><span data-parent hidden></span><span data-changed hidden></span><span class="mono" data-id></span></div>
-    <div class="row" data-actions></div>
-    <form data-form="preset" class="row" hidden style="margin-top:6px">
-      <label class="field" style="flex:1 1 180px">Preset name<input name="name" required placeholder="e.g. Studio talking head"></label>
-      <label class="field" style="flex:2 1 240px">Description<input name="description" placeholder="One line: when to use it"></label>
-      <button type="submit" class="small">Save preset</button><button type="button" class="small secondary" data-cancel>Cancel</button>
-    </form>
-  </section>
-</template>
-
-<!-- ============================================================ Studio stage card -->
-<template id="tpl-stage-card">
-  <article class="card">
-    <div class="card-head"><span class="number" data-index></span><h3 data-label></h3><span class="chip" data-state></span><label class="toggle" data-toggle hidden><input type="checkbox" data-on> <span>on</span></label></div>
-    <div class="card-body">
-      <div class="controls">
-        <label class="field">Tool<select data-tool></select><span class="hint" data-description></span></label>
-        <div class="params" data-params></div>
-        <p class="health" data-health></p>
-        <div class="numbers" data-numbers></div>
-        <ul class="warnings" data-warnings hidden></ul>
-        <div class="line error" data-error hidden></div>
-      </div>
-      <div class="preview" data-preview></div>
+<!-- ============================================================ Workspace head: back link, name, chip, spent, Compare, Details, step rail, status line -->
+<template id="tpl-ws-head">
+  <div class="ws-head">
+    <div class="ws-title">
+      <a class="btn ghost sm" href="/?view=runs" data-nav><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>All runs</a>
+      <h1 data-name>Run</h1>
+      <button type="button" class="btn ghost icon sm" data-rename aria-label="Rename this run" title="Rename"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16zM13 7l4 4"/></svg></button>
+      <form class="rename-form" data-rename-form hidden><input name="name" maxlength="80" aria-label="Run name"><button type="submit" class="sm">Save</button><button type="button" class="ghost sm" data-cancel>Cancel</button></form>
+      <span class="chip" data-state></span><span class="spent">Spent <b data-spent>$0.00</b></span>
+      <div class="right"><button type="button" class="sm" data-compare>Compare</button><button type="button" class="sm" data-details><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>Details</button></div>
     </div>
-    <div class="card-foot"><span class="cost" data-cost></span><div class="row" data-fixes></div><button type="button" class="secondary small" data-rerun>Re-run from here</button></div>
-  </article>
-</template>
-
-<!-- ============================================================ Review panel (step 02). The timeline editor (tpl-editor) mounts into [data-editor]; the old mask wand goes into [data-review-tools]. -->
-<template id="tpl-review">
-  <section class="panel" id="review">
-    <div class="heading"><span class="number">02</span><h2>Review the prepared input</h2></div>
-    <p class="hint">Review the full mask or face-mesh tracking, and listen to the embedded audio before generating.</p>
-    <div class="status" data-progress hidden><span class="dot"></span><div class="body"><span data-text></span><span class="fix" data-fix hidden></span><div class="actions-inline" data-actions hidden></div></div></div>
-    <div class="empty" data-empty>Your original video and prepared previews will appear here.</div>
-    <div data-ready hidden>
-      <div data-editor></div>
-      <div data-review-tools></div>
-      <div class="review-box">
-        <h3>Required · Review the complete input</h3>
-        <p class="hint">Depth: check the entire mask for missing areas and background spill. Face mesh: check face tracking, eyes, mouth and alignment across every frame. Listen to the embedded audio.</p>
-        <p class="line" data-review-status role="status"></p>
-        <p class="line" data-tracking hidden></p>
-        <label class="check"><input type="checkbox" data-check> I reviewed the entire prepared clip; its mask or face mesh is correctly aligned throughout.</label>
-        <div class="row" style="margin-top:12px"><button type="button" data-approve disabled>Approve input</button><button type="button" class="secondary" data-reject>Input needs fixing</button></div>
-      </div>
-      <details><summary>Audio downloads</summary><div class="download" data-audio></div></details>
-    </div>
-  </section>
-</template>
-
-<!-- ============================================================ Timeline editor (inside the review panel; static/editor.js) -->
-<template id="tpl-editor">
-  <div class="editor">
-    <div class="tabs" data-tabs role="group" aria-label="Preview selection"></div>
-    <div class="viewer editor-viewer">
-      <div class="stage-view" data-stage></div>
-      <div class="transport" data-transport></div>
-      <div class="viewer-foot"><span class="hint" data-caption></span><a data-download download>Download video ↓</a></div>
-    </div>
-    <div class="timeline-box" data-timeline></div>
-    <div class="track-panel" data-track-panel></div>
-    <div class="savebar" data-savebar role="region" aria-label="Pending edits"></div>
+    <nav class="rail-steps" aria-label="Steps" data-rail></nav>
+    <div class="statusline" data-statusline><p data-status-text></p><span data-next></span></div>
   </div>
 </template>
 
-<!-- ============================================================ Draft panel (step 03) -->
-<template id="tpl-draft">
-  <section class="panel" id="draft">
-    <div class="heading"><span class="number">03</span><h2>Create your draft</h2></div>
-    <div class="meta"><span data-provider-label>Provider · …</span><span data-mode-label>Seedance · Edit</span><span data-draft-quality>Draft · …</span><span data-final-quality>Final · …</span></div>
-    <form data-form="seedance">
-      <div class="split">
-        <label class="upload"><img data-thumb alt="Character 1 reference" hidden><span><strong>Character 1 · required</strong><small data-filename>Choose character reference</small></span><input type="file" name="char1" aria-label="Character 1 reference" accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm"></label>
-        <label class="upload"><img data-thumb alt="Character 2 reference" hidden><span><strong>Character 2 · optional</strong><small data-filename>Choose character reference</small></span><input type="file" name="char2" aria-label="Character 2 reference" accept="image/png,image/jpeg,image/webp"></label>
+<!-- ============================================================ Prep (an existing run) -->
+<template id="tpl-prep">
+  <section class="panel" id="prep">
+    <div class="prep-sum">
+      <div class="thumb" data-thumb><span class="blank">No picture yet</span></div>
+      <div class="prep-facts">
+        <div class="row"><h3 data-title>Prepared clip</h3><span class="chip" data-chip></span></div>
+        <p class="hint" data-method></p>
+        <div data-progress hidden><div class="rail" data-stage-rail></div><p class="hint" data-progress-text></p></div>
+        <p class="line" data-check hidden></p>
+        <p class="line" data-face hidden></p>
+        <p class="hint" data-background></p>
+        <div class="prep-chars" data-chars></div>
+        <div class="row" data-fix hidden></div>
       </div>
-      <label class="field" style="margin-top:20px">Seedance provider<select name="provider" aria-label="Seedance provider"></select><span class="hint" data-provider-hint>Loading providers…</span></label>
-      <label class="field" style="margin-top:20px">Generation prompt<textarea name="prompt" required rows="7"></textarea></label>
-      <div class="actions"><span class="hint">Review this prompt first. Full quality is a separate approval below.</span><button type="submit" data-draft-button disabled>Create draft →</button></div>
-    </form>
-  </section>
-</template>
-
-<!-- ============================================================ Set / Look / Light slots (inside step 03, above the prompt; static/slots.js). Agents 2 and 3 mount into [data-slot=prompt-builder] and [data-slot=generator]. -->
-<template id="tpl-slots">
-  <div class="slots">
-    <div class="slots-head"><h3>Set, look and light</h3><span class="hint">What the generated world should show. Saved with this run (slots.json); the prompt builder reads it. Nothing re-runs when you change a slot.</span></div>
-    <div class="split">
-      <div class="slot" data-set></div>
-      <div class="slot" data-look></div>
     </div>
-    <label class="field" style="margin-top:12px">Light<input name="light" placeholder="e.g. soft window light from the left, warm practicals" aria-label="Light"></label>
-    <div class="row" data-apply hidden></div>
-    <p class="line info" data-task role="status">Task · …</p>
-    <p class="hint" data-saved></p>
-    <div data-slot="prompt-builder"></div>
-    <div data-slot="generator"></div>
-  </div>
-</template>
-
-<!-- ============================================================ Final panel (step 04) -->
-<template id="tpl-final">
-  <section class="panel" id="final">
-    <div class="heading"><span class="number">04</span><h2>Approve &amp; export</h2></div>
-    <p class="hint">Every finished preview uses the entire original source audio, including voices and music.</p>
-    <div class="empty" data-empty>Your draft will appear here when generation finishes.</div>
-    <div data-ready hidden>
-      <div class="viewer"><video data-video controls playsinline preload="metadata"></video><div class="viewer-foot"><span class="badge" data-quality>DRAFT PREVIEW</span><a data-download download>Download preview ↓</a></div></div>
-      <div class="actions"><div><h3 style="margin-bottom:4px">Happy with this draft?</h3><span class="hint" data-finalize-hint>Approve it to generate the full-resolution version.</span><br><span class="hint" data-finalize-warning style="color:#d9a24a" hidden>Result will not be identical to the draft.</span></div><button type="button" data-upgrade disabled>Approve &amp; generate full resolution →</button></div>
-      <div class="line" data-upgrade-status role="status" hidden></div>
-    </div>
-    <details data-sent hidden><summary>View submitted prompt &amp; generation ID</summary><p class="hint" data-generation-id></p><pre data-sent-prompt></pre><a data-raw-link class="hint">Download raw Seedance result</a></details>
-    <details><summary>Import a generated result manually</summary>
-      <form data-form="finish" style="margin-top:14px"><label class="upload"><span class="icon">↑</span><span><strong>Choose Seedance result</strong><small data-filename>We’ll restore the original source audio.</small></span><input name="video" aria-label="Seedance result" type="file" accept="video/*" required></label><div class="actions"><button class="secondary" type="submit">Restore original audio</button></div></form>
+    <details class="more" data-remember="prep-more"><summary>More<span class="hint">save as preset · new version from a stage</span></summary>
+      <div class="body">
+        <form data-form="preset" class="row">
+          <label class="field" style="flex:1 1 180px">Preset name<input name="name" required placeholder="e.g. Studio talking head"></label>
+          <label class="field" style="flex:2 1 240px">Description<input name="description" placeholder="One line: when to use it"></label>
+          <button type="submit" class="sm">Save this recipe as a preset</button>
+        </form>
+        <p class="hint">A preset keeps this run's recipe (which stages ran, with which methods and settings) for the next New run. To change one stage and make a new version, open <button type="button" class="ghost sm" data-open-stages>Details · Stages</button>.</p>
+      </div>
     </details>
   </section>
 </template>
 
-<!-- ============================================================ Export kit (inside the step 04 panel; static/export.js) -->
-<template id="tpl-export">
-  <div class="export" id="export">
-    <h3>Export kit <span class="hint">· free, runs locally</span></h3>
-    <p class="hint">Everything you prepared and edited, packed for the tool you take it to. Pending timeline edits are saved first as one new version, so every export includes them.</p>
-    <div class="row"><label class="field" style="flex:1 1 260px">Target<select data-preset aria-label="Export target"></select></label></div>
-    <p class="line info" data-what>What's in it: …</p>
-    <div class="export-items" data-items></div>
-    <div class="row" data-formats></div>
-    <p class="line" data-pending hidden></p>
-    <div class="actions"><span class="hint" data-hint>Free, runs locally.</span><button type="button" data-export disabled>Export · free, local</button></div>
-    <div class="line info" data-progress role="status" hidden></div>
-    <div class="export-result" data-result hidden></div>
-    <details data-earlier-box hidden><summary>Earlier exports</summary><div class="export-list" data-earlier></div></details>
+<!-- ============================================================ Edit: the timeline editor (tpl-editor mounts into [data-editor]) plus the approve bar -->
+<template id="tpl-edit">
+  <section id="edit" class="step-edit">
+    <div class="empty" data-empty><p>The clip opens here when the preparation finishes.</p></div>
+    <div data-ready hidden class="editor-host">
+      <div data-editor></div>
+      <div data-review-tools></div>
+    </div>
+  </section>
+</template>
+
+<!-- ============================================================ Timeline editor (static/editor.js) -->
+<template id="tpl-editor">
+  <div class="editor">
+    <div class="viewer editor-viewer">
+      <div class="views" data-tabs role="tablist" aria-label="View"></div>
+      <div class="stage-view" data-stage></div>
+      <div class="transport" data-transport></div>
+      <div class="viewer-foot"><span class="hint" data-caption></span><details class="more inline" data-more-views data-remember="views-more" hidden><summary>More views</summary><div class="body row" data-more-tabs></div></details></div>
+    </div>
+    <div class="timeline-box" data-timeline></div>
+    <div class="below">
+      <div class="panel track-panel" data-track-panel></div>
+      <div class="edit-side">
+        <div class="savebar" data-savebar role="region" aria-label="Unsaved edits"></div>
+        <div class="savebar" data-approvebar role="region" aria-label="Approval" hidden></div>
+        <details class="more" data-remember="edit-downloads" data-downloads><summary>Downloads<span class="hint">this view · audio · files</span></summary><div class="body downloads" data-downloads-body></div></details>
+      </div>
+    </div>
   </div>
 </template>
 
-<!-- ============================================================ Lab -->
-<template id="tpl-lab">
-  <section class="panel" id="lab">
-    <div class="heading"><span class="number">A/B</span><h2>Lab · compare runs side by side</h2></div>
-    <p class="hint">Pick two to four runs or branches, choose which output to compare, and play them in sync. Your pick is saved per comparison.</p>
-    <div class="split">
-      <div><h3>Runs to compare <span class="hint" data-count>(0 of 4)</span></h3><div class="lab-picker" data-picker></div></div>
-      <div><label class="field">Output to compare<select data-stage></select></label><label class="field" style="margin-top:12px">Note for your pick (optional)<input data-note placeholder="e.g. B keeps the hands"></label></div>
+<!-- ============================================================ World & Look -->
+<template id="tpl-world">
+  <section class="world" id="world">
+    <div class="slots3">
+      <div class="slot" data-set><h4>Set <span class="muted" style="text-transform:none;letter-spacing:0">· the place</span></h4></div>
+      <div class="slot" data-look><h4>Look <span class="muted" style="text-transform:none;letter-spacing:0">· the rendering style</span></h4></div>
+      <div class="slot" data-light><h4>Light</h4><input name="light" placeholder="e.g. soft window light from the left, warm practicals" aria-label="Light"><div class="row"><button type="button" class="sm" data-describe>Describe the set and light from this frame</button><span class="reason" data-describe-hint></span></div><p class="line info" data-described hidden></p></div>
+      <p class="hint" data-saved></p>
     </div>
-    <div class="lab-controls" data-controls hidden>
-      <button type="button" class="small" data-play>Play</button>
-      <span class="row speed"><button type="button" class="small secondary active" data-speed="1">1×</button><button type="button" class="small secondary" data-speed="0.25">0.25×</button></span>
+    <div class="aside">
+      <section class="panel" aria-label="Prompt">
+        <div class="ph"><h3>Prompt</h3><span class="hint">what the generator will read</span></div>
+        <pre class="prompt" data-prompt-preview>Building the prompt…</pre>
+        <ul class="warnings" data-warnings hidden></ul>
+        <details class="more" data-remember="prompt-edit"><summary>Edit prompt<span class="hint">text · spoken lines · references</span></summary>
+          <div class="body">
+            <textarea name="prompt" rows="7" aria-label="Prompt"></textarea>
+            <div class="row"><button type="button" class="sm" data-build>Rebuild from set &amp; look</button><button type="button" class="sm" data-beats>Insert spoken lines</button></div>
+            <p class="hint" data-beats-hint></p>
+            <h4>References · attached in this order</h4>
+            <div class="refs-strip" data-refs role="list" aria-label="Attached references"></div>
+            <p class="hint" data-final-line></p>
+            <p class="hint" data-task></p>
+          </div>
+        </details>
+      </section>
+    </div>
+  </section>
+</template>
+
+<!-- ============================================================ Generate -->
+<template id="tpl-generate">
+  <section id="generate" class="step-generate">
+    <div class="gen">
+      <section class="panel" aria-label="Generate">
+        <form data-form="seedance">
+          <div class="ph"><h3>Generator</h3></div>
+          <div data-generator></div>
+          <select name="provider" aria-label="Generator" hidden></select>
+          <div class="costline" data-costline></div>
+          <h4 style="margin-top:8px">References</h4>
+          <div class="refs" data-refs>
+            <label class="ref upload" data-ref="char1"><img data-thumb alt="" hidden><i class="ph-ico" data-ico>1</i><b>Character 1 · @Image1</b><span data-filename>Choose a picture or a short video</span><input type="file" name="char1" aria-label="Character 1" accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm"></label>
+            <label class="ref upload" data-ref="char2"><img data-thumb alt="" hidden><i class="ph-ico" data-ico>2</i><b>Character 2 · @Image2</b><span data-filename>Optional · a picture</span><input type="file" name="char2" aria-label="Character 2" accept="image/png,image/jpeg,image/webp"></label>
+            <div class="ref"><i>▶</i><b>Prepared clip · @Video1</b><span>motion, timing and lip-sync</span></div>
+          </div>
+          <textarea name="prompt" hidden aria-hidden="true"></textarea>
+          <div class="row" style="margin-top:8px"><button type="submit" class="primary" data-draft-button disabled>Create draft</button><span class="reason" data-reason></span></div>
+        </form>
+      </section>
+      <aside class="panel" aria-label="Prompt preview">
+        <div class="ph"><h3>Prompt</h3><button type="button" class="ghost sm right" data-go="world">Edit in World &amp; Look</button></div>
+        <pre class="prompt" data-prompt></pre>
+      </aside>
+    </div>
+    <section class="panel draft" data-draft hidden>
+      <div class="ph"><h3 data-draft-title>Draft</h3><span class="chip" data-quality></span></div>
+      <video data-video controls playsinline preload="metadata"></video>
+      <div class="row"><button type="button" class="primary" data-upgrade hidden>Make the final</button><button type="button" data-export-instead>Export instead <span class="cost">· free</span></button><a class="btn sm" data-download download>Download</a></div>
+      <p class="reason" data-finalize-hint></p>
+      <p class="line warn" data-finalize-warning hidden>The final will not be identical to the draft (a new render).</p>
+      <p class="line" data-upgrade-status role="status" hidden></p>
+    </section>
+    <details class="more" data-remember="generate-more"><summary>More<span class="hint">a render made elsewhere · generator details · request files</span></summary>
+      <div class="body">
+        <h4>Add a render you made elsewhere</h4>
+        <form data-form="finish" class="row"><label class="upload" style="flex:1 1 260px"><span><strong>Choose the rendered video</strong><small data-filename>The original audio is put back under it.</small></span><input name="video" aria-label="Rendered video" type="file" accept="video/*" required></label><button class="sm" type="submit">Add it · free</button></form>
+        <h4>Generator details</h4>
+        <p class="hint" data-provider-hint></p>
+        <div data-sent hidden><h4>Submitted prompt &amp; request</h4><p class="hint" data-generation-id></p><pre class="prompt" data-sent-prompt></pre><div class="downloads" data-request-files></div></div>
+      </div>
+    </details>
+  </section>
+</template>
+
+<!-- ============================================================ Export -->
+<template id="tpl-export">
+  <section class="export" id="export">
+    <section class="panel">
+      <div class="ph"><h3>Export</h3><span class="hint">a zip for the tool you take the files to · free, made on this computer</span></div>
+      <div class="targets" data-targets role="radiogroup" aria-label="Export target"></div>
+      <p class="line info" data-what>What's in it: …</p>
+      <div class="row" data-formats></div>
+      <p class="line" data-pending hidden></p>
+      <details class="more" data-remember="export-files"><summary>Choose files<span class="hint" data-items-count></span></summary><div class="body"><div class="export-items" data-items></div></div></details>
+      <div class="row"><button type="button" class="primary" data-export disabled>Export <span class="cost">· free</span></button><span class="reason" data-hint></span></div>
+      <p class="line info" data-progress role="status" hidden></p>
+      <div class="export-result" data-result hidden></div>
+      <details class="more" data-earlier-box data-remember="export-earlier" hidden><summary>Earlier exports<span class="hint" data-earlier-count></span></summary><div class="body export-list" data-earlier></div></details>
+    </section>
+    <div class="aside" style="display:grid;gap:16px;align-content:start">
+      <section class="panel subs" data-subs hidden><div class="ph"><h3>Subtitles</h3><span class="hint">burned into a copy of the final · free</span></div><div data-subs-body></div></section>
+      <details class="more" data-remember="export-downloads"><summary>Downloads<span class="hint">single files of this run</span></summary><div class="body downloads" data-files></div></details>
+    </div>
+  </section>
+</template>
+
+<!-- ============================================================ Stage row (Details drawer · Stages; static/stagecard.js) -->
+<template id="tpl-stage-card">
+  <details class="stage">
+    <summary><span class="n" data-index></span><span><span class="l" data-label></span><span class="m" data-summary></span></span><span class="chip" data-state></span></summary>
+    <div class="stage-body">
+      <div class="controls">
+        <div class="row"><label class="field" style="flex:1 1 200px">Method<select data-tool></select></label><label class="toggle" data-toggle hidden><input type="checkbox" data-on> <span>on</span></label></div>
+        <p class="hint" data-description></p>
+        <div class="params" data-params></div>
+        <p class="health" data-health></p>
+        <div class="numbers" data-numbers></div>
+        <ul class="warnings" data-warnings hidden></ul>
+        <p class="line error" data-error hidden></p>
+      </div>
+      <div class="preview" data-preview></div>
+      <div class="stage-foot"><span class="cost" data-cost></span><div class="row" data-fixes></div><button type="button" class="sm" data-rerun>Make a new version from here</button></div>
+    </div>
+  </details>
+</template>
+
+<!-- ============================================================ Runs -->
+<template id="tpl-runs">
+  <section id="runs" class="runs-page" style="display:grid;gap:24px">
+    <div class="runs-head"><div class="lead"><h1>Your runs</h1><p>Every clip you have prepared, with its versions. Open one to keep working, or pick two to compare them side by side.</p></div><a class="btn primary" href="/?view=new" data-nav><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New run</a></div>
+    <div class="tools">
+      <label class="search"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" data-search placeholder="Search runs" aria-label="Search runs"></label>
+      <div class="filters" role="group" aria-label="Filter" data-filters></div>
+      <label class="switch"><input type="checkbox" data-pick-mode><i></i>Pick to compare</label>
+      <span class="hint" data-pick-count hidden></span>
+      <a class="btn sm" data-open-compare data-nav hidden>Compare →</a>
+      <a class="btn ghost sm" data-flat-toggle data-nav>List view</a>
+    </div>
+    <div class="grid" data-list></div>
+    <div class="runs-foot" data-foot hidden><button type="button" data-more>Show more</button></div>
+  </section>
+</template>
+
+<template id="tpl-run-card">
+  <article class="card">
+    <div class="thumb" data-thumb><label class="pick" data-pick hidden><input type="checkbox" aria-label="Pick to compare"></label><span class="chip state" data-state></span></div>
+    <div class="cbody">
+      <div class="name"><h3 data-name></h3><button type="button" class="btn ghost icon sm rename" data-rename aria-label="Rename" title="Rename"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16zM13 7l4 4"/></svg></button><form class="rename-form" data-rename-form hidden><input name="name" maxlength="80" aria-label="Run name"><button type="submit" class="sm">Save</button></form></div>
+      <p class="hint" data-summary></p>
+      <div class="msg" data-msg hidden></div>
+      <div class="facts" data-facts></div>
+      <div class="acts"><a class="btn primary sm" data-open data-nav>Open</a><button type="button" class="btn ghost sm" data-versions-toggle hidden></button><button type="button" class="btn ghost sm details" data-details>Details</button></div>
+    </div>
+    <details class="more versions" data-versions hidden><summary>Versions<span class="hint"></span></summary><div class="body" data-versions-body></div></details>
+  </article>
+</template>
+
+<template id="tpl-version-row">
+  <div class="branch">
+    <div class="bt" data-thumb></div>
+    <div><div class="bn"><b data-name></b><span class="chip" data-state></span></div><div class="bf" data-facts></div></div>
+    <div class="acts"><a class="btn sm" data-open data-nav>Open</a><button type="button" class="btn ghost sm" data-details>Details</button><label class="check" data-pick hidden><input type="checkbox" aria-label="Pick to compare"></label></div>
+  </div>
+</template>
+
+<!-- ============================================================ Compare -->
+<template id="tpl-compare">
+  <section class="panel compare" id="compare">
+    <div class="ph"><h2>Compare</h2><span class="hint">two to four versions side by side, played in sync; your pick is remembered</span></div>
+    <div class="pickers">
+      <div><h4 style="margin-bottom:6px">Versions to compare <span data-count>(0 of 4)</span></h4><input type="search" data-search placeholder="Search runs" aria-label="Search runs" style="margin-bottom:8px"><div class="tray" data-tray></div></div>
+      <div style="display:grid;gap:12px;align-content:start"><label class="field">View<select data-stage></select></label><label class="field">Note for your pick (optional)<input data-note placeholder="e.g. B keeps the hands"></label></div>
+    </div>
+    <div class="cmp-controls" data-controls hidden>
+      <button type="button" class="sm primary" data-play>Play</button>
+      <span class="seg-ctl" role="group" aria-label="Speed"><button type="button" class="on" data-speed="1">Normal</button><button type="button" data-speed="0.25">Slow ¼</button></span>
       <input type="range" min="0" max="1000" value="0" step="1" data-scrub aria-label="Position">
       <span class="time" data-time>0.00 / 0.00 s</span>
     </div>
     <div class="tiles" data-tiles></div>
-    <div class="empty" data-empty>Choose at least two runs above.</div>
+    <div class="empty sm" data-empty>Choose at least two runs above.</div>
   </section>
 </template>
 
-<template id="tpl-lab-tile">
+<template id="tpl-compare-tile">
   <article class="tile">
     <div class="row"><span class="letter" data-letter>A</span><strong data-name class="wrap"></strong><span class="chip" data-state></span></div>
-    <span class="mono" data-id></span>
     <video data-video playsinline preload="metadata" muted></video>
-    <div class="empty" data-missing hidden></div>
+    <div class="empty sm" data-missing hidden></div>
     <ul class="diff" data-diff></ul>
     <div class="numbers" data-numbers></div>
-    <div class="row"><button type="button" class="small secondary" data-pick>Pick this one</button><span class="hint" data-picked hidden>Your pick</span><a class="hint" data-open>Open in Studio</a></div>
+    <div class="row"><button type="button" class="sm" data-pick>Pick</button><span class="hint" data-picked hidden>Your pick</span><a class="btn sm" data-open data-nav>Continue with this version</a><button type="button" class="btn ghost sm" data-details>Details</button></div>
   </article>
-</template>
-
-<!-- ============================================================ Runs page -->
-<template id="tpl-runs">
-  <section class="panel" id="runs">
-    <div class="heading"><span class="number">≡</span><h2 data-title>Runs</h2></div>
-    <div class="runs-tools"><label class="toggle"><input type="checkbox" data-flat> flat list</label><span class="hint">Every job under <code>runs/</code>. Branches sit under the run they were made from, newest roots first. Open a run in Studio, or add it to the Lab to compare.</span><a class="button small" data-open-lab hidden>Open Lab</a></div>
-    <div class="runs" data-list></div>
-  </section>
-</template>
-
-<template id="tpl-run-row">
-  <div class="run-row">
-    <span class="name"><span class="branch" data-branch hidden>└</span><a data-title data-nav></a> <span class="chip" data-state></span></span>
-    <span class="when" data-when></span>
-    <span class="detail" data-changed></span>
-    <span class="links"><span class="cost" data-spent></span><a data-studio data-nav>Open in Studio</a><a data-quick data-nav>Quick view</a><button type="button" class="linkish small" data-lab>Add to Lab</button></span>
-  </div>
 </template>
 
 <script type="module" src="/static/app.js"></script>

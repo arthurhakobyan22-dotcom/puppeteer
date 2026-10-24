@@ -1,5 +1,5 @@
 // Generator slot (Agent 3): which generator renders the draft, what it supports for the chosen slots and at what price.
-// Mounted into [data-slot=generator] inside tpl-slots (draft.js calls mountGenerator after mountSlots). Everything shown comes
+// Mounted into [data-generator] of the Generate step (static/generate.js). Everything shown comes
 // from GET /jobs/{id}/generators (providers/capabilities.py: normalized capabilities, `summary`, `limits` = supports(caps, slots)),
 // so the UI never guesses what a generator can do. The choice is saved as slots.generator.name / .resolution (PUT /jobs/{id}/slots)
 // and mirrored into the legacy <select name=provider> so the old form field still submits the same value.
@@ -18,9 +18,8 @@ export function mountGenerator(host, { select = null, facts = () => ({}), onChan
   const resolution = el('select', { 'aria-label': 'Resolution' });
   const resolutionRow = el('label', { class: 'field', hidden: true }, 'Resolution', resolution);
   const draftLine = el('p', { class: 'line info', role: 'status' });
-  const node = el('div', { class: 'generator' },
-    el('div', { class: 'slots-head' }, el('h3', { text: 'Generator' }), el('span', { class: 'hint', text: 'Who renders the draft. Only what the chosen generator supports is offered; anything else is said here with the nearest option.' })),
-    list, summary, limits, resolutionRow, draftLine);
+  const node = el('div', { class: 'generator' }, list, summary, limits, resolutionRow, draftLine);
+  list.className = 'gens';
   host.replaceChildren(node);
   let data = null, loadedFor = null, chosen = null, busy = false;
 
@@ -80,15 +79,15 @@ export function mountGenerator(host, { select = null, facts = () => ({}), onChan
     list.replaceChildren();
     for (const g of data.generators) {
       const active = g.name === chosen;
-      const why = g.configured ? g.summary : 'Add ' + g.key + '=… to the .env file in the project folder and restart the app.';
-      const b = el('button', { type: 'button', class: 'generator-choice' + (active ? ' active' : '') + (g.configured ? '' : ' unconfigured'), role: 'radio', 'aria-checked': active ? 'true' : 'false',
+      const why = g.configured ? g.summary : 'Not set up yet: add ' + g.key + ' to the .env file in the project folder and restart the app.';
+      const b = el('button', { type: 'button', class: 'genopt' + (active ? ' on' : '') + (g.configured ? '' : ' off'), role: 'radio', 'aria-checked': active ? 'true' : 'false',
         disabled: busy || locked || !g.configured, title: g.label + ' · ' + why, onclick: () => choose(g.name) },
-        el('strong', { text: g.label }), el('small', { text: g.configured ? usd(g.estimate_usd) + (g.draft ? ' draft' : ' · one render') : 'not configured · ' + g.key }));
+        el('span', { class: 'radio' }), el('span', {}, el('b', { text: g.label }), el('small', { text: g.configured ? g.summary : why })), el('span', { class: 'price', text: g.configured ? usd(g.estimate_usd) + (g.draft ? ' draft' : ' · one render') : '—' }));
       list.append(b);
     }
     const caps = byName(chosen);
-    if (!caps) { summary.textContent = 'No generator is available. Add FAL_KEY or ENHANCOR_API_KEY to .env and restart the app.'; limits.replaceChildren(); resolutionRow.hidden = true; draftLine.hidden = true; return; }
-    summary.textContent = caps.label + ' · ' + caps.summary + (caps.configured ? '' : ' · not configured: add ' + caps.key + ' to .env and restart the app.');
+    if (!caps) { summary.hidden = false; summary.textContent = 'No generator is set up yet. Add FAL_KEY or ENHANCOR_API_KEY to .env and restart the app.'; limits.replaceChildren(); resolutionRow.hidden = true; draftLine.hidden = true; return; }
+    summary.hidden = true; summary.textContent = '';
     limits.replaceChildren(...caps.limits.map(l => el('li', {}, el('strong', { text: (SLOT_LABEL[l.slot] || l.slot) + ' · ' }), l.message + ' ', el('span', { class: 'hint', text: l.fix }))));
     limits.hidden = !caps.limits.length;
     const offersChoice = caps.resolutions.length > 1 && !caps.draft;   // Seedance drafts are fixed (480p / 1080p); Wan renders once at the chosen resolution
@@ -98,9 +97,8 @@ export function mountGenerator(host, { select = null, facts = () => ({}), onChan
       resolution.value = caps.resolutions.includes(data.resolution) ? data.resolution : caps.resolutions[0];
       resolution.disabled = busy || locked;
     }
-    draftLine.hidden = false;
-    draftLine.textContent = caps.finalize ? 'Draft ' + (caps.draft_resolution || '') + ' → ' + (caps.final_resolution || '') + ' on approval (' + (caps.finalize_identical ? 'the same draft completed' : 'a new render') + ').'
-      : 'One render at ' + (offersChoice ? resolution.value : (caps.resolutions[0] || '')) + '. ' + (caps.finalize_hint || 'There is no draft to complete.');
+    draftLine.hidden = !!caps.finalize;
+    draftLine.textContent = caps.finalize ? '' : 'One render at ' + (offersChoice ? resolution.value : (caps.resolutions[0] || '')) + '. ' + (caps.finalize_hint || 'There is no draft to finish; the first render is the final.');
     applySlotLimits(caps);
     if (select && byName(chosen)) {
       if (![...select.options].some(o => o.value === chosen)) select.append(el('option', { value: chosen, text: caps.label }));

@@ -8,7 +8,7 @@
 // a neighbour, at least one frame; one commit per drag). "Transcribe" runs the free local Whisper (or the paid fal
 // fallback with its estimate on the button) through POST /jobs/{id}/words/transcribe.
 import { api, getJSON, send, plain } from './api.js';
-import { el, ariaFor, notice, showError, usd } from './ui.js';
+import { el, ariaFor, notice, showError, usd, cssVar } from './ui.js';
 import { registerTrack } from './timeline.js';
 
 const st = { jobId: null, ctx: null, panel: null, layerBox: null, info: null, infoKey: null, selected: null, drag: null, editing: null, adding: null, busy: false, engine: 'local', singing: null, blocksKey: '', status: '' };
@@ -134,7 +134,7 @@ async function transcribe(ctx, { confirm = false } = {}) {
     const current = words(ctx).map(w => [w.text, w.start, w.end].join('|')).join(' '), incoming = r.words.map(w => [w.text, w.start, w.end].join('|')).join(' ');
     if (layerValue(ctx) || (!r.written && current !== incoming)) {   // the run already has a transcript (or pending edits): the new one is a pending edit, undoable, saved with "Save edits"
       await ctx.edits.commit(`Transcribe again${r.singing ? ' (singing mode)' : ''}`, 'words', () => ({ words: list, singing: !!r.singing, edited: [], replaced: { engine: r.engine_name, language: r.language } }));
-      st.status += ' It is a pending edit: Save edits keeps it in a new version.';
+      st.status += ' It is an unsaved edit: Save as new version keeps it.';
     }
     st.busy = false;
     if (r.written && window.puppeteer && window.puppeteer.loadJob) await window.puppeteer.loadJob({ quiet: true });
@@ -142,7 +142,7 @@ async function transcribe(ctx, { confirm = false } = {}) {
   } catch (e) {
     st.busy = false; st.status = '';
     const p = plain(e);
-    showError(e, { key: 'words', actions: p.status === 402 ? [{ label: 'Transcribe anyway · ' + usd(p.body.estimated_cost_usd), run: () => transcribe(ctx, { confirm: true }) }] : [] });
+    showError(e, { key: 'words', actions: p.status === 402 ? [{ label: 'Yes, spend ' + usd(p.body.estimated_cost_usd), run: () => transcribe(ctx, { confirm: true }), primary: true }] : [] });
   }
   render();
 }
@@ -173,7 +173,7 @@ function draw(lane, v) {
   if (lane) lastView = { lane, v }; else if (lastView) ({ lane, v } = lastView); else return;
   const ctx = st.ctx; if (!ctx) return;
   const box = ensureLayer(lane), list = words(ctx), c = v.ctx2d;
-  if (!list.length && !st.adding && c) { c.fillStyle = '#9a9eab'; c.font = '11px sans-serif'; c.textBaseline = 'middle'; c.fillText(st.busy ? 'Transcribing…' : 'No transcript yet · select Words and click Transcribe', 8, v.height / 2); }
+  if (!list.length && !st.adding && c) { c.fillStyle = cssVar('--muted') || '#9aa1b0'; c.font = '11px sans-serif'; c.textBaseline = 'middle'; c.fillText(st.busy ? 'Transcribing…' : 'No words yet · select Words and click Transcribe', 8, v.height / 2); }
   const key = list.map(w => w.id + w.text).join('|') + '|' + (st.editing || '') + '|' + (st.adding ? 'add' : '');
   if (key !== st.blocksKey) {
     st.blocksKey = key; box.replaceChildren();
@@ -228,7 +228,7 @@ function onBlockDown(e, id) {
 }
 
 // ---------------------------------------------------------------- panel
-const button = (text, title, onclick, cls = 'small secondary', disabled = false) => el('button', { type: 'button', class: cls, text, title, 'aria-label': ariaFor(text, title), onclick, disabled });
+const button = (text, title, onclick, cls = 'sm', disabled = false) => el('button', { type: 'button', class: cls, text, title, 'aria-label': ariaFor(text, title), onclick, disabled });
 function renderTimes(d) { const out = st.panel && st.panel.querySelector('[data-times]'); if (out) out.textContent = `${fmt(d.start)}–${fmt(d.end)} s (frames ${frameOf(d.start, st.ctx)}–${Math.max(frameOf(d.start, st.ctx), Math.ceil(d.end * fps(st.ctx) - 1e-3) - 1)})`; }
 function render() {
   const ctx = st.ctx, box = st.panel; if (!ctx || !box) return;
@@ -236,7 +236,7 @@ function render() {
   const list = words(ctx), pending = !!layerValue(ctx), info = st.info, sel = list.find(w => w.id === st.selected) || null, here = wordAt(list, ctx);
   const can = !running(ctx);
   const source = !info ? 'Loading…' : info.failed ? 'The words could not be loaded.' : !list.length ? 'No transcript yet.' :
-    `${plural(list.length, 'word')} · ` + (pending ? 'pending edits (saved with "Save edits")' : `from words.json${info.meta && info.meta.engine ? ' (' + info.meta.engine + (info.meta.language ? ', ' + info.meta.language : '') + (info.meta.singing ? ', singing mode' : '') + ')' : ''}`);
+    `${plural(list.length, 'word')} · ` + (pending ? 'unsaved edits (kept by "Save as new version")' : `from this run's transcript${info.meta && info.meta.language ? ' (' + info.meta.language + (info.meta.singing ? ', singing mode' : '') + ')' : ''}`);
   // transcribe row
   const engines = (info && info.engines) || [];
   if (!engines.some(e => e.name === st.engine)) st.engine = 'local';
@@ -246,8 +246,8 @@ function render() {
   const sing = el('input', { type: 'checkbox', 'aria-label': 'Singing mode' }); sing.checked = singing(ctx); sing.disabled = st.busy;
   sing.onchange = () => { st.singing = sing.checked; render(); };
   const label = !eng ? 'Transcribe' : st.busy ? 'Transcribing…' : eng.paid ? 'Transcribe · ' + usd(eng.estimated_cost_usd) : 'Transcribe · free, runs locally';
-  const go = button(label, eng && eng.paid ? 'Paid: sends the audio to ' + eng.label + '; the estimate is on the button' : 'Whisper on this Mac; nothing leaves the computer', () => transcribe(ctx, { confirm: !!(eng && eng.paid) }), 'small', !eng || st.busy || !can || !(info && info.has_audio) || (eng && !eng.paid && !eng.ready) || (eng && eng.offline_blocked));
-  const problem = eng && !eng.paid && eng.problem ? el('p', { class: 'line warn', text: eng.problem.message + ' ' + eng.problem.fix }) : eng && eng.offline_blocked ? el('p', { class: 'line warn', text: 'Offline mode (PUPPETEER_OFFLINE=1) blocks the paid engine; nothing would be sent. Use the free local engine, or start the app without PUPPETEER_OFFLINE.' }) : info && !info.has_audio ? el('p', { class: 'line warn', text: 'This run has no audio track to transcribe; add words by hand.' }) : null;
+  const go = button(label, eng && eng.paid ? 'Paid: sends the audio to ' + eng.label + '; the price is on the button' : 'Runs on this Mac; nothing leaves the computer', () => transcribe(ctx, { confirm: !!(eng && eng.paid) }), 'sm' + (list.length ? '' : ' primary'), !eng || st.busy || !can || !(info && info.has_audio) || (eng && !eng.paid && !eng.ready) || (eng && eng.offline_blocked));
+  const problem = eng && !eng.paid && eng.problem ? el('p', { class: 'line warn', text: eng.problem.message + ' ' + eng.problem.fix }) : eng && eng.offline_blocked ? el('p', { class: 'line warn', text: 'Offline mode: nothing is sent, so the paid engine cannot run. Use the free local engine, or start the app without offline mode.' }) : info && !info.has_audio ? el('p', { class: 'line warn', text: 'This run has no audio track to transcribe; add words by hand.' }) : null;
   const tRow = el('div', { class: 'mt-row' }, select, el('label', { class: 'wand-inline', title: 'Looser auto-timing for songs: no conditioning on earlier lyrics, longer minimum word length, held notes fill short gaps. Expect to drag edges afterwards.' }, sing, ' Singing mode'), go);
   // selected word
   const target = sel || here;
@@ -265,13 +265,9 @@ function render() {
     button('Delete', 'Remove the selected word', () => target && remove(ctx, target.id), 'small secondary', !can || !target),
     button('◀ Prev', 'Previous word', () => { const p = list[idx > 0 ? idx - 1 : 0]; if (p) { st.selected = p.id; ctx.editor.seek(frameOf(p.start, ctx)); } }, 'small secondary', !list.length || idx === 0),
     button('Next ▶', 'Next word', () => { const n = idx < 0 ? list.find(w => w.start * fps(ctx) > ctx.editor.frame) : list[idx + 1]; if (n) { st.selected = n.id; ctx.editor.seek(frameOf(n.start, ctx)); } }, 'small secondary', !list.length || idx >= list.length - 1));
-  const exports = el('div', { class: 'mt-row' }, el('span', { class: 'hint', text: 'Export' }),
-    list.length ? el('a', { class: 'button small secondary', href: '/jobs/' + ctx.jobId + '/subtitles.srt', download: '', text: 'Export subtitles (.srt) ↓', title: pending ? 'From your pending edits' : 'From words.json' }) : button('Export subtitles (.srt) ↓', 'Transcribe first', null, 'small secondary', true),
-    ctx.files.has('words.json') ? el('a', { class: 'button small secondary', href: '/runs/' + ctx.jobId + '/words.json', download: 'words.json', text: 'words.json ↓' }) : null,
-    ctx.files.has('mouth-guidance.json') ? el('a', { class: 'button small secondary', href: '/runs/' + ctx.jobId + '/mouth-guidance.json', download: 'mouth-guidance.json', text: 'mouth-guidance.json ↓' }) : null);
-  const help = el('p', { class: 'hint', text: running(ctx) ? 'The run is still preparing; the words open when it finishes.' : 'Click a word to select it, double-click to edit its text, drag its edges to fix the timing (snaps to frames, never overlaps a neighbour). Every change is a pending edit (Undo / Redo / Save edits); this run is never changed.' });
+  const help = el('p', { class: 'hint', text: running(ctx) ? 'The run is still preparing; the words open when it finishes.' : 'Click a word to select it, double-click to edit its text, drag its edges to fix the timing (snaps to frames, never overlaps a neighbour). Every change is an unsaved edit (Undo / Redo / Save as new version); this run is never changed. The subtitles (.srt) and the word files are under Export → Downloads.' });
   const status = st.status ? el('p', { class: 'line ' + (st.busy ? 'info' : 'ok'), 'aria-live': 'polite', text: st.status }) : null;
-  box.replaceChildren(...[help, el('p', { class: 'hint ft-where', text: source }), tRow, problem, status, wRow, eRow, exports].filter(Boolean));
+  box.replaceChildren(...[help, el('p', { class: 'hint ft-where', text: source }), tRow, problem, status, wRow, eRow].filter(Boolean));
 }
 
 // ---------------------------------------------------------------- overlay: the current word as a caption while the track is selected
@@ -285,7 +281,7 @@ function drawCanvas(c, box, frame) {
 
 function reset0(ctx) { Object.assign(st, { jobId: ctx.jobId, info: null, infoKey: null, selected: null, drag: null, editing: null, adding: null, busy: false, singing: null, blocksKey: '', status: '' }); }
 registerTrack({
-  id: 'words', label: 'Words', order: 30, height: 36, markerColor: '#1f18c0',
+  id: 'words', label: 'Words', hint: 'transcribe, fix words and their timing', order: 30, height: 36, markerColor: '--lane-words',
   available: ctx => ctx.files.has('original.mp4') || ctx.files.has('seedance-input.mp4'),
   mount(row, panel, ctx) {
     if (st.jobId !== ctx.jobId) reset0(ctx);

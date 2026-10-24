@@ -315,4 +315,4 @@ class RouteTests(unittest.TestCase):
             run=client.get(f'/jobs/{world.HEX}/run').json();self.assertAlmostEqual(run['estimates']['draft']['wan'],0.06,places=3);self.assertIsNone(run['estimates']['complete']['wan'])
     def test_index_serves_the_generator_module(self):
         client=TestClient(application.app)
-        self.assertEqual(client.get('/static/generator.js').status_code,200);self.assertIn('data-slot="generator"',client.get('/').text)
+        self.assertEqual(client.get('/static/generator.js').status_code,200);self.assertIn('data-generator',client.get('/').text)

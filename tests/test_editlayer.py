@@ -196,7 +196,7 @@ class StaticEditorTests(unittest.TestCase):
     def test_editor_modules_and_template_are_served(self):
         client=TestClient(application.app);index=client.get('/').text
         for name in ['tpl-editor','data-editor','data-review-tools','data-approve']:self.assertIn(name,index)
-        for module in ['editor','timeline','editlayer','tracks','track-placeholders','wand']:
+        for module in ['editor','timeline','editlayer','tracks','track-mask','track-face','track-words']:
             r=client.get(f'/static/{module}.js');self.assertEqual(r.status_code,200,module);self.assertIn('javascript',r.headers['content-type'])
 
 if __name__=='__main__':unittest.main()

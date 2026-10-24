@@ -103,4 +103,6 @@ export const api = {
   finish: (id, form) => send('/jobs/' + id + '/finish', form),
   hdStart: (id, form) => send('/jobs/' + id + '/hd', form),
   saveReview: (id, form) => send('/jobs/' + id + '/mask-review', form),
+  rename: (id, name) => send('/jobs/' + id + '/name', { name }, { method: 'PUT' }),
+  calls: id => getJSON('/jobs/' + id + '/calls'),
 };

@@ -16,7 +16,7 @@
 //   editor.on(event, fn) — 'frame', 'range', 'select', 'view', 'zoom', 'update'; editor.ctx() — the track ctx
 //   editor.overlay (the <canvas>), editor.pictureBox() — {left, top, width, height} of the picture inside the stage
 import { api } from './api.js';
-import { $, $$, el, ariaFor, showError, tpl } from './ui.js';
+import { $, $$, el, ariaFor, showError, tpl, withCost } from './ui.js';
 import { state } from './state.js';
 import { edits } from './editlayer.js';
 import { createTimeline, tracks } from './timeline.js';
@@ -34,10 +34,9 @@ export function pictureBox(cw, ch, vw, vh) {
 export function mountEditor(host, { tabs = [], onViewChosen } = {}) {
   const node = tpl('tpl-editor'); host.append(node);
   const q = s => $(s, node);
-  const tabsBox = q('[data-tabs]'), stageView = q('[data-stage]'), caption = q('[data-caption]'), download = q('[data-download]');
+  const tabsBox = q('[data-tabs]'), moreBox = q('[data-more-views]'), moreTabs = q('[data-more-tabs]'), stageView = q('[data-stage]'), caption = q('[data-caption]');
   const transport = q('[data-transport]'), panelBox = q('[data-track-panel]'), saveBar = q('[data-savebar]');
-  const overlay = el('canvas', { class: 'stage-overlay', 'aria-label': 'Overlay for the selected track' }); stageView.append(overlay);
-  const zipLink = el('a', { download: '', hidden: true, style: 'margin-left:10px', text: 'Masks as PNGs (.zip) ↓' });
+  const overlay = el('canvas', { class: 'stage-overlay', 'aria-label': 'Overlay for the selected lane' }); stageView.append(overlay);
 
   const listeners = {};
   const videos = new Map();   // src -> <video>, kept alive so switching views is instant and nothing is downloaded twice
@@ -97,13 +96,8 @@ export function mountEditor(host, { tabs = [], onViewChosen } = {}) {
     for (const v of editor.layers) setTime(v, editor.frame);
     if (wasPlaying && previous !== base) { editor.playing = false; editor.play(); }
     if (base.readyState >= 1) onMetadata(base);
-    for (const b of $$('button', tabsBox)) b.classList.toggle('active', b.dataset.view === view.id);
+    for (const b of [...$$('button', tabsBox), ...$$('button', moreTabs)]) { b.classList.toggle('active', b.dataset.view === view.id); b.setAttribute('aria-selected', b.dataset.view === view.id ? 'true' : 'false'); }
     caption.textContent = view.caption || view.label;
-    const file = view.download || layers[0].file; download.hidden = !file && !layers[0].src;
-    download.href = file ? '/runs/' + data.jobId + '/' + file : layers[0].src; download.setAttribute('download', (file || layers[0].src || '').split('/').pop());
-    download.textContent = (view.downloadLabel || 'Download ' + view.label.toLowerCase()) + ' ↓';   // a stacked view names what the file really is
-    const masks = /mask/i.test(view.id) && [...data.files].some(f => f.startsWith('clean-masks/'));   // the masks as PNG frames too (GET /jobs/{id}/download/mask.zip)
-    zipLink.hidden = !masks; zipLink.href = '/jobs/' + data.jobId + '/download/mask.zip'; download.after(zipLink);
     placeOverlay(); editor.emit('view', view.id);
   };
   function preloadViews(views) {   // every view's videos exist (preload=auto, hidden) so a switch is instant; ones no view uses any more go
@@ -116,9 +110,10 @@ export function mountEditor(host, { tabs = [], onViewChosen } = {}) {
     const views = allViews(); const key = views.map(v => v.id + ':' + v.layers.map(srcOf).join('+')).join('|');
     if (tabsBox.dataset.key === key) return;
     preloadViews(views);
-    tabsBox.dataset.key = key; tabsBox.replaceChildren();
-    for (const v of views) tabsBox.append(el('button', { type: 'button', dataset: { view: v.id, file: v.layers[0].file || '' }, text: v.label, onclick: () => editor.setView(v.id, { chosen: true }) }));
-    for (const b of $$('button', tabsBox)) b.classList.toggle('active', b.dataset.view === editor.view);
+    tabsBox.dataset.key = key; tabsBox.replaceChildren(); moreTabs.replaceChildren();
+    for (const v of views) (v.more ? moreTabs : tabsBox).append(el('button', { type: 'button', role: 'tab', dataset: { view: v.id, file: v.layers[0].file || '' }, text: v.label, title: v.caption || '', onclick: () => editor.setView(v.id, { chosen: true }) }));
+    moreBox.hidden = !moreTabs.children.length;
+    for (const b of [...$$('button', tabsBox), ...$$('button', moreTabs)]) b.classList.toggle('active', b.dataset.view === editor.view);
   }
 
   // ---------------------------------------------------------------- frames, seeking, playback
@@ -245,8 +240,8 @@ export function mountEditor(host, { tabs = [], onViewChosen } = {}) {
   overlay.addEventListener('contextmenu', e => { if (overlay.style.pointerEvents === 'auto') e.preventDefault(); });
 
   // ---------------------------------------------------------------- transport, counter, Save bar
-  const btn = (text, title, onclick, cls = 'small secondary') => el('button', { type: 'button', class: cls, text, title, 'aria-label': ariaFor(text, title), onclick });
-  const playButton = btn('▶ Play', 'Play / pause (Space)', () => editor.toggle(), 'small');
+  const btn = (text, title, onclick, cls = 'sm') => el('button', { type: 'button', class: cls, text, title, 'aria-label': ariaFor(text, title), onclick });
+  const playButton = btn('▶ Play', 'Play / pause (Space)', () => editor.toggle(), 'sm primary');
   const counter = el('span', { class: 'tr-counter mono', 'aria-live': 'off' });
   const zoomOut = btn('−', 'Zoom out (Ctrl/Cmd + wheel over the timeline)', () => tl.zoom(1 / 1.6)), zoomIn = btn('+', 'Zoom in (Ctrl/Cmd + wheel over the timeline)', () => tl.zoom(1.6));
   const zoomFit = btn('fit', 'Whole clip in view', () => tl.zoomFit());
@@ -255,31 +250,33 @@ export function mountEditor(host, { tabs = [], onViewChosen } = {}) {
       btn('frame ▶', 'One frame forward (→)', () => editor.step(1)), btn('+1 s', 'One second forward (Shift+→)', () => editor.step(Math.round(editor.fps)))),
     counter,
     el('span', { class: 'tr-zoom', role: 'group', 'aria-label': 'Timeline zoom' }, el('span', { class: 'hint', text: 'zoom' }), zoomOut, zoomIn, zoomFit));
+  zoomOut.classList.add('icon'); zoomIn.classList.add('icon');
   editor.on('zoom', () => renderTransport());
   function renderCounter() {
-    counter.textContent = `frame ${editor.frame} / ${editor.frames} · ${(editor.frame / editor.fps).toFixed(2)} s` + (editor.range ? `  ·  range ${editor.range.from}–${editor.range.to} (${editor.range.to - editor.range.from + 1} frames, Esc clears)` : '');
+    counter.replaceChildren('frame ', el('b', { text: String(editor.frame) }), ` / ${editor.frames} · `, el('b', { text: (editor.frame / editor.fps).toFixed(2) }), ' s', editor.range ? `  ·  range ${editor.range.from}–${editor.range.to} (${editor.range.to - editor.range.from + 1} frames, Esc clears)` : '');
   }
   function renderTransport() {
     playButton.textContent = editor.playing ? '❚❚ Pause' : '▶ Play'; playButton.setAttribute('aria-label', editor.playing ? 'Pause' : 'Play');
     zoomIn.disabled = !tl.canZoomIn(); zoomOut.disabled = !tl.canZoomOut(); zoomFit.disabled = tl.fit;
     renderCounter();
   }
-  const panelHint = el('p', { class: 'hint track-panel-hint', text: 'Click a track name on the left of the timeline to see its tools here. Drag across the ruler or an empty part of a track to select a range; click to move the playhead. Keys: ← → one frame, Shift+← → one second, Space play, [ ] markers, Esc clears the range, Cmd/Ctrl+Z undo.' });
+  const panelHint = el('div', { class: 'track-panel-hint' }, el('h3', { text: 'Lanes' }), el('p', { class: 'hint' }, 'Click a lane name (Mask · Face · Words) to see its tools here. Drag across the ruler or an empty part of a lane to select a range; click to move the playhead. Keys: ', el('kbd', { text: '←' }), ' ', el('kbd', { text: '→' }), ' one frame, ', el('kbd', { text: 'Shift' }), '+arrows one second, ', el('kbd', { text: 'Space' }), ' play, ', el('kbd', { text: '[' }), ' ', el('kbd', { text: ']' }), ' markers, ', el('kbd', { text: 'Esc' }), ' clears the range, ', el('kbd', { text: 'Cmd/Ctrl+Z' }), ' undo, ', el('kbd', { text: 'Cmd/Ctrl+S' }), ' save.'));
   panelBox.append(panelHint);
   function renderSaveBar() {
     const n = edits.pending.total || 0;
+    saveBar.hidden = !n && !edits.canRedo && !edits.busy;
     const summary = el('div', { class: 'sb-summary' },
-      el('strong', { text: n ? `${n} pending edit${n > 1 ? 's' : ''}` : 'No pending edits' }),
-      el('span', { class: 'hint', text: n ? edits.summary.join(' · ') : 'Edits you make on the tracks are kept here until you save them as a new version; this run is never changed.' }));
+      el('strong', { text: n ? `${n} unsaved edit${n > 1 ? 's' : ''}` : 'No unsaved edits' }),
+      el('span', { class: 'hint', text: n ? edits.summary.join(' · ') + ' · saving makes one new version; this run stays as it is.' : 'Edits you make on the lanes are kept here until you save them as a new version; this run is never changed.' }));
     const undo = btn('Undo', edits.canUndo ? 'Undo: ' + edits.undoLabel + ' (Cmd/Ctrl+Z)' : 'Nothing to undo', () => edits.undo()); undo.disabled = !edits.canUndo || edits.busy;
     const redo = btn('Redo', edits.canRedo ? 'Redo: ' + edits.redoLabel + ' (Shift+Cmd/Ctrl+Z)' : 'Nothing to redo', () => edits.redo()); redo.disabled = !edits.canRedo || edits.busy;
     const actions = el('div', { class: 'sb-actions' }, undo, redo);
-    if (discarding && n) actions.append(el('span', { class: 'hint', text: `Discard ${n} pending edit${n > 1 ? 's' : ''}?` }), btn('Yes, discard', 'Remove every pending edit', async () => { discarding = false; await edits.discard(); }, 'small danger'), btn('Keep', 'Keep the edits', () => { discarding = false; renderSaveBar(); }));
-    else { const d = btn('Discard', 'Remove every pending edit (asks first)', () => { discarding = true; renderSaveBar(); }); d.disabled = !n || edits.busy; actions.append(d); }
-    const save = btn(edits.busy ? 'Saving…' : 'Save edits · free, creates one new version', 'Saves every pending edit as one new branch run; this run stays as it is and its approval does not carry over', () => edits.save(), 'small'); save.disabled = !n || edits.busy;
+    if (discarding && n) actions.append(el('span', { class: 'hint', text: `Discard ${n} unsaved edit${n > 1 ? 's' : ''}?` }), btn('Yes, discard', 'Remove every unsaved edit', async () => { discarding = false; await edits.discard(); }, 'sm danger'), btn('Keep', 'Keep the edits', () => { discarding = false; renderSaveBar(); }));
+    else { const d = btn('Discard', 'Remove every unsaved edit (asks first)', () => { discarding = true; renderSaveBar(); }, 'ghost sm'); d.disabled = !n || edits.busy; actions.append(d); }
+    const save = btn('', 'Saves every unsaved edit as one new version; this run stays as it is and the new version needs its own approval (Cmd/Ctrl+S)', () => edits.save(), 'primary'); withCost(save, edits.busy ? 'Saving…' : 'Save as new version', 'free'); save.disabled = !n || edits.busy;
     actions.append(save);
     saveBar.replaceChildren(summary, actions);
-    if (edits.stale && n) saveBar.append(el('p', { class: 'line warn', text: 'This run changed after you started editing. Check your edits on the tracks before saving.' }));
+    if (edits.stale && n) saveBar.append(el('p', { class: 'line warn', text: 'This run changed after you started editing. Check your edits on the lanes before saving.' }));
     saveBar.classList.toggle('has-edits', !!n);
   }
 
@@ -292,8 +289,9 @@ export function mountEditor(host, { tabs = [], onViewChosen } = {}) {
     const mod = e.metaKey || e.ctrlKey, key = e.key;
     if (mod && (key === 'z' || key === 'Z')) { e.preventDefault(); e.stopPropagation(); if (e.shiftKey) edits.redo(); else edits.undo(); return; }
     if (e.ctrlKey && (key === 'y' || key === 'Y')) { e.preventDefault(); e.stopPropagation(); edits.redo(); return; }
+    if (mod && (key === 's' || key === 'S')) { e.preventDefault(); e.stopPropagation(); if ((edits.pending.total || 0) && !edits.busy) edits.save(); return; }
     if (mod || e.altKey) return;
-    if (key === ' ' && t && t.closest && t.closest('button, a') && !node.contains(t)) return;   // Space on a button outside the editor clicks it
+    if (key === ' ' && t && t.closest && t.closest('button, a, summary, label')) return;   // Space on a focused control presses it (inside the editor too)
     const second = Math.round(editor.fps);
     const actions = {
       ArrowLeft: () => editor.step(e.shiftKey ? -second : -1), ArrowRight: () => editor.step(e.shiftKey ? second : 1), ' ': () => editor.toggle(),
@@ -321,7 +319,7 @@ export function mountEditor(host, { tabs = [], onViewChosen } = {}) {
     tl.sync(ctx);
     for (const row of tl.visibleRows()) {
       if (!row.mounted) {
-        const panel = el('div', { class: 'track-panel-body', dataset: { track: row.track.id }, hidden: true }, el('h3', { text: row.track.label }));
+        const panel = el('div', { class: 'track-panel-body', dataset: { track: row.track.id }, hidden: true }, el('div', { class: 'ph' }, el('i', { class: 'dot', style: 'background:var(--lane-' + row.track.id + ',var(--accent))' }), el('h3', { text: row.track.label }), el('span', { class: 'hint', text: row.track.hint || '' })));
         panels.set(row.track.id, panel); panelBox.append(panel); row.mounted = true;
         try { if (row.track.mount) row.track.mount(row.lane, panel, ctx); } catch (e) { showError(e, { key: 'track-' + row.track.id }); }
       }

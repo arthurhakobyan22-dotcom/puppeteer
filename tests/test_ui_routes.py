@@ -118,11 +118,12 @@ class StaticTests(unittest.TestCase):
     def test_app_files_are_served(self):
         client=TestClient(application.app)
         index=client.get('/');self.assertEqual(index.status_code,200);self.assertIn('/static/app.js',index.text);self.assertIn('/static/app.css',index.text)
-        for name in ['tpl-quick','tpl-studio-new','tpl-stage-card','tpl-review','tpl-draft','tpl-final','tpl-lab','tpl-runs']:self.assertIn(name,index.text)
+        for name in ['tpl-start','tpl-ws-head','tpl-stage-card','tpl-edit','tpl-editor','tpl-world','tpl-generate','tpl-export','tpl-compare','tpl-runs']:self.assertIn(name,index.text)
         js=client.get('/static/app.js');self.assertEqual(js.status_code,200);self.assertIn('javascript',js.headers['content-type'])
         css=client.get('/static/app.css');self.assertEqual(css.status_code,200);self.assertIn('text/css',css.headers['content-type'])
-        for module in ['api','ui','state','jobdata','review','draft','stagecard','runhead','quick','studio','lab','runs']:self.assertEqual(client.get(f'/static/{module}.js').status_code,200,module)
-        self.assertNotIn('<script>',index.text)   # markup only: no inline script or style
+        for module in ['api','ui','state','jobdata','edit','generate','world','stagecard','workspace','start','drawer','compare','runs','theme']:self.assertEqual(client.get(f'/static/{module}.js').status_code,200,module)
+        for sheet in ['tokens','components','app']:self.assertEqual(client.get(f'/static/{sheet}.css').status_code,200,sheet)
+        self.assertNotIn('<script>',index.text)   # markup only: no inline script or style (the theme boot is /static/theme.js)
         self.assertNotIn('<style>',index.text)
 
 if __name__=='__main__':unittest.main()
