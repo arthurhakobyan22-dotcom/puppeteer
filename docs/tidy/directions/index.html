@@ -30,8 +30,20 @@ h1{font-size:28px;margin:0 0 6px;letter-spacing:-.02em}
 </head>
 <body>
 <main>
-  <h1>Three visual directions for the tidy pass</h1>
+  <h1>Visual directions for the tidy pass</h1>
   <p class="lead">Each file shows the same Runs page, the same Edit step of the run workspace, and the same component set, so you compare the design, not the content. Every file is self-contained, works from 380 px up (no horizontal page scroll; the timeline scrolls inside its own panel), and lists its colour tokens, type and spacing scales and its WCAG AA contrast ratios in a comment at the top.</p>
+
+  <div class="grid" style="margin-bottom:20px">
+    <div class="dir" style="grid-column:1/-1;grid-template-columns:minmax(260px,2fr) 3fr;grid-template-rows:auto">
+      <a class="shot" href="hybrid.html" style="aspect-ratio:auto;border-bottom:0;border-right:1px solid var(--border)"><img src="shots/hybrid-dark-desktop.png" alt="Hybrid at desktop width, dark theme"></a>
+      <div class="body">
+        <h2><a href="hybrid.html">Hybrid · the owner's pick</a> <small>A look + B layout · dark default, light theme behind the toggle</small></h2>
+        <p>B's layout, editorial type, thumbnail cards and step rail with A's dark low-chroma palette and one accent. Progressive disclosure in three levels: the step body (1), remembered collapsibles such as "Tool settings" (2), and one Details drawer on every step and card (3). The rail switches steps with history entries; the browser Back button works.</p>
+        <span class="meta">dark: text 15.4:1 · muted 6.7:1 · accent 9.3:1 · button label 9.1:1 &nbsp;·&nbsp; light: text 15.2:1 · muted 5.7:1 · accent 6.1:1 · button label 6.2:1</span>
+        <span class="links"><a href="hybrid.html?theme=dark">dark</a><a href="hybrid.html?theme=light">light</a><a href="hybrid.html?step=generate">Generate step</a><a href="hybrid.html?details=1">Details open</a><a href="shots/hybrid-dark-desktop.png">hybrid-dark-desktop.png</a><a href="shots/hybrid-dark-380.png">hybrid-dark-380.png</a><a href="shots/hybrid-light-desktop.png">hybrid-light-desktop.png</a><a href="shots/hybrid-light-380.png">hybrid-light-380.png</a><a href="shots/hybrid-details-desktop.png">hybrid-details-desktop.png</a><a href="shots/hybrid-generate-desktop.png">hybrid-generate-desktop.png</a></span>
+      </div>
+    </div>
+  </div>
 
   <div class="grid">
     <div class="dir">
