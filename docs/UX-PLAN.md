@@ -34,7 +34,7 @@ Why this is a better starting point than the owner's sketch in two places, and t
 | Element | Content |
 |---|---|
 | Toolbar | "New run" (primary, opens Quick start), search box (name, preset, method, what-changed text, id prefix), sort (newest · last worked on · spent), filter chips (needs approval · draft ready · final ready · failed), "Compare (n)" tray button (hidden until one run is in the tray). |
-| Card (one per **root** run) | thumbnail (§3.1), **name** (§3.2), state chip, "n versions" link, date, "Spent $x", one-line summary ("Cutout + face mesh · approved · draft ready"), menu "⋯" (Rename, Compare, Save as preset, Details, Open folder path). Click = open the workspace. |
+| Card (one per **root** run) | thumbnail (§3.1), **name** (§3.2), state chip, "n versions" link, date, "Spent $x", one-line summary ("Motion clip + face mesh · approved · draft ready"), menu "⋯" (Rename, Compare, Save as preset, Details, Open folder path). Click = open the workspace. |
 | Versions (on demand) | "n versions ▸" expands an indented list under the card: name or "What changed" line, state, date, spent, "Compare" tick, open. The tree is the existing `GET /jobs/tree` data; nothing new. The flat list toggle is removed (A-24); the search box replaces it. |
 | Empty | "No runs yet." + primary "New run". |
 | Loading | 6 skeleton cards. |
@@ -113,7 +113,7 @@ Proposed smallest additive shape (flagged as the exception):
   name clears it.
 
 Frontend default name when `name` is empty (used today already, so nothing looks worse): `<preset or prep method>
-· <date dd Mon> · <first clause of "what changed">`, e.g. "Expressive · 22 Oct", "Cutout + face mesh · 23 Oct ·
+· <date dd Mon> · <first clause of "what changed">`, e.g. "Expressive · 22 Oct", "Motion clip + face mesh · 23 Oct ·
 mask: 5 clicks applied". The branch's `changed` line is already in plain words from `plain_changed()`.
 
 Frontend-only alternative if the exception is refused: `localStorage['puppeteer.names'] = {id: name}` with the
@@ -126,10 +126,10 @@ owner on one Mac; not acceptable if runs are shared. The plan prefers the endpoi
 ### 4.1 Prep (stages 1–6)
 
 Body: a summary card: thumbnail, prep method (G-25), input check advice list (today's checklists), the "Face
-found / lost" line, "Background behind the person: original frames" line with "Change ▸" (opens the Cutout stage in
+found / lost" line, "Background behind the person: original frames" line with "Change ▸" (opens the Motion clip stage in
 Advanced), the Character 1 / 2 references saved with the run. While running: the progress line with the status
 text and a cancel-free "This can take a minute" note. **Advanced ▸** drawer: stage cards **01 Input check, 02
-Audio, 03 Depth, 04 Mask, 05 Cutout, 06 Face mesh** as compact accordion rows (name · method · state chip · "⌄");
+Audio, 03 Depth, 04 Mask, 05 Motion clip, 06 Face mesh** as compact accordion rows (name · method · state chip · "⌄");
 an expanded row is today's card (method select, settings, health, numbers, warnings, preview, "Use my own file",
 downloads moved to Details) with **one** button "Make a new version from here" whose label carries the price when
 paid ("… · about $0.13"; the click with a price is the confirmation, as today's second click).
@@ -156,11 +156,11 @@ Transcribe; its exports move to the Export step (A-55).
 Order (fixes A-61): **Generator** (cards, with price and "cannot: …" lines) → **Characters** (1 and 2; the only
 place they are picked after prep) → **Set · Look · Light** (Set and Look as mode cards with one sentence each,
 picker below the chosen mode; "Put the set image behind the person" shows an inline "Apply as background · free,
-new version" with the plate canvas from the Cutout card, so the background is edited in one place, A-72) →
+new version" with the plate canvas from the Motion clip card, so the background is edited in one place, A-72) →
 **Prompt** (textarea; it is rebuilt automatically from the slots while the box is untouched, with "Rebuild from
 slots" once the user has edited it; "Insert spoken lines"; "Describe set & light · about $0.01"; `Final text ▸`
 with the References strip). The primary is **"Create draft · about $2.15"** at the bottom and in the Next line.
-**Advanced ▸**: stage cards **05 Cutout (Background)** and **07 Prompt**.
+**Advanced ▸**: stage cards **05 Motion clip (Background)** and **07 Prompt**.
 
 ### 4.4 Generate
 
@@ -193,11 +193,11 @@ power user pays it once). Routes come from `app.py`.
 | F-04 | "Re-run with lenient gaps · free" (`POST /branch`) | banner / review / face card | banner fix button + Prep → Advanced → Face mesh | 0 / 3 |
 | F-05 | Stage cards: method select, settings, health, numbers, warnings, previews (`GET /stages`, `GET /jobs/{id}/run`) | Studio rack | Advanced drawer of the owning step (§4) | 2 (step, drawer) + 1 expand |
 | F-06 | Make a new version from a stage (`POST /jobs/{id}/estimate`, `POST /branch`) | "Re-run from here" | Advanced → expanded card → one button | 3–4 |
-| F-07 | Use my own file for depth / mask / face / cutout (`POST /jobs/{id}/import`) | card `details` | Advanced → card → "Use my own file" | 4 (over the ≤3 rule; acceptable: a rare power action; alternatively a row in the `⋯` menu "Use my own file…" = 2) |
+| F-07 | Use my own file for depth / mask / face / motion clip (`POST /jobs/{id}/import`) | card `details` | Advanced → card → "Use my own file" | 4 (over the ≤3 rule; acceptable: a rare power action; alternatively a row in the `⋯` menu "Use my own file…" = 2) |
 | F-08 | Per-file downloads, folder zips, masks zip (`GET /jobs/{id}/download/{name}`, `/runs/<id>/<file>`) | each card, editor foot, audio downloads | Export → `Single files ▸`; also `⋯` → Details | 2 |
 | F-09 | Input check checklists | Input check card | Prep body (summary) | 0 |
-| F-10 | Background behind the person (select, plate picker, drag canvas, scale) | Cutout card (Studio) + slots "Apply as background" | World & Look → Set "Put the set image behind" (inline) and Prep → Advanced → Cutout | 2 / 3 |
-| F-11 | Views: prepared clip / original / depth / mask only / cutout / overlay / face mesh editable | tabs + 2 view rows | Edit: one tab row (lane tools no longer repeat it) | 1 |
+| F-10 | Background behind the person (select, plate picker, drag canvas, scale) | Motion clip card (Studio) + slots "Apply as background" | World & Look → Set "Put the set image behind" (inline) and Prep → Advanced → Motion clip | 2 / 3 |
+| F-11 | Views: prepared clip / original / depth / mask only / motion clip / overlay / face mesh editable | tabs + 2 view rows | Edit: one tab row (lane tools no longer repeat it) | 1 |
 | F-12 | Transport, frame counter, zoom, keys | Edit | Edit (unchanged) | 0–1 |
 | F-13 | Range selection, markers `[` `]` | drag on ruler | Edit; dragging on a lane also selects that lane | 1 |
 | F-14 | Mask fixes: + / −, brush, pending list, preview (`POST /edits/mask/preview`) | Mask track + classic wand | Edit → Mask lane (the wand is deleted) | 2 |
@@ -248,7 +248,7 @@ has the reason as a line right under it; a toast is used only when the cause is 
 |---|---|---|---|---|---|
 | Runs | "No runs yet." **[New run]** | 6 skeleton cards | cards | — | "The runs could not be listed." + fix from the server **[Try again]** |
 | Quick start | the form itself; button "Prepare · free, runs locally" | "Estimating the price…" on the button (as today) | navigates to the workspace | "The price could not be estimated: <message> <fix>" under the button (as today) | upload failure toast with the server's fix; 402 → inline **[Yes, spend about $x]** |
-| Prep | (never empty; a run always has a Prep) | "Preparing… <status>" + pulse; Next: "Preparing · the clip opens in Edit when it is done" | summary card; Next: "Prepared · now watch the clip and approve it →" | input check advice list (amber), "Face lost 0.42–0.71 s; the cutout stands in there." | banner "Preparation failed: <reason>" + fix sentence; buttons **[Re-run with lenient gaps · free]** (when it applies) **[Open the failed stage]** (opens Advanced, expands it) |
+| Prep | (never empty; a run always has a Prep) | "Preparing… <status>" + pulse; Next: "Preparing · the clip opens in Edit when it is done" | summary card; Next: "Prepared · now watch the clip and approve it →" | input check advice list (amber), "Face lost 0.42–0.71 s; the motion clip stands in there." | banner "Preparation failed: <reason>" + fix sentence; buttons **[Re-run with lenient gaps · free]** (when it applies) **[Open the failed stage]** (opens Advanced, expands it) |
 | Edit | run still preparing: "The clip opens here when the preparation finishes." (no button) | views load; lanes show "Checking the mask…" / "Loading the face…" | bar: "Watched the whole clip? **[Approve this clip]**"; after: "Approved ✓ · Next: choose the world and the prompt →" | "This clip changed after you approved it. **[Approve again]**"; "3 unsaved edits · save or discard them before approving" | lane errors inline ("The mask could not be checked." + fix); save refusal inline on the bar: "1 mask click is not applied yet. **[Apply and save]** **[Save without it]**"; 409: "The clip changed since this page loaded. **[Reload the latest clip]**" |
 | World & Look | Character 1 empty: "Add Character 1: a picture or a short video of the character." **[Choose Character 1]**; prompt box: auto-filled, never empty | "Building the prompt…" (replaces the box text only while untouched) | "Prompt ready · Next: create the draft →" | generator limits ("Wan takes one reference image: the set image is ignored here. Use Seedance for a set reference."), reference warnings under the box | "Describe" without a key: inline "No Anthropic key yet. Add ANTHROPIC_API_KEY to .env, then restart." (no button, as today); slot save failure: inline "Could not save the set. **[Try again]**" |
 | Generate | "No draft yet." + the reason line under the disabled button when it applies: "Approve the clip in Edit first →" (a link) / "Add Character 1 in World & Look →" | "Draft in progress… <status>" + pulse; "Final in progress…" | draft video; Next: "Draft ready · judge it, then make the final or export →"; final: "Final ready · download or export →" | "The final will not be identical to the draft (a new render)." | 402 inline **[Yes, spend about $x]**; generation failure: the provider's message + fix + **[Try again · about $x]**; offline: "Offline mode: nothing is sent." (no button) |
@@ -388,3 +388,34 @@ Same counting rule as the audit (select = 2, drag = 1, file pick = 1, scroll = 0
 
 (a) is one click fewer than today and loses the two-page hop; (b)–(f) each lose one to two clicks and, more
 importantly, every scroll of 1 500–10 000 px.
+
+## 12. Owner decisions (2026-10-24, after the three directions)
+
+**Look: hybrid of A and B.** B's layout, editorial typography, thumbnail run cards, step rail with a one-line status
+under each step, spacing and friendliness; A's dark low-chroma palette with one accent so the video is always the
+brightest thing on screen. Dark is the default; B's paper look is a light theme behind a persisted toggle (tokens only).
+Direction C is dropped.
+
+**Core principle: clean but powerful (progressive disclosure).** Every piece of UI has one of three levels:
+
+| level | what | where |
+|---|---|---|
+| 1 · always visible | only what the current step needs: the video, the step's single primary action, the step rail, one status line | the step body |
+| 2 · one click away | secondary controls: tool choice, settings, extra views (overlay / mask only), export options | collapsible panels, a "More" menu or a side drawer that remembers its open/closed state across reloads |
+| 3 · on demand | technical info: run ids, frame counts, reports, logs, cost breakdowns, the nine-stage Advanced view | ONE "Details" drawer, in the same place on every step |
+
+Visible by default per step: **Prep** clip, preset, character, Go · **Edit** video, timeline, active tool (mask / face /
+words), Save · **World & Look** set, look, prompt preview · **Generate** generator, cost, Draft / Final · **Export** preset
+picker, Export. Everything else is level 2 or 3; every existing feature stays reachable in ≤ 3 clicks from the workspace.
+The feature map (§5) gets a "level" column.
+
+**Navigation.** The step rail is clickable, the current step is clearly highlighted, the browser back button moves
+between steps (each step is a history entry), and the way back to Runs is always visible.
+
+**Decisions.** Run names are stored as `name` in `run.json` with one `PUT /jobs/{id}/name` endpoint (the approved
+backend exception; shown on cards and in exports). The glossary term for the depth composite is **Motion clip** (not
+Cutout); the rest of the glossary is approved. The Quick journey must be upload → draft in **4 clicks max**: upload,
+preset + character, approve, draft.
+
+**Order.** One hybrid mockup first (`docs/tidy/directions/hybrid.html`: Runs, Edit and Generate; desktop and 380 px;
+dark and light), owner OK, then Step 4.
