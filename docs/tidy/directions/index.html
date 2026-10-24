@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Puppeteer · three visual directions</title>
+<style>
+:root{--bg:#f4f4f6;--surface:#fff;--text:#1c1d22;--muted:#5f6370;--border:#dedfe5;--accent:#1f18c0}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;overflow-wrap:anywhere}
+main{max-width:1100px;margin:auto;padding:40px 16px 80px}
+h1{font-size:28px;margin:0 0 6px;letter-spacing:-.02em}
+.lead{color:var(--muted);max-width:70ch;margin:0 0 28px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px}
+.dir{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;display:grid;grid-template-rows:auto 1fr;text-decoration:none;color:inherit;transition:box-shadow .2s,transform .2s}
+.dir:hover{box-shadow:0 12px 32px -12px #0003;transform:translateY(-2px)}
+.shot{display:block;aspect-ratio:16/10;overflow:hidden;background:#111;border-bottom:1px solid var(--border)}
+.body h2 a{color:inherit;text-decoration:none}.body h2 a:hover{color:var(--accent)}
+.shot img{width:100%;display:block;object-fit:cover;object-position:top}
+.body{padding:16px 18px 18px;display:grid;gap:8px;align-content:start}
+.body h2{margin:0;font-size:18px}
+.body h2 small{color:var(--muted);font-weight:500;font-size:13px;margin-left:6px}
+.body p{margin:0;color:var(--muted)}
+.body .meta{font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted)}
+.links{display:flex;gap:12px;flex-wrap:wrap;font-size:13px}
+.links a{color:var(--accent)}
+.same{margin-top:36px;padding:16px 18px;border:1px dashed var(--border);border-radius:12px;color:var(--muted);font-size:14px}
+.same b{color:var(--text)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Three visual directions for the tidy pass</h1>
+  <p class="lead">Each file shows the same Runs page, the same Edit step of the run workspace, and the same component set, so you compare the design, not the content. Every file is self-contained, works from 380 px up (no horizontal page scroll; the timeline scrolls inside its own panel), and lists its colour tokens, type and spacing scales and its WCAG AA contrast ratios in a comment at the top.</p>
+
+  <div class="grid">
+    <div class="dir">
+      <a class="shot" href="a-calm-suite.html"><img src="shots/a-desktop.png" alt="Direction A at desktop width"></a>
+      <div class="body">
+        <h2><a href="a-calm-suite.html">A · Calm editing suite</a> <small>dark</small></h2>
+        <p>A low-chroma dark UI in the spirit of a pro NLE: one ice-blue accent, monospace timecode everywhere, dense but quiet, the three tracks are the hero. For someone who will spend hours in the Edit step.</p>
+        <span class="meta">Inter + JetBrains Mono · text 15.4:1 · muted 6.7:1 · accent 9.3:1 · button label 9.1:1</span>
+        <span class="links"><span>desktop and 380 shots:</span><a href="shots/a-desktop.png">a-desktop.png</a><a href="shots/a-380.png">a-380.png</a></span>
+      </div>
+    </div>
+    <div class="dir">
+      <a class="shot" href="b-light-studio.html"><img src="shots/b-desktop.png" alt="Direction B at desktop width"></a>
+      <div class="body">
+        <h2><a href="b-light-studio.html">B · Light studio</a> <small>paper</small></h2>
+        <p>Warm paper-light surfaces, generous whitespace, soft shadows and an editorial serif for titles. Cards carry real thumbnails and a sentence of plain language; the step bar is a gentle progress rail. The friendliest for a first-time user.</p>
+        <span class="meta">Fraunces + Source Sans 3 + Plex Mono · text 15.2:1 · muted 5.7:1 · accent 6.1:1 · button label 6.2:1</span>
+        <span class="links"><span>desktop and 380 shots:</span><a href="shots/b-desktop.png">b-desktop.png</a><a href="shots/b-380.png">b-380.png</a></span>
+      </div>
+    </div>
+    <div class="dir">
+      <a class="shot" href="c-bold.html"><img src="shots/c-desktop.png" alt="Direction C at desktop width"></a>
+      <div class="body">
+        <h2><a href="c-bold.html">C · Bold expressive</a> <small>colour blocks</small></h2>
+        <p>Electric blue, signal yellow and ink on warm white, big Syne display type, hard 2 px outlines with offset shadows and CSS-only motion hints (hover lift, breathing playhead, striped progress). Loud, but every pair is AA or better.</p>
+        <span class="meta">Syne + Manrope + Space Mono · text 17.3:1 · muted 6.8:1 · accent 7.3:1 · ink on yellow 13.2:1</span>
+        <span class="links"><span>desktop and 380 shots:</span><a href="shots/c-desktop.png">c-desktop.png</a><a href="shots/c-380.png">c-380.png</a></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="same"><b>Same in all three:</b> five runs (Kitchen monologue · take 2 with two versions, Balcony toast, Hallway rant, Porch interview · wide, Garage pitch), the Edit step on frame 52 / 195 · 2.17 s with the Mask lane selected and three unsaved fixes, the Prep → Edit → World &amp; Look → Generate → Export step bar with Compare reachable, the "· free" / "· about $0.12" cost suffix on every paid or free action, a toast stack, an empty state, a loading sample, a shortcuts overlay and a tooltip on "cache key". Each file has a sticky in-page nav: Runs · Workspace · Components.</div>
+</main>
+</body>
+</html>

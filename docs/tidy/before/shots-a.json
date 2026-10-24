@@ -1,0 +1,122 @@
+{
+ "lab-two-runs-desktop": {
+  "console_errors": [],
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false
+ },
+ "lab-two-runs-380": {
+  "console_errors": [],
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false
+ },
+ "lab-four-runs-draft-desktop": {
+  "console_errors": [],
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false
+ },
+ "lab-four-runs-draft-380": {
+  "console_errors": [],
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false
+ },
+ "run-quick-review-desktop": {
+  "console_errors": [],
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false
+ },
+ "run-quick-review-380": {
+  "console_errors": [],
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false
+ },
+ "run-studio-stage-cards-desktop": {
+  "console_errors": [],
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false
+ },
+ "run-studio-stage-cards-380": {
+  "console_errors": [],
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false
+ },
+ "run-draft-step-desktop": {
+  "console_errors": [],
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false
+ },
+ "run-draft-step-380": {
+  "console_errors": [],
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false
+ },
+ "run-studio-with-draft-desktop": {
+  "console_errors": [],
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false
+ },
+ "run-studio-with-draft-380": {
+  "console_errors": [],
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false
+ },
+ "run-failed-quick-desktop": {
+  "console_errors": [],
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false
+ },
+ "run-failed-quick-380": {
+  "console_errors": [],
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false
+ },
+ "run-failed-studio-desktop": {
+  "console_errors": [],
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false
+ },
+ "run-failed-studio-380": {
+  "console_errors": [],
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false
+ },
+ "run-imported-studio-desktop": {
+  "console_errors": [],
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false
+ },
+ "run-imported-studio-380": {
+  "console_errors": [],
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false
+ },
+ "run-fast-reviewed-quick-desktop": {
+  "console_errors": [],
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false
+ },
+ "run-fast-reviewed-quick-380": {
+  "console_errors": [],
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false
+ }
+}

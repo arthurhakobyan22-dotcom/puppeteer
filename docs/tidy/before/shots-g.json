@@ -1,0 +1,14 @@
+{
+ "run-editor-words-track-desktop": {
+  "console_errors": [],
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false
+ },
+ "run-editor-words-track-380": {
+  "console_errors": [],
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false
+ }
+}

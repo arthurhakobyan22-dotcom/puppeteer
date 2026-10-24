@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Puppeteer · Direction A · Calm editing suite</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<!--
+  DIRECTION A · "Calm editing suite"
+  A dark, low-chroma UI in the spirit of a pro NLE/DAW. One accent (ice blue), dense but calm,
+  monospace for every timecode and frame number, the tracks are the hero of the workspace.
+
+  TOKENS (all on :root below)
+    colour   --bg --surface --surface-2 --surface-3 --text --muted --accent --accent-ink --accent-soft
+             --ok --ok-soft --warn --warn-soft --danger --danger-soft --border --border-strong
+             lanes: --lane-mask --lane-face --lane-words --playhead
+    type     --font-ui Inter · --font-mono JetBrains Mono
+             scale  --t-xs 11/16 · --t-sm 12/18 · --t-base 13/20 · --t-md 14/22 · --t-lg 16/24 · --t-xl 20/28 · --t-2xl 26/32 · --t-3xl 32/38
+    space    4-based: --s-1 4 · --s-2 8 · --s-3 12 · --s-4 16 · --s-5 20 · --s-6 24 · --s-8 32 · --s-10 40 · --s-12 48
+    radius   --r-1 4 · --r-2 6 · --r-3 10 · --r-4 14 · --r-pill 999
+    shadow   --shadow-1 (hairline lift) · --shadow-2 (floating: toasts, overlays)
+    motion   --ease (cubic-bezier) · --dur-1 120ms · --dur-2 200ms
+
+  WCAG AA CONTRAST (checked with the WCAG 2.x formula)
+    text #e6e8ee on bg #0f1115 ......... 15.42 : 1
+    text #e6e8ee on surface #171a21 .... 14.21 : 1
+    text #e6e8ee on surface-2 #1e222b .. 13.00 : 1
+    muted #9aa1b0 on surface #171a21 ...  6.71 : 1
+    muted #9aa1b0 on surface-2 #1e222b .  6.14 : 1
+    accent #7cc4ff on surface #171a21 ..  9.28 : 1
+    accent-ink #0b1d2e on accent #7cc4ff  9.11 : 1   (primary button label)
+    ok #6fd39a on surface ..............  9.50 : 1
+    warn #f0c35a on surface ............ 10.50 : 1
+    danger #ff7b72 on surface ..........  6.90 : 1
+  Controls: every button/chip label uses one of the pairs above; focus ring is the accent on the surface (9.28:1).
+-->
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0f1115;--surface:#171a21;--surface-2:#1e222b;--surface-3:#262b36;
+  --text:#e6e8ee;--muted:#9aa1b0;
+  --accent:#7cc4ff;--accent-ink:#0b1d2e;--accent-soft:#1a2a3a;
+  --ok:#6fd39a;--ok-soft:#16281f;--warn:#f0c35a;--warn-soft:#2d2614;--danger:#ff7b72;--danger-soft:#2f1b1a;
+  --border:#2a2f3a;--border-strong:#3a4150;
+  --lane-mask:#7cc4ff;--lane-face:#6fd39a;--lane-words:#c9b6ff;--playhead:#ff7b72;
+  --font-ui:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --t-xs:11px;--lh-xs:16px;--t-sm:12px;--lh-sm:18px;--t-base:13px;--lh-base:20px;--t-md:14px;--lh-md:22px;
+  --t-lg:16px;--lh-lg:24px;--t-xl:20px;--lh-xl:28px;--t-2xl:26px;--lh-2xl:32px;--t-3xl:32px;--lh-3xl:38px;
+  --s-1:4px;--s-2:8px;--s-3:12px;--s-4:16px;--s-5:20px;--s-6:24px;--s-8:32px;--s-10:40px;--s-12:48px;
+  --r-1:4px;--r-2:6px;--r-3:10px;--r-4:14px;--r-pill:999px;
+  --shadow-1:0 1px 0 #000 inset,0 1px 2px #0008;--shadow-2:0 10px 30px -10px #000c,0 2px 6px #0008;
+  --ease:cubic-bezier(.2,.7,.2,1);--dur-1:120ms;--dur-2:200ms;
+}
+*{box-sizing:border-box;min-width:0}
+html{background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--text);font:var(--t-base)/var(--lh-base) var(--font-ui);-webkit-font-smoothing:antialiased;overflow-wrap:anywhere}
+h1,h2,h3,h4{margin:0;font-weight:600;letter-spacing:-.01em}
+h1{font-size:var(--t-2xl);line-height:var(--lh-2xl)}
+h2{font-size:var(--t-xl);line-height:var(--lh-xl)}
+h3{font-size:var(--t-md);line-height:var(--lh-md)}
+h4{font-size:var(--t-xs);line-height:var(--lh-xs);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+p{margin:0}
+a{color:var(--accent)}
+code,.mono{font-family:var(--font-mono);font-size:var(--t-sm);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.small{font-size:var(--t-sm);line-height:var(--lh-sm)}
+.xs{font-size:var(--t-xs);line-height:var(--lh-xs)}
+svg.i{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* app chrome */
+.top{position:sticky;top:0;z-index:30;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+.top .in{max-width:1360px;margin:auto;padding:0 var(--s-4);height:48px;display:flex;align-items:center;gap:var(--s-4)}
+.brand{font-weight:700;font-size:var(--t-md);letter-spacing:-.02em;display:flex;gap:8px;align-items:center;color:var(--text);text-decoration:none}
+.brand i{width:16px;height:16px;border-radius:4px;background:linear-gradient(135deg,var(--accent),#3b7fc4);display:inline-block}
+.brand span{color:var(--muted);font-weight:500;font-family:var(--font-mono);font-size:var(--t-xs);letter-spacing:.1em;text-transform:uppercase}
+nav.pages{display:flex;gap:2px;margin-left:var(--s-2)}
+nav.pages a{color:var(--muted);text-decoration:none;padding:6px 10px;border-radius:var(--r-2);font-weight:500}
+nav.pages a:hover{background:var(--surface-2);color:var(--text)}
+nav.pages a.on{color:var(--text);background:var(--surface-2)}
+.top .right{margin-left:auto;display:flex;gap:var(--s-2);align-items:center}
+@media(max-width:560px){.top .in{height:auto;flex-wrap:wrap;padding:8px 12px;gap:8px}.top .right{margin-left:0;width:100%;justify-content:space-between}.brand span{display:none}}
+.wrap{max-width:1360px;margin:auto;padding:var(--s-6) var(--s-4) var(--s-12)}
+.screen{padding:var(--s-8) 0;border-top:1px dashed var(--border-strong);scroll-margin-top:60px}
+.screen:first-child{border-top:0;padding-top:var(--s-4)}
+.screen-label{display:inline-flex;gap:8px;align-items:center;font-family:var(--font-mono);font-size:var(--t-xs);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:var(--s-4)}
+.screen-label b{color:var(--accent);font-weight:600}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:32px;padding:0 12px;border-radius:var(--r-2);border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);font:600 var(--t-base)/1 var(--font-ui);cursor:pointer;text-decoration:none;white-space:nowrap;transition:background var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease)}
+.btn:hover{background:var(--surface-3)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+.btn.ghost:hover{color:var(--text);background:var(--surface-2)}
+.btn.danger{background:transparent;color:var(--danger);border-color:#5a2f2c}
+.btn.danger:hover{background:var(--danger-soft)}
+.btn:disabled,.btn.disabled{opacity:.45;cursor:not-allowed;filter:none}
+.btn .cost{font-family:var(--font-mono);font-weight:500;font-size:var(--t-xs);opacity:.85}
+.btn.sm{min-height:26px;padding:0 8px;font-size:var(--t-sm)}
+.btn.icon{padding:0;width:32px}
+.btn.icon.sm{width:26px}
+.btn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+
+/* chips */
+.chip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:var(--r-pill);font:500 var(--t-xs)/1 var(--font-mono);letter-spacing:.02em;background:var(--surface-3);color:var(--muted);white-space:nowrap}
+.chip::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
+.chip.ready{color:var(--ok);background:var(--ok-soft)}
+.chip.review{color:var(--warn);background:var(--warn-soft)}
+.chip.preparing{color:var(--accent);background:var(--accent-soft)}
+.chip.preparing::before{animation:pulse 1.2s infinite}
+.chip.draft{color:var(--lane-words);background:#262038}
+.chip.failed{color:var(--danger);background:var(--danger-soft)}
+.chip.plain::before{display:none}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* inputs */
+.input,.select{display:flex;align-items:center;gap:8px;height:32px;padding:0 10px;border:1px solid var(--border-strong);border-radius:var(--r-2);background:var(--bg);color:var(--text);font:var(--t-base)/1 var(--font-ui);width:100%}
+.input input{all:unset;flex:1;min-width:0;color:var(--text)}
+.input input::placeholder{color:var(--muted)}
+.input:focus-within,.select:focus-within{border-color:var(--accent)}
+.select select{all:unset;flex:1;min-width:0;appearance:none;-webkit-appearance:none;color:var(--text)}
+label.lbl{display:grid;gap:6px;font-size:var(--t-sm);color:var(--muted)}
+.check{display:inline-flex;gap:8px;align-items:center;cursor:pointer;color:var(--text)}
+.check input{width:16px;height:16px;margin:0;accent-color:var(--accent)}
+.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;color:var(--muted);font-size:var(--t-sm)}
+.switch i{width:30px;height:18px;border-radius:var(--r-pill);background:var(--surface-3);border:1px solid var(--border-strong);position:relative;transition:background var(--dur-2) var(--ease)}
+.switch i::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--muted);transition:transform var(--dur-2) var(--ease)}
+.switch.on i{background:var(--accent-soft);border-color:var(--accent)}
+.switch.on i::after{transform:translateX(12px);background:var(--accent)}
+.switch.on{color:var(--text)}
+input[type=range]{width:100%;accent-color:var(--accent);height:20px;margin:0}
+
+/* RUNS */
+.runs-head{display:flex;gap:var(--s-3);align-items:center;flex-wrap:wrap;margin-bottom:var(--s-4)}
+.runs-head .count{color:var(--muted);font-family:var(--font-mono);font-size:var(--t-sm)}
+.runs-head .grow{flex:1 1 220px;max-width:360px}
+.filters{display:flex;gap:4px;flex-wrap:wrap}
+.filters .btn{font-weight:500}
+.runs{display:grid;gap:var(--s-2)}
+.run{display:grid;grid-template-columns:96px minmax(0,1fr) auto;gap:var(--s-3);padding:var(--s-3);border:1px solid var(--border);border-radius:var(--r-3);background:var(--surface);align-items:center;position:relative}
+.run:hover{border-color:var(--border-strong)}
+.run.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.run .lab-pick{position:absolute;top:10px;left:10px;z-index:2}
+.thumb{aspect-ratio:16/10;width:100%;border-radius:var(--r-2);overflow:hidden;position:relative;background:#000}
+.thumb svg{width:100%;height:100%;display:block}
+.thumb .dur{position:absolute;right:4px;bottom:4px;max-width:calc(100% - 8px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font:500 10px/1 var(--font-mono);color:#fff;background:#000a;padding:3px 5px;border-radius:3px}
+.run .name{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.run .name h3{font-size:var(--t-md)}
+.run .name .rename{color:var(--muted);display:inline-flex;align-items:center}
+.run .name .rename:hover{color:var(--text)}
+.run .facts{display:flex;gap:4px 14px;flex-wrap:wrap;color:var(--muted);font-size:var(--t-sm);margin-top:4px}
+.run .facts b{color:var(--text);font-weight:500}
+.run .facts .mono{font-size:var(--t-xs)}
+.run .actions{display:flex;gap:4px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+.run .msg{grid-column:2/-1;font-size:var(--t-sm);display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 10px;border-radius:var(--r-2);background:var(--danger-soft);color:var(--danger)}
+.run .msg .btn{color:var(--text)}
+.run .prog{grid-column:2/-1;display:grid;gap:4px;font-size:var(--t-sm);color:var(--muted)}
+.bar{height:4px;border-radius:2px;background:var(--surface-3);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);width:42%;border-radius:2px}
+.tree{margin-left:calc(96px + var(--s-3));display:grid;gap:var(--s-2);padding-left:var(--s-4);border-left:1px solid var(--border-strong)}
+.tree .run{grid-template-columns:64px minmax(0,1fr) auto;padding:var(--s-2) var(--s-3)}
+.tree .run::before{content:'';position:absolute;left:-17px;top:50%;width:12px;height:1px;background:var(--border-strong)}
+.tree .run h3{font-size:var(--t-base)}
+.tree-toggle{grid-column:2/-1;display:inline-flex;gap:6px;align-items:center;color:var(--muted);font-size:var(--t-sm);width:max-content;background:none;border:0;cursor:pointer;padding:0;font-family:inherit}
+.tree-toggle:hover{color:var(--text)}
+.drawer{grid-column:1/-1;border-top:1px solid var(--border);padding-top:var(--s-3);display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:var(--s-2) var(--s-4);font-size:var(--t-sm)}
+.drawer dt{color:var(--muted);font-size:var(--t-xs);text-transform:uppercase;letter-spacing:.06em}
+.drawer dd{margin:2px 0 0;font-family:var(--font-mono);font-size:var(--t-sm);color:var(--text)}
+.drawer dd .btn{margin-left:6px;vertical-align:middle}
+@media(max-width:720px){.run{grid-template-columns:80px minmax(0,1fr)}.run .actions{grid-column:1/-1;justify-content:flex-start}.run .msg,.run .prog{grid-column:1/-1}.tree{margin-left:var(--s-3);padding-left:var(--s-3)}.tree .run{grid-template-columns:56px minmax(0,1fr)}}
+
+/* empty / loading */
+.empty{border:1px dashed var(--border-strong);border-radius:var(--r-3);padding:var(--s-8) var(--s-4);text-align:center;display:grid;gap:var(--s-2);justify-items:center;color:var(--muted)}
+.empty h3{color:var(--text)}
+.loading{display:grid;gap:var(--s-2);padding:var(--s-3);border:1px solid var(--border);border-radius:var(--r-3);background:var(--surface)}
+.loading .row{display:flex;justify-content:space-between;gap:8px;font-size:var(--t-sm)}
+.loading .row b{font-weight:500}
+.loading .stages{display:flex;gap:3px}
+.loading .stages i{flex:1;height:3px;border-radius:2px;background:var(--surface-3)}
+.loading .stages i.d{background:var(--ok)}
+.loading .stages i.c{background:var(--accent);animation:pulse 1.2s infinite}
+.skel{display:grid;gap:8px}
+.skel i{display:block;height:10px;border-radius:3px;background:linear-gradient(90deg,var(--surface-2),var(--surface-3),var(--surface-2));background-size:200% 100%;animation:shimmer 1.4s linear infinite}
+@keyframes shimmer{to{background-position:-200% 0}}
+
+/* WORKSPACE */
+.ws-head{display:grid;gap:var(--s-3);margin-bottom:var(--s-4)}
+.ws-title{display:flex;gap:var(--s-3);align-items:center;flex-wrap:wrap}
+.ws-title h1{font-size:var(--t-xl);line-height:var(--lh-xl)}
+.ws-title .spent{font-family:var(--font-mono);font-size:var(--t-sm);color:var(--muted)}
+.steps{display:flex;align-items:center;gap:0;border:1px solid var(--border);border-radius:var(--r-3);background:var(--surface);padding:4px;overflow-x:auto}
+.step{display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:var(--r-2);color:var(--muted);font-weight:500;white-space:nowrap;text-decoration:none;font-size:var(--t-sm)}
+.step .n{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font:600 10px/1 var(--font-mono);border:1px solid var(--border-strong);color:var(--muted)}
+.step.done{color:var(--text)}
+.step.done .n{background:var(--ok-soft);border-color:transparent;color:var(--ok)}
+.step.cur{background:var(--accent-soft);color:var(--accent)}
+.step.cur .n{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.step.next{color:var(--text)}
+.step.locked{opacity:.55}
+.step.locked .n{border-style:dashed}
+.steps .sep{width:16px;height:1px;background:var(--border-strong);flex:none}
+.steps .lab{margin-left:auto}
+@media(max-width:720px){.steps .lab{margin-left:8px}}
+.ws{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:var(--s-4)}
+@media(max-width:1000px){.ws{grid-template-columns:1fr}}
+.viewer{border:1px solid var(--border);border-radius:var(--r-3);background:var(--surface);overflow:hidden}
+.views{display:flex;gap:2px;padding:6px;border-bottom:1px solid var(--border);overflow-x:auto}
+.views .btn{font-weight:500}
+.stage{position:relative;aspect-ratio:16/9;background:#000;max-height:520px;overflow:hidden}
+.stage svg{width:100%;height:100%;display:block}
+.stage .caption{position:absolute;left:12px;bottom:12px;font-family:var(--font-mono);font-size:var(--t-xs);color:#fff;background:#000a;padding:4px 8px;border-radius:var(--r-1)}
+.transport{display:flex;gap:6px 12px;align-items:center;flex-wrap:wrap;padding:8px 10px;border-top:1px solid var(--border)}
+.transport .grp{display:inline-flex;gap:2px}
+.transport .counter{font-family:var(--font-mono);font-size:var(--t-sm);color:var(--text);flex:1 1 160px}
+.transport .counter b{font-weight:600;color:var(--accent)}
+.transport .zoom{display:inline-flex;gap:2px;align-items:center;color:var(--muted);font-size:var(--t-xs)}
+
+/* timeline */
+.tlwrap{grid-column:1/-1;border:1px solid var(--border);border-radius:var(--r-3);background:var(--surface);overflow:hidden}
+.tl{display:grid;grid-template-columns:88px minmax(0,1fr)}
+.tl-labels{border-right:1px solid var(--border);background:var(--surface-2);display:grid;grid-template-rows:28px 56px 44px 44px}
+.tl-label{display:flex;align-items:center;gap:8px;padding:0 10px;border-bottom:1px solid var(--border);font:600 var(--t-xs)/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:none;border-left:0;border-right:0;border-top:0;cursor:pointer;text-align:left}
+.tl-label i{width:8px;height:8px;border-radius:2px}
+.tl-label.on{background:var(--surface-3);color:var(--text);box-shadow:inset 2px 0 0 var(--accent)}
+.tl-scroll{overflow-x:auto;overflow-y:hidden;position:relative}
+.tl-inner{position:relative;min-width:760px}
+.ruler{height:28px;border-bottom:1px solid var(--border);position:relative;background:repeating-linear-gradient(90deg,var(--border-strong) 0 1px,transparent 1px 12.345%);font:var(--t-xs)/1 var(--font-mono);color:var(--muted)}
+.ruler span{position:absolute;top:8px;transform:translateX(4px)}
+.lane{position:relative;border-bottom:1px solid var(--border)}
+.lane.mask{height:56px}.lane.face{height:44px}.lane.words{height:44px}
+.lane.sel{background:#1a1e28}
+.blk{position:absolute;top:8px;bottom:8px;border-radius:3px}
+.mask-area{position:absolute;inset:0;width:100%;height:100%}
+.tick{position:absolute;top:0;bottom:0;width:2px;background:var(--danger);opacity:.9}
+.tick::after{content:'';position:absolute;top:0;left:-3px;border:4px solid transparent;border-top:5px solid var(--danger)}
+.fix{position:absolute;top:50%;transform:translate(-50%,-50%);width:16px;height:16px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font:700 11px/16px var(--font-mono);text-align:center;box-shadow:0 0 0 2px var(--surface)}
+.fix.minus{background:var(--warn)}
+.seg{position:absolute;top:14px;height:16px;border-radius:2px}
+.seg.tracked{background:var(--lane-face);opacity:.8}
+.seg.filled{background:var(--warn);opacity:.8}
+.seg.missing{background:var(--danger);opacity:.8}
+.seg.off{background:repeating-linear-gradient(135deg,var(--muted) 0 2px,transparent 2px 6px);opacity:.7}
+.key{position:absolute;top:6px;transform:translateX(-50%) rotate(45deg);width:7px;height:7px;background:var(--text)}
+.word{position:absolute;top:9px;height:26px;border-radius:3px;background:#2a2340;border:1px solid var(--lane-words);color:var(--text);font:var(--t-xs)/24px var(--font-ui);padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.word.sel{background:var(--lane-words);color:#1a1428;font-weight:600}
+.range{position:absolute;top:28px;bottom:0;background:#7cc4ff14;border-left:1px solid var(--accent);border-right:1px solid var(--accent);pointer-events:none}
+.range::before{content:'1.80 – 2.90 s';position:absolute;bottom:2px;left:3px;white-space:nowrap;font:var(--t-xs)/1 var(--font-mono);color:var(--accent);background:var(--surface);padding:2px 4px;border-radius:2px}
+.playhead{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--playhead);pointer-events:none;z-index:3}
+.playhead::before{content:'';position:absolute;top:0;left:-5px;border:6px solid transparent;border-top:8px solid var(--playhead)}
+.playhead::after{content:'2.17 s';position:absolute;top:4px;left:8px;white-space:nowrap;font:500 var(--t-xs)/1 var(--font-mono);color:var(--playhead)}
+
+/* track panel + save bar */
+.panel{border:1px solid var(--border);border-radius:var(--r-3);background:var(--surface);display:grid;gap:var(--s-3);padding:var(--s-3);align-content:start}
+.panel .ph{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.panel .ph h3{display:flex;gap:8px;align-items:center}
+.panel .ph h3 i{width:8px;height:8px;border-radius:2px;background:var(--lane-mask)}
+.seg-ctl{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;border:1px solid var(--border-strong);border-radius:var(--r-2);overflow:hidden}
+.seg-ctl button{all:unset;text-align:center;padding:6px 4px;font:500 var(--t-sm)/16px var(--font-ui);color:var(--muted);cursor:pointer;border-right:1px solid var(--border-strong)}
+.seg-ctl button:last-child{border-right:0}
+.seg-ctl button.on{background:var(--accent-soft);color:var(--accent)}
+.pending{list-style:none;margin:0;padding:0;border:1px solid var(--border);border-radius:var(--r-2);font-family:var(--font-mono);font-size:var(--t-sm)}
+.pending li{display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border-bottom:1px solid var(--border);gap:8px}
+.pending li:last-child{border-bottom:0}
+.pending li.here{background:var(--accent-soft)}
+.pending .k{color:var(--muted)}
+.slider{display:grid;grid-template-columns:7.5em minmax(0,1fr) 3em;gap:8px;align-items:center;font-size:var(--t-sm)}
+.slider output{font-family:var(--font-mono);font-size:var(--t-xs);text-align:right;color:var(--muted)}
+.savebar{grid-column:1/-1;display:flex;gap:var(--s-2) var(--s-4);align-items:center;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--accent);border-radius:var(--r-3);background:var(--accent-soft)}
+.savebar .sum{flex:1 1 220px;display:grid;gap:2px}
+.savebar .sum b{font-weight:600}
+.savebar .sum span{color:var(--muted);font-size:var(--t-sm)}
+.savebar .acts{display:flex;gap:4px;flex-wrap:wrap}
+details.adv{grid-column:1/-1;border:1px solid var(--border);border-radius:var(--r-3);background:var(--surface)}
+details.adv summary{list-style:none;cursor:pointer;display:flex;gap:10px;align-items:center;padding:10px 12px;color:var(--muted);font-size:var(--t-sm)}
+details.adv summary::-webkit-details-marker{display:none}
+details.adv summary svg{transition:transform var(--dur-2) var(--ease)}
+details.adv[open] summary svg{transform:rotate(90deg)}
+details.adv .body{padding:0 12px 12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--s-3);font-size:var(--t-sm)}
+.kv dt{color:var(--muted);font-size:var(--t-xs);text-transform:uppercase;letter-spacing:.06em}
+.kv dd{margin:2px 0 0;font-family:var(--font-mono);font-size:var(--t-sm)}
+.nextbar{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:var(--s-3);flex-wrap:wrap;padding:var(--s-3) 0 0}
+.nextbar .hint{color:var(--muted);font-size:var(--t-sm)}
+
+/* tooltips / overlay / toasts */
+.tip{position:relative;border-bottom:1px dotted var(--muted);cursor:help;color:var(--text)}
+.tipbox{position:absolute;left:0;top:calc(100% + 8px);width:260px;padding:10px 12px;background:var(--surface-3);border:1px solid var(--border-strong);border-radius:var(--r-2);box-shadow:var(--shadow-2);font-size:var(--t-sm);line-height:var(--lh-sm);color:var(--text);z-index:5}
+.tipbox.r{left:auto;right:0}.tipbox.r::before{left:auto;right:14px}
+.tipbox::before{content:'';position:absolute;top:-5px;left:14px;width:8px;height:8px;background:var(--surface-3);border-left:1px solid var(--border-strong);border-top:1px solid var(--border-strong);transform:rotate(45deg)}
+.tipbox b{display:block;font-family:var(--font-mono);font-weight:500;color:var(--accent);margin-bottom:2px}
+.samples{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--s-4);margin-top:var(--s-6)}
+.sample{display:grid;gap:var(--s-3);align-content:start}
+.overlay{background:var(--surface-2);border:1px solid var(--border-strong);border-radius:var(--r-3);box-shadow:var(--shadow-2);padding:var(--s-4);display:grid;gap:var(--s-3)}
+.overlay .oh{display:flex;justify-content:space-between;align-items:center}
+.keys{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:var(--t-sm)}
+.keys div{display:flex;justify-content:space-between;gap:8px;color:var(--muted)}
+.keys span{color:var(--text)}
+kbd{font:500 var(--t-xs)/1 var(--font-mono);padding:3px 5px;border:1px solid var(--border-strong);border-bottom-width:2px;border-radius:4px;background:var(--surface);color:var(--text);white-space:nowrap}
+.toasts{display:grid;gap:8px}
+.toast{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:var(--r-3);border:1px solid var(--border-strong);background:var(--surface-2);box-shadow:var(--shadow-2);font-size:var(--t-sm);line-height:var(--lh-sm)}
+.toast svg.i{margin-top:2px}
+.toast .b{flex:1;display:grid;gap:4px}
+.toast .b b{font-weight:600;color:var(--text)}
+.toast .b span{color:var(--muted)}
+.toast .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.toast.ok{border-color:#2d5a3f}.toast.ok svg{color:var(--ok)}
+.toast.warn{border-color:#5a4a1f}.toast.warn svg{color:var(--warn)}
+.toast.err{border-color:#5a2f2c}.toast.err svg{color:var(--danger)}
+.toast .x{margin-left:auto;color:var(--muted);background:none;border:0;cursor:pointer;padding:0 2px;font-size:16px;line-height:1}
+
+/* COMPONENTS */
+.comp{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:var(--s-4)}
+.comp .box{border:1px solid var(--border);border-radius:var(--r-3);background:var(--surface);padding:var(--s-4);display:grid;gap:var(--s-3);align-content:start}
+.comp .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.card{border:1px solid var(--border);border-radius:var(--r-3);background:var(--surface-2);padding:var(--s-3);display:grid;gap:6px}
+.card h3{font-size:var(--t-base)}
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:6px}
+.sw{display:grid;gap:4px;font:var(--t-xs)/1 var(--font-mono);color:var(--muted)}
+.sw i{height:28px;border-radius:var(--r-1);border:1px solid var(--border)}
+.type-scale div{display:flex;gap:12px;align-items:baseline;border-bottom:1px solid var(--border);padding:6px 0}
+.type-scale code{color:var(--muted);width:7em;flex:none}
+.lane-demo{position:relative;height:44px;border:1px solid var(--border);border-radius:var(--r-2);background:var(--surface-2);overflow:hidden}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="in">
+    <a class="brand" href="#runs"><i></i>Puppeteer <span>motion control</span></a>
+    <nav class="pages" aria-label="Screens in this mockup">
+      <a href="#runs" class="on">Runs</a><a href="#workspace">Workspace</a><a href="#components">Components</a>
+    </nav>
+    <div class="right">
+      <span class="chip plain">offline · fal key missing</span>
+      <a class="btn primary sm" href="#runs"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New run</a>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ================================================================ RUNS -->
+<section class="screen" id="runs">
+  <div class="screen-label"><b>01</b> Runs · the library</div>
+  <div class="runs-head">
+    <h1>Runs</h1>
+    <span class="count">5 runs · 2 versions · $3.31 spent</span>
+    <label class="input grow"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input placeholder="Search by name, preset or ID"></label>
+    <div class="filters" role="group" aria-label="Filter">
+      <button class="btn sm on">All</button><button class="btn sm">Needs review</button><button class="btn sm">Ready</button><button class="btn sm">Failed</button>
+    </div>
+    <label class="switch on"><i></i>Pick runs to compare</label>
+    <a class="btn ghost sm" href="#workspace">Compare 2 →</a>
+  </div>
+
+  <div class="runs">
+    <!-- 1 · ready, with branch tree and details drawer open -->
+    <article class="run selected">
+      <label class="check lab-pick" title="Pick to compare"><input type="checkbox" checked aria-label="Pick Kitchen monologue to compare"></label>
+      <div class="thumb"><svg viewBox="0 0 160 100" aria-hidden="true"><defs><linearGradient id="g1" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#3a2a1a"/><stop offset="1" stop-color="#0d0b0a"/></linearGradient></defs><rect width="160" height="100" fill="url(#g1)"/><ellipse cx="80" cy="42" rx="18" ry="22" fill="#e8b27a"/><path d="M40 100c4-26 20-36 40-36s36 10 40 36z" fill="#2b3a4a"/><g stroke="#7cc4ff" stroke-width=".6" fill="none" opacity=".9"><path d="M66 36l14-6 14 6-14 26z"/><path d="M62 44l18-2 18 2M70 54l10 2 10-2M80 30v30"/></g></svg><span class="dur">0:08 · 195 f</span></div>
+      <div>
+        <div class="name"><h3>Kitchen monologue · take 2</h3><a class="rename" href="#runs" aria-label="Rename"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16zM13 7l4 4"/></svg></a><span class="chip ready">ready</span></div>
+        <div class="facts"><span><b>$0.52</b> spent</span><span>Expressive · cutout + face mesh</span><span>2 h ago</span><span>195 frames · 24 fps · 1080 × 1920</span><span class="mono">0be4cf2c…</span></div>
+      </div>
+      <div class="actions"><a class="btn sm primary" href="#workspace">Open</a><button class="btn sm ghost">Export</button><button class="btn sm icon ghost" aria-label="More"><svg class="i" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div>
+      <button class="tree-toggle" aria-expanded="true"><svg class="i" viewBox="0 0 24 24" style="transform:rotate(90deg)"><path d="m9 6 6 6-6 6"/></svg>2 versions · hide</button>
+      <dl class="drawer">
+        <div><dt>Run ID</dt><dd>0be4cf2cadd945008a9c9131b6c75f12 <button class="btn sm ghost">copy</button></dd></div>
+        <div><dt>Mode</dt><dd>depth_mesh · lenient gaps</dd></div>
+        <div><dt>Face</dt><dd>163 found · 13 filled · 19 lost</dd></div>
+        <div><dt>Generator</dt><dd>fal · Seedance 2.5 · edit</dd></div>
+        <div><dt>Folder</dt><dd>runs/0be4cf2c… · 184 MB</dd></div>
+      </dl>
+    </article>
+    <div class="tree">
+      <article class="run">
+        <div class="thumb"><svg viewBox="0 0 160 100" aria-hidden="true"><rect width="160" height="100" fill="#111"/><ellipse cx="80" cy="42" rx="18" ry="22" fill="#fff"/><path d="M40 100c4-26 20-36 40-36s36 10 40 36z" fill="#fff"/></svg></div>
+        <div>
+          <div class="name"><h3>Mask fix · hands on 46–52</h3><span class="chip ready">ready</span></div>
+          <div class="facts"><span>re-ran <b>mask</b> · SAM 3 on fal</span><span><b>$0.12</b></span><span>40 min ago</span></div>
+        </div>
+        <div class="actions"><a class="btn sm" href="#workspace">Open</a><label class="check"><input type="checkbox" checked aria-label="Pick to compare"></label></div>
+      </article>
+      <article class="run">
+        <div class="thumb"><svg viewBox="0 0 160 100" aria-hidden="true"><rect width="160" height="100" fill="#0a0a0a"/><ellipse cx="80" cy="42" rx="18" ry="22" fill="#e8b27a"/><path d="M40 100c4-26 20-36 40-36s36 10 40 36z" fill="#2b3a4a"/><g stroke="#6fd39a" stroke-width=".6" fill="none"><path d="M66 36l14-6 14 6-14 26zM62 44l18-2 18 2"/></g></svg></div>
+        <div>
+          <div class="name"><h3>Face pad 1.82</h3><span class="chip review">needs review</span></div>
+          <div class="facts"><span>re-ran <b>face</b> · free, local</span><span><b>$0.00</b></span><span>12 min ago</span></div>
+        </div>
+        <div class="actions"><a class="btn sm" href="#workspace">Review</a><label class="check"><input type="checkbox" aria-label="Pick to compare"></label></div>
+      </article>
+    </div>
+
+    <!-- 2 · needs review -->
+    <article class="run">
+      <label class="check lab-pick"><input type="checkbox" aria-label="Pick Balcony toast to compare"></label>
+      <div class="thumb"><svg viewBox="0 0 160 100" aria-hidden="true"><defs><linearGradient id="g2" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#f2a65a"/><stop offset="1" stop-color="#4a2c5a"/></linearGradient></defs><rect width="160" height="100" fill="url(#g2)"/><rect x="0" y="70" width="160" height="30" fill="#1a1222"/><ellipse cx="60" cy="40" rx="12" ry="15" fill="#1a1222"/><path d="M34 100c2-24 12-32 26-32s24 8 26 32z" fill="#1a1222"/><path d="M86 64l6-20 3 20" fill="#1a1222"/></svg><span class="dur">0:12 · 288 f</span></div>
+      <div>
+        <div class="name"><h3>Balcony toast</h3><a class="rename" href="#runs" aria-label="Rename"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16zM13 7l4 4"/></svg></a><span class="chip review">needs review</span></div>
+        <div class="facts"><span><b>$0.12</b> spent</span><span>Full body · cutout</span><span>yesterday</span><span>288 frames · 24 fps</span><span class="mono">85e5dbe6…</span></div>
+      </div>
+      <div class="actions"><a class="btn sm primary" href="#workspace">Review mask</a><button class="btn sm icon ghost" aria-label="More"><svg class="i" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div>
+    </article>
+
+    <!-- 3 · preparing -->
+    <article class="run">
+      <label class="check lab-pick"><input type="checkbox" disabled aria-label="Not ready to compare"></label>
+      <div class="thumb"><svg viewBox="0 0 160 100" aria-hidden="true"><rect width="160" height="100" fill="#1c2026"/><rect x="20" y="0" width="30" height="100" fill="#262c34"/><rect x="110" y="0" width="30" height="100" fill="#262c34"/><ellipse cx="80" cy="44" rx="14" ry="17" fill="#b98a66"/><path d="M50 100c3-24 16-30 30-30s27 6 30 30z" fill="#5a3b3b"/></svg><span class="dur">0:06 · 144 f</span></div>
+      <div>
+        <div class="name"><h3>Hallway rant</h3><a class="rename" href="#runs" aria-label="Rename"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16zM13 7l4 4"/></svg></a><span class="chip preparing">preparing</span></div>
+        <div class="facts"><span><b>$0.00</b> · free preset</span><span>Talking head · face mesh only</span><span>started 40 s ago</span><span class="mono">431506e4…</span></div>
+      </div>
+      <div class="actions"><button class="btn sm ghost">Watch</button><button class="btn sm danger">Stop</button></div>
+      <div class="prog"><span>Face mesh · stage 6 of 9 · 42% · about 1 min left</span><div class="bar"><i></i></div></div>
+    </article>
+
+    <!-- 4 · draft done -->
+    <article class="run">
+      <label class="check lab-pick"><input type="checkbox" aria-label="Pick Porch interview to compare"></label>
+      <div class="thumb"><svg viewBox="0 0 160 100" aria-hidden="true"><defs><linearGradient id="g4" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#6aa0c8"/><stop offset="1" stop-color="#cfe3f0"/></linearGradient></defs><rect width="160" height="100" fill="url(#g4)"/><rect x="0" y="62" width="160" height="38" fill="#7a8a5a"/><ellipse cx="104" cy="40" rx="11" ry="14" fill="#f0d0b0"/><path d="M80 100c2-24 11-30 24-30s22 6 24 30z" fill="#2d3f5a"/></svg><span class="dur">0:10 · 240 f</span></div>
+      <div>
+        <div class="name"><h3>Porch interview · wide</h3><a class="rename" href="#runs" aria-label="Rename"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16zM13 7l4 4"/></svg></a><span class="chip draft">draft done</span></div>
+        <div class="facts"><span><b>$2.67</b> spent</span><span>Profile-heavy · cutout, mesh hidden</span><span>3 days ago</span><span>Seedance 2.5 · draft 480p</span><span class="mono">9e44f470…</span></div>
+      </div>
+      <div class="actions"><a class="btn sm primary" href="#workspace">Open draft</a><button class="btn sm">Make the final <span class="cost">· 1080p · about $11.34</span></button></div>
+    </article>
+
+    <!-- 5 · failed -->
+    <article class="run">
+      <label class="check lab-pick"><input type="checkbox" disabled aria-label="Not ready to compare"></label>
+      <div class="thumb"><svg viewBox="0 0 160 100" aria-hidden="true"><rect width="160" height="100" fill="#2a2a2a"/><rect x="0" y="0" width="160" height="40" fill="#3a3a3a"/><ellipse cx="70" cy="48" rx="13" ry="16" fill="#c9a07a"/><path d="M42 100c3-24 14-30 28-30s25 6 28 30z" fill="#444"/><rect x="118" y="30" width="30" height="70" fill="#8a1f1f" opacity=".7"/></svg><span class="dur">0:09 · 216 f</span></div>
+      <div>
+        <div class="name"><h3>Garage pitch</h3><a class="rename" href="#runs" aria-label="Rename"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16zM13 7l4 4"/></svg></a><span class="chip failed">failed</span></div>
+        <div class="facts"><span><b>$0.00</b> spent</span><span>Talking head · face mesh only, strict</span><span>5 days ago</span><span class="mono">0b6ee85c…</span></div>
+      </div>
+      <div class="actions"><button class="btn sm ghost">Details</button><button class="btn sm danger">Delete</button></div>
+      <div class="msg"><svg class="i" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9 2.6 17.3A2 2 0 0 0 4.3 20h15.4a2 2 0 0 0 1.7-2.7L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span>Face lost for 2.1 s at 0:03; the strict rule stopped the run before anything was sent.</span><button class="btn sm">Re-run with lenient gaps <span class="cost">· free</span></button></div>
+    </article>
+  </div>
+
+  <div class="samples">
+    <div class="sample"><h4>Empty state · first visit</h4>
+      <div class="empty"><svg class="i" viewBox="0 0 24 24" style="width:28px;height:28px"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/></svg><h3>No runs yet</h3><p class="small">Upload a clip of a person talking, 5 to 30 seconds. The free Talking head preset runs on this machine and needs no key.</p><button class="btn primary">New run · Talking head <span class="cost">· free</span></button><a class="small" href="#runs">What is a run?</a></div>
+    </div>
+    <div class="sample"><h4>Loading · a run being prepared</h4>
+      <div class="loading"><div class="row"><b>Preparing Hallway rant</b><span class="mono">42%</span></div><div class="stages"><i class="d"></i><i class="d"></i><i class="d"></i><i class="d"></i><i class="d"></i><i class="c"></i><i></i><i></i><i></i></div><div class="row muted"><span>Face mesh · stage 6 of 9 · frame 61 of 144</span><span>about 1 min left</span></div><p class="small muted">Free and local. You can leave this page; the run keeps going.</p></div>
+      <div class="skel" aria-hidden="true"><i style="width:60%"></i><i style="width:90%"></i><i style="width:40%"></i></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ WORKSPACE -->
+<section class="screen" id="workspace">
+  <div class="screen-label"><b>02</b> Run workspace · Edit step</div>
+  <div class="ws-head">
+    <div class="ws-title">
+      <a class="btn ghost sm" href="#runs"><svg class="i" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>Runs</a>
+      <h1>Kitchen monologue · take 2</h1><a class="rename" href="#workspace" aria-label="Rename" style="color:var(--muted)"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16zM13 7l4 4"/></svg></a>
+      <span class="chip ready">ready</span><span class="spent">Spent $0.52</span>
+      <span class="muted small">Expressive · 195 frames · 8.1 s</span>
+    </div>
+    <nav class="steps" aria-label="Steps">
+      <a class="step done" href="#workspace"><span class="n">✓</span>Prep</a><span class="sep"></span>
+      <a class="step cur" href="#workspace" aria-current="step"><span class="n">2</span>Edit</a><span class="sep"></span>
+      <a class="step next" href="#workspace"><span class="n">3</span>World &amp; Look</a><span class="sep"></span>
+      <a class="step locked" href="#workspace"><span class="n">4</span>Generate</a><span class="sep"></span>
+      <a class="step locked" href="#workspace"><span class="n">5</span>Export</a>
+      <a class="btn ghost sm lab" href="#workspace"><svg class="i" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/></svg>Compare</a>
+    </nav>
+  </div>
+
+  <div class="ws">
+    <div class="viewer">
+      <div class="views" role="tablist" aria-label="View">
+        <button class="btn sm on" role="tab" aria-selected="true">Prepared</button><button class="btn sm ghost" role="tab">Original</button><button class="btn sm ghost" role="tab">Depth</button><button class="btn sm ghost" role="tab">Mask</button><button class="btn sm ghost" role="tab">Cutout</button>
+        <span style="margin-left:auto"></span><button class="btn sm icon ghost" aria-label="Shortcuts">?</button>
+      </div>
+      <div class="stage">
+        <svg viewBox="0 0 320 180" aria-label="Prepared clip, frame 52"><defs><radialGradient id="st" cx=".55" cy=".4"><stop offset="0" stop-color="#f3b24a"/><stop offset=".6" stop-color="#6a3d12"/><stop offset="1" stop-color="#0a0806"/></radialGradient></defs><rect width="320" height="180" fill="url(#st)"/><ellipse cx="176" cy="78" rx="34" ry="42" fill="#f6c36a"/><path d="M110 180c6-46 36-62 66-62s60 16 66 62z" fill="#1d2a3a"/><g stroke="#2d6fb0" stroke-width=".7" fill="none"><path d="M150 66l26-14 26 14-26 52zM144 82l32-4 32 4M158 102l18 4 18-4M176 52v62M152 70q24 10 48 0M156 92q20 8 40 0"/></g><g stroke="#7cc4ff" stroke-width="1" fill="none" stroke-dasharray="3 3"><path d="M88 112h60v50H88z"/></g><circle cx="118" cy="137" r="5" fill="#7cc4ff"/></svg>
+        <span class="caption">prepared · mesh drawn · fix + at frame 52</span>
+      </div>
+      <div class="transport">
+        <div class="grp"><button class="btn sm" title="Back one second">−1 s</button><button class="btn sm" title="Back one frame">◀ frame</button><button class="btn sm primary" title="Play (Space)"><svg class="i" viewBox="0 0 24 24"><path d="m7 5 12 7-12 7z"/></svg></button><button class="btn sm" title="Forward one frame">frame ▶</button><button class="btn sm" title="Forward one second">+1 s</button></div>
+        <span class="counter">frame <b>52</b> / 195 · <b>2.17</b> s</span>
+        <div class="zoom">zoom <button class="btn sm icon" aria-label="Zoom out">−</button><button class="btn sm icon" aria-label="Zoom in">+</button><button class="btn sm">fit</button></div>
+      </div>
+    </div>
+
+    <!-- track tool panel: Mask selected -->
+    <aside class="panel" aria-label="Mask tools">
+      <div class="ph"><h3><i></i>Mask</h3><span class="muted xs mono">lane 1 of 3</span></div>
+      <label class="lbl">Method<span class="select"><select><option>Free, local (rougher edges)</option><option>SAM 3 on fal · about $0.12</option><option>SAM 2 on Replicate · about $0.09</option><option>Brush · paint or erase</option></select><svg class="i" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></label>
+      <div class="seg-ctl" role="group" aria-label="Fix type"><button class="on">+ include</button><button>− exclude</button></div>
+      <button class="btn primary">Add a fix at this frame <span class="cost">· frame 52</span></button>
+      <label class="lbl">Spread the fix<div class="seg-ctl" role="group"><button>◀ back</button><button class="on">both ways</button><button>forward ▶</button></div></label>
+      <div>
+        <h4 style="margin-bottom:6px">Unsaved fixes · 3</h4>
+        <ul class="pending">
+          <li><span>+ include <span class="k">· frame 46 · 1.92 s</span></span><button class="btn sm icon ghost" aria-label="Remove">×</button></li>
+          <li><span>− exclude <span class="k">· frame 48 · 2.00 s</span></span><button class="btn sm icon ghost" aria-label="Remove">×</button></li>
+          <li class="here"><span>+ include <span class="k">· frame 52 · 2.17 s</span></span><button class="btn sm icon ghost" aria-label="Remove">×</button></li>
+        </ul>
+      </div>
+      <div class="comp row" style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm">Apply to clip <span class="cost">· quick · free</span></button><button class="btn sm">Apply with SAM 3 <span class="cost">· about $0.12</span></button></div>
+      <p class="xs muted">Flagged frames at 0.9 s, 4.6 s and 6.3 s: the subject area drops, usually hands or hair. <kbd>[</kbd> <kbd>]</kbd> jump between them.</p>
+    </aside>
+
+    <!-- timeline -->
+    <div class="tlwrap">
+      <div class="tl">
+        <div class="tl-labels">
+          <div class="tl-label" style="cursor:default" aria-hidden="true">8.1 s</div>
+          <button class="tl-label on" aria-pressed="true"><i style="background:var(--lane-mask)"></i>Mask</button>
+          <button class="tl-label"><i style="background:var(--lane-face)"></i>Face</button>
+          <button class="tl-label"><i style="background:var(--lane-words)"></i>Words</button>
+        </div>
+        <div class="tl-scroll">
+          <div class="tl-inner">
+            <div class="ruler"><span style="left:0">0</span><span style="left:12.35%">1 s</span><span style="left:24.69%">2 s</span><span style="left:37.04%">3 s</span><span style="left:49.38%">4 s</span><span style="left:61.73%">5 s</span><span style="left:74.07%">6 s</span><span style="left:86.42%">7 s</span><span style="left:98.77%">8</span></div>
+            <div class="lane mask sel">
+              <svg class="mask-area" viewBox="0 0 760 56" preserveAspectRatio="none" aria-hidden="true"><path d="M0 40 L40 36 60 34 80 44 90 48 100 36 140 32 180 30 220 32 260 34 300 30 340 31 380 28 400 30 420 40 440 44 460 32 500 30 540 29 580 42 600 46 620 34 660 30 700 29 760 30 V56 H0z" fill="#7cc4ff22"/><path d="M0 40 L40 36 60 34 80 44 90 48 100 36 140 32 180 30 220 32 260 34 300 30 340 31 380 28 400 30 420 40 440 44 460 32 500 30 540 29 580 42 600 46 620 34 660 30 700 29 760 30" stroke="#7cc4ff" stroke-width="1.2" fill="none"/></svg>
+              <i class="tick" style="left:11.1%"></i><i class="tick" style="left:56.8%"></i><i class="tick" style="left:77.8%"></i>
+              <span class="fix" style="left:23.66%">+</span><span class="fix minus" style="left:24.7%">−</span><span class="fix" style="left:26.75%">+</span>
+            </div>
+            <div class="lane face">
+              <i class="seg tracked" style="left:0;width:5.19%"></i><i class="seg missing" style="left:5.19%;width:3.58%"></i><i class="seg tracked" style="left:8.77%;width:16.91%"></i><i class="seg missing" style="left:25.68%;width:6.17%"></i><i class="seg filled" style="left:31.85%;width:3.95%"></i><i class="seg tracked" style="left:35.8%;width:25.9%"></i><i class="seg off" style="left:61.7%;width:7.4%"></i><i class="seg tracked" style="left:69.1%;width:30.9%"></i>
+              <i class="key" style="left:14.8%"></i><i class="key" style="left:42%"></i>
+            </div>
+            <div class="lane words">
+              <span class="word" style="left:12.35%;width:3.09%">And</span><span class="word" style="left:16.05%;width:1.23%">I</span><span class="word" style="left:17.9%;width:4.94%">need</span><span class="word sel" style="left:23.46%;width:3.09%">you</span><span class="word" style="left:28.4%;width:2.47%">and</span><span class="word" style="left:31.5%;width:1.23%">I</span><span class="word" style="left:33.3%;width:4.94%">miss</span><span class="word" style="left:38.9%;width:1.85%">the</span><span class="word" style="left:41.36%;width:4.32%">way</span><span class="word" style="left:46.3%;width:3.09%">you</span><span class="word" style="left:50.6%;width:7.4%">laughed</span><span class="word" style="left:59.26%;width:1.85%">at</span><span class="word" style="left:61.7%;width:4.94%">burnt</span><span class="word" style="left:67.3%;width:5.56%">toast</span>
+            </div>
+            <div class="range" style="left:22.2%;width:13.6%"></div>
+            <div class="playhead" style="left:26.79%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="savebar" role="region" aria-label="Unsaved edits">
+      <div class="sum"><b>3 unsaved edits</b><span>Kept here until you save; saving makes one new version and leaves this run as it is.</span></div>
+      <div class="acts"><button class="btn sm">Undo <kbd>⌘Z</kbd></button><button class="btn sm" disabled>Redo</button><button class="btn sm ghost">Discard</button><button class="btn primary">Save as new version <span class="cost">· free</span></button></div>
+    </div>
+
+    <details class="adv">
+      <summary><svg class="i" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>Advanced · stage plumbing for the Mask lane <span class="mono" style="margin-left:auto">mask · sam3_fal · $0.12</span></summary>
+      <div class="body">
+        <dl class="kv"><dt>Stage</dt><dd>mask (4 of 9)</dd></dl>
+        <dl class="kv"><dt>Method</dt><dd>sam3_fal</dd></dl>
+        <dl class="kv"><dt>Params</dt><dd>prompt "person" · threshold 0.5</dd></dl>
+        <dl class="kv"><dt><span class="tip">Cache key<span class="tipbox" role="tooltip"><b>cache key</b>A fingerprint of this stage's inputs, method and settings. A version with the same key reuses the result instead of paying again.</span></span></dt><dd>9f3a…b2c1</dd></dl>
+        <dl class="kv"><dt>Cost</dt><dd>$0.12 · 1 fal call</dd></dl>
+        <dl class="kv"><dt>Report</dt><dd><a href="#workspace">stages/mask/report.json</a></dd></dl>
+      </div>
+    </details>
+
+    <div class="nextbar">
+      <span class="hint">Save or discard the unsaved edits before moving on. World &amp; Look chooses the set, the look and the light; nothing re-runs.</span>
+      <a class="btn primary" href="#workspace">Next: World &amp; Look <svg class="i" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a>
+    </div>
+  </div>
+
+  <div class="samples">
+    <div class="sample"><h4>"?" shortcuts overlay</h4>
+      <div class="overlay" role="dialog" aria-label="Keyboard shortcuts">
+        <div class="oh"><h3>Keyboard shortcuts</h3><button class="btn sm icon ghost" aria-label="Close">×</button></div>
+        <div class="keys">
+          <div><span>Play / pause</span><kbd>Space</kbd></div><div><span>One frame</span><kbd>←</kbd> <kbd>→</kbd></div>
+          <div><span>One second</span><kbd>⇧←</kbd> <kbd>⇧→</kbd></div><div><span>Start / end</span><kbd>Home</kbd> <kbd>End</kbd></div>
+          <div><span>Prev / next marker</span><kbd>[</kbd> <kbd>]</kbd></div><div><span>Clear range</span><kbd>Esc</kbd></div>
+          <div><span>Undo / redo</span><kbd>⌘Z</kbd> <kbd>⇧⌘Z</kbd></div><div><span>Add a fix here</span><kbd>F</kbd></div>
+        </div>
+        <p class="xs muted">Press <kbd>?</kbd> anywhere in the workspace to open this.</p>
+      </div>
+    </div>
+    <div class="sample"><h4>Toast stack</h4>
+      <div class="toasts">
+        <div class="toast ok" role="status"><svg class="i" viewBox="0 0 24 24"><path d="m5 13 4 4L19 7"/></svg><div class="b"><b>Edits saved as a new version</b><span>Mask fix · hands on 46–52 · free</span><div class="acts"><button class="btn sm">Open it</button></div></div><button class="x" aria-label="Dismiss">×</button></div>
+        <div class="toast warn" role="status"><svg class="i" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9 2.6 17.3A2 2 0 0 0 4.3 20h15.4a2 2 0 0 0 1.7-2.7L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><div class="b"><b>Face lost 0.42–0.71 s and 2.08–2.58 s</b><span>The cutout stands in there. Face found on 163 of 195 frames.</span></div><button class="x" aria-label="Dismiss">×</button></div>
+        <div class="toast err" role="alert"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><div class="b"><b>SAM 3 on fal could not run: no FAL_KEY</b><span>Add <code>FAL_KEY=…</code> to .env and restart, or use the free local method.</span><div class="acts"><button class="btn sm">Use the free local method <span class="cost">· free</span></button><button class="btn sm ghost">How to add a key</button></div></div><button class="x" aria-label="Dismiss">×</button></div>
+      </div>
+    </div>
+    <div class="sample"><h4>"?" tooltip on a technical term</h4>
+      <p class="small">Paid stages whose inputs match an earlier run are reused: the <span class="tip">cache key<span class="tipbox r" role="tooltip"><b>cache key</b>A fingerprint of this stage's inputs, method and settings. A version with the same key reuses the result instead of paying again.</span></span> decides.</p>
+      <div style="height:110px"></div>
+      <h4>Empty lane</h4>
+      <div class="empty" style="padding:var(--s-4)"><p class="small">No words yet.</p><button class="btn sm">Transcribe <span class="cost">· free, runs locally</span></button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ COMPONENTS -->
+<section class="screen" id="components">
+  <div class="screen-label"><b>03</b> Components</div>
+  <div class="comp">
+    <div class="box"><h4>Buttons · cost suffix pattern</h4>
+      <div class="row"><button class="btn primary">Prepare <span class="cost">· free, runs locally</span></button><button class="btn primary">Create draft <span class="cost">· about $2.15</span></button></div>
+      <div class="row"><button class="btn">Secondary</button><button class="btn ghost">Ghost</button><button class="btn danger">Delete run</button><button class="btn" disabled>Disabled</button></div>
+      <div class="row"><button class="btn sm">Small</button><button class="btn sm primary">Small primary</button><button class="btn sm icon" aria-label="Icon">+</button><button class="btn sm on">Toggled</button></div>
+    </div>
+    <div class="box"><h4>Status chips</h4>
+      <div class="row"><span class="chip preparing">preparing</span><span class="chip review">needs review</span><span class="chip ready">ready</span><span class="chip draft">draft done</span><span class="chip failed">failed</span><span class="chip plain">cached</span><span class="chip plain">imported · mask</span></div>
+      <h4>Step bar · all states</h4>
+      <nav class="steps" style="padding:4px"><span class="step done"><span class="n">✓</span>Done</span><span class="sep"></span><span class="step cur"><span class="n">2</span>Current</span><span class="sep"></span><span class="step next"><span class="n">3</span>Next</span><span class="sep"></span><span class="step locked"><span class="n">4</span>Locked</span></nav>
+    </div>
+    <div class="box"><h4>Inputs</h4>
+      <label class="lbl">Run name<span class="input"><input value="Kitchen monologue · take 2"></span></label>
+      <label class="lbl">Subject to replace<span class="input"><input placeholder="person"></span></label>
+      <label class="lbl">Method<span class="select"><select><option>Free, local (rougher edges)</option><option>SAM 3 on fal · about $0.12</option></select><svg class="i" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></label>
+      <label class="check"><input type="checkbox" checked>Clean dialogue · isolate vocals <span class="muted">· paid</span></label>
+      <div class="slider"><span>jaw open</span><input type="range" min="-1" max="1" step=".05" value=".3"><output>+0.30</output></div>
+      <div class="slider"><span>brow up</span><input type="range" min="-1" max="1" step=".05" value="0"><output>0.00</output></div>
+      <label class="switch on"><i></i>Pick to compare</label>
+    </div>
+    <div class="box"><h4>Cards</h4>
+      <div class="card"><div class="row" style="justify-content:space-between"><h3>Mask</h3><span class="chip ready">done</span></div><p class="small muted">SAM 3 on fal · 195 of 195 frames · 3 flagged frames</p><div class="row"><button class="btn sm">Re-run from here <span class="cost">· about $0.12</span></button><a class="small" href="#components">report.json</a></div></div>
+      <div class="card"><div class="row" style="justify-content:space-between"><h3>Face</h3><span class="chip review">warn</span></div><p class="small muted">MediaPipe · lenient gaps · 163 found · 13 filled · 19 lost</p><div class="row"><button class="btn sm">Re-run from here <span class="cost">· free</span></button></div></div>
+    </div>
+    <div class="box"><h4>Timeline track blocks</h4>
+      <div class="lane-demo"><i class="seg tracked" style="left:2%;width:30%"></i><i class="seg filled" style="left:32%;width:10%"></i><i class="seg missing" style="left:42%;width:12%"></i><i class="seg off" style="left:56%;width:14%"></i><i class="seg tracked" style="left:70%;width:28%"></i><i class="key" style="left:20%"></i></div>
+      <p class="xs muted">Face: found · filled · lost · hidden (hatched) · ◆ adjustment</p>
+      <div class="lane-demo"><span class="word" style="left:2%;width:14%">And</span><span class="word sel" style="left:18%;width:14%">I</span><span class="word" style="left:34%;width:22%">need</span><span class="fix" style="left:70%">+</span><span class="fix minus" style="left:80%">−</span><i class="tick" style="left:92%"></i></div>
+      <p class="xs muted">Words: block · selected block. Mask: + fix · − fix · flagged frame</p>
+    </div>
+    <div class="box"><h4>Toasts · tooltip · skeleton</h4>
+      <div class="toast ok"><svg class="i" viewBox="0 0 24 24"><path d="m5 13 4 4L19 7"/></svg><div class="b"><b>Export ready</b><span>kitchen-monologue-seedance-web.zip · 46 MB</span></div></div>
+      <div class="toast err"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><div class="b"><b>Draft refused: estimate $2.15 needs confirming</b><div class="acts"><button class="btn sm">Yes, spend about $2.15</button></div></div></div>
+      <div class="skel"><i style="width:70%"></i><i style="width:95%"></i><i style="width:50%"></i></div>
+      <div class="empty" style="padding:var(--s-4)"><p class="small">Choose at least two runs to compare.</p></div>
+    </div>
+    <div class="box"><h4>Colour tokens</h4>
+      <div class="swatches">
+        <div class="sw"><i style="background:var(--bg)"></i>bg</div><div class="sw"><i style="background:var(--surface)"></i>surface</div><div class="sw"><i style="background:var(--surface-2)"></i>surface-2</div><div class="sw"><i style="background:var(--text)"></i>text</div><div class="sw"><i style="background:var(--muted)"></i>muted</div><div class="sw"><i style="background:var(--accent)"></i>accent</div><div class="sw"><i style="background:var(--ok)"></i>ok</div><div class="sw"><i style="background:var(--warn)"></i>warn</div><div class="sw"><i style="background:var(--danger)"></i>danger</div><div class="sw"><i style="background:var(--border)"></i>border</div><div class="sw"><i style="background:var(--lane-words)"></i>lane-words</div><div class="sw"><i style="background:var(--playhead)"></i>playhead</div>
+      </div>
+    </div>
+    <div class="box type-scale"><h4>Type scale · Inter + JetBrains Mono</h4>
+      <div><code>3xl 32/38</code><span style="font-size:var(--t-3xl);line-height:var(--lh-3xl);font-weight:600">Runs</span></div>
+      <div><code>2xl 26/32</code><span style="font-size:var(--t-2xl);line-height:var(--lh-2xl);font-weight:600">Kitchen monologue</span></div>
+      <div><code>xl 20/28</code><span style="font-size:var(--t-xl);font-weight:600">Review the prepared input</span></div>
+      <div><code>md 14/22</code><span style="font-size:var(--t-md)">Body emphasis and card titles</span></div>
+      <div><code>base 13/20</code><span>Default UI text, buttons, facts</span></div>
+      <div><code>sm 12/18</code><span class="small">Hints, chips, facts under a name</span></div>
+      <div><code>mono 12</code><span class="mono">frame 52 / 195 · 2.17 s · $0.12</span></div>
+      <div><code>space</code><span class="mono muted">4 · 8 · 12 · 16 · 20 · 24 · 32 · 40 · 48</span></div>
+    </div>
+  </div>
+</section>
+
+</main>
+</body>
+</html>

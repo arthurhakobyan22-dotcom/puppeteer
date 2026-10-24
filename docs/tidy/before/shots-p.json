@@ -1,0 +1,14 @@
+{
+ "run-editor-no-track-desktop": {
+  "console_errors": [],
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false
+ },
+ "run-editor-no-track-380": {
+  "console_errors": [],
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false
+ }
+}

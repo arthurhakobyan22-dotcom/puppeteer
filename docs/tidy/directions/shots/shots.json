@@ -1,0 +1,50 @@
+{
+ "a-desktop": {
+  "console_errors": [],
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false
+ },
+ "a-380": {
+  "console_errors": [],
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false
+ },
+ "b-desktop": {
+  "console_errors": [],
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false
+ },
+ "b-380": {
+  "console_errors": [],
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false
+ },
+ "c-desktop": {
+  "console_errors": [],
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false
+ },
+ "c-380": {
+  "console_errors": [],
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false
+ },
+ "index-desktop": {
+  "console_errors": [],
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false
+ },
+ "index-380": {
+  "console_errors": [],
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false
+ }
+}

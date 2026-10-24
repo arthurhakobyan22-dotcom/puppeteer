@@ -1,0 +1,14 @@
+{
+ "run-fast-audio-downloads-desktop": {
+  "console_errors": [],
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false
+ },
+ "run-fast-audio-downloads-380": {
+  "console_errors": [],
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false
+ }
+}

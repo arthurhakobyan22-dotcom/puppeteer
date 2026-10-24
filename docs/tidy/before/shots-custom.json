@@ -1,0 +1,170 @@
+{
+ "run-editor-mask-pending-fix-desktop": {
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "run-editor-mask-pending-fix-380": {
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "run-editor-face-mesh-off-pending-desktop": {
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "run-editor-face-mesh-off-pending-380": {
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "run-editor-savebar-discard-desktop": {
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "run-editor-savebar-discard-380": {
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "toast-save-blocked-by-pending-mask-fix-desktop": {
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "toast-save-blocked-by-pending-mask-fix-380": {
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "toast-error-describe-no-key-desktop": {
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "toast-error-describe-no-key-380": {
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "toast-402-run-anyway-desktop": {
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "toast-402-run-anyway-380": {
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "toast-409-approve-stale-desktop": {
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "toast-409-approve-stale-380": {
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "run-editor-words-paid-engine-offline-desktop": {
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "run-editor-words-paid-engine-offline-380": {
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "run-editor-words-selected-desktop": {
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "run-editor-words-selected-380": {
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "run-editor-range-selected-desktop": {
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "run-editor-range-selected-380": {
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "run-studio-composite-set-image-desktop": {
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "run-studio-composite-set-image-380": {
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "run-studio-card-changed-setting-desktop": {
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "run-studio-card-changed-setting-380": {
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "run-world-slots-described-style-desktop": {
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "run-world-slots-described-style-380": {
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "run-final-details-open-desktop": {
+  "scrollWidth": 1440,
+  "clientWidth": 1440,
+  "horizontal_scroll": false,
+  "errors": []
+ },
+ "run-final-details-open-380": {
+  "scrollWidth": 380,
+  "clientWidth": 380,
+  "horizontal_scroll": false,
+  "errors": []
+ }
+}

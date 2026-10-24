@@ -1,0 +1,1382 @@
+{
+ "pages": {
+  "quick": {
+   "controls": 17,
+   "unnamed": [],
+   "glyph_only": [],
+   "tab_stops": 11,
+   "focus_without_ring": [],
+   "pointer_only": [],
+   "targets_total": 14,
+   "targets_under_24": 6,
+   "targets_under_44": 13,
+   "under_24_examples": [
+    [
+     "input",
+     "radio",
+     "Talking headFast: the face mes",
+     7,
+     13
+    ],
+    [
+     "input",
+     "radio",
+     "Full bodyAdvanced: Depth Anyth",
+     8,
+     13
+    ],
+    [
+     "input",
+     "radio",
+     "ExpressiveAdvanced + Face mesh",
+     7,
+     13
+    ],
+    [
+     "input",
+     "radio",
+     "Profile-heavyAdvanced with the",
+     7,
+     13
+    ],
+    [
+     "summary",
+     "",
+     "More options",
+     310,
+     20
+    ],
+    [
+     "input",
+     "checkbox",
+     "Clean dialogue (isolate vocals",
+     16,
+     16
+    ]
+   ],
+   "scrollWidth380": 380,
+   "tl_scroll_overflow": null
+  },
+  "runs": {
+   "controls": 450,
+   "unnamed": [],
+   "glyph_only": [],
+   "tab_stops": 140,
+   "focus_without_ring": [],
+   "pointer_only": [],
+   "targets_total": 450,
+   "targets_under_24": 255,
+   "targets_under_44": 448,
+   "under_24_examples": [
+    [
+     "input",
+     "checkbox",
+     "flat list",
+     16,
+     16
+    ],
+    [
+     "a",
+     "",
+     "Talking head",
+     74,
+     17
+    ],
+    [
+     "a",
+     "",
+     "Open in Studio",
+     78,
+     18
+    ],
+    [
+     "a",
+     "",
+     "Quick view",
+     59,
+     18
+    ],
+    [
+     "a",
+     "",
+     "Fast \u00b7 Face mesh",
+     98,
+     17
+    ],
+    [
+     "a",
+     "",
+     "Open in Studio",
+     78,
+     18
+    ],
+    [
+     "a",
+     "",
+     "Quick view",
+     59,
+     18
+    ],
+    [
+     "a",
+     "",
+     "Fast \u00b7 Face mesh",
+     98,
+     17
+    ],
+    [
+     "a",
+     "",
+     "Open in Studio",
+     78,
+     18
+    ],
+    [
+     "a",
+     "",
+     "Quick view",
+     59,
+     18
+    ],
+    [
+     "a",
+     "",
+     "Talking head",
+     74,
+     17
+    ],
+    [
+     "a",
+     "",
+     "Open in Studio",
+     78,
+     18
+    ],
+    [
+     "a",
+     "",
+     "Quick view",
+     59,
+     18
+    ],
+    [
+     "a",
+     "",
+     "Advanced \u00b7 Depth + SAM",
+     146,
+     17
+    ]
+   ],
+   "scrollWidth380": 380,
+   "tl_scroll_overflow": null
+  },
+  "run-quick": {
+   "controls": 87,
+   "unnamed": [],
+   "glyph_only": [],
+   "tab_stops": 43,
+   "focus_without_ring": [
+    {
+     "tag": "select",
+     "type": "",
+     "text": "Mask tool for Apply",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(31, 24, 192)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": true
+    },
+    {
+     "tag": "select",
+     "type": "",
+     "text": "Set",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(31, 24, 192)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    },
+    {
+     "tag": "select",
+     "type": "",
+     "text": "Look",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(31, 24, 192)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    },
+    {
+     "tag": "input",
+     "type": "",
+     "text": "Light",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(223, 226, 232)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    },
+    {
+     "tag": "textarea",
+     "type": "",
+     "text": "@Image1 defines the character's identity",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(31, 24, 192)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    },
+    {
+     "tag": "select",
+     "type": "",
+     "text": "Export target",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(31, 24, 192)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    }
+   ],
+   "pointer_only": [
+    ".stage-overlay.interactive",
+    ".tl-stage",
+    ".wb",
+    ".tl-lane"
+   ],
+   "targets_total": 83,
+   "targets_under_24": 19,
+   "targets_under_44": 76,
+   "under_24_examples": [
+    [
+     "a",
+     "",
+     "Download prepared input \u2193",
+     150,
+     18
+    ],
+    [
+     "a",
+     "",
+     "Classic wand (one version per ",
+     196,
+     18
+    ],
+    [
+     "input",
+     "checkbox",
+     "I reviewed the entire prepared",
+     16,
+     16
+    ],
+    [
+     "summary",
+     "",
+     "Audio downloads",
+     310,
+     20
+    ],
+    [
+     "summary",
+     "",
+     "Import a generated result manu",
+     310,
+     20
+    ],
+    [
+     "input",
+     "checkbox",
+     "Prepared clip with audio",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "Silent composite",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "Depth video",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "Face mesh alone on transparent",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "Mask (black / white)",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "Person with alpha",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "Original audio",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "Isolated vocals",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "Music without vocals",
+     16,
+     16
+    ]
+   ],
+   "scrollWidth380": 380,
+   "tl_scroll_overflow": [
+    251,
+    250
+   ]
+  },
+  "run-studio": {
+   "controls": 150,
+   "unnamed": [],
+   "glyph_only": [],
+   "tab_stops": 140,
+   "focus_without_ring": [
+    {
+     "tag": "select",
+     "type": "",
+     "text": "Check and normalizeInput doctor (checks ",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(31, 24, 192)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    },
+    {
+     "tag": "select",
+     "type": "",
+     "text": "Original audioClean dialogue (Demucs) \u00b7 ",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(31, 24, 192)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    },
+    {
+     "tag": "select",
+     "type": "",
+     "text": "Depth Anything on Replicate \u00b7 paidDepth ",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(31, 24, 192)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    },
+    {
+     "tag": "select",
+     "type": "",
+     "text": "SAM 3 on Replicate \u00b7 paidLocal propagati",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(31, 24, 192)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    },
+    {
+     "tag": "input",
+     "type": "text",
+     "text": "person, hands",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(223, 226, 232)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    },
+    {
+     "tag": "select",
+     "type": "",
+     "text": "Depth subject over originalOriginal fram",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(31, 24, 192)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    },
+    {
+     "tag": "select",
+     "type": "",
+     "text": "Background",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(31, 24, 192)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    },
+    {
+     "tag": "select",
+     "type": "",
+     "text": "MediaPipe face meshOffTimeline mesh edit",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(31, 24, 192)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    },
+    {
+     "tag": "input",
+     "type": "number",
+     "text": "1.8",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(223, 226, 232)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    },
+    {
+     "tag": "input",
+     "type": "number",
+     "text": "6",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(223, 226, 232)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    },
+    {
+     "tag": "select",
+     "type": "",
+     "text": "Identity-only prompt",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(31, 24, 192)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    },
+    {
+     "tag": "textarea",
+     "type": "",
+     "text": "@Image1 defines the character's identity",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(31, 24, 192)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    }
+   ],
+   "pointer_only": [
+    ".tl-stage",
+    ".wb",
+    ".tl-lane"
+   ],
+   "targets_total": 140,
+   "targets_under_24": 50,
+   "targets_under_44": 132,
+   "under_24_examples": [
+    [
+     "a",
+     "",
+     "original.mp4 \u2193",
+     79,
+     19
+    ],
+    [
+     "a",
+     "",
+     "audio-manifest.json \u2193",
+     117,
+     19
+    ],
+    [
+     "input",
+     "checkbox",
+     "on",
+     16,
+     16
+    ],
+    [
+     "a",
+     "",
+     "depth-raw.mp4 \u2193",
+     94,
+     19
+    ],
+    [
+     "a",
+     "",
+     "depth.mp4 \u2193",
+     70,
+     19
+    ],
+    [
+     "summary",
+     "",
+     "Import my own\u2026",
+     254,
+     20
+    ],
+    [
+     "input",
+     "checkbox",
+     "on",
+     16,
+     16
+    ],
+    [
+     "a",
+     "",
+     "raw-masks/ (.zip) \u2193",
+     102,
+     19
+    ],
+    [
+     "a",
+     "",
+     "clean-masks/ (.zip) \u2193",
+     111,
+     18
+    ],
+    [
+     "a",
+     "",
+     "sam-report.json \u2193",
+     97,
+     18
+    ],
+    [
+     "a",
+     "",
+     "sam-attempts.json \u2193",
+     111,
+     18
+    ],
+    [
+     "a",
+     "",
+     "sam-raw-request.json \u2193",
+     128,
+     18
+    ],
+    [
+     "a",
+     "",
+     "mask-cleanup-report.json \u2193",
+     150,
+     18
+    ],
+    [
+     "a",
+     "",
+     "sam-masks.zip \u2193",
+     91,
+     18
+    ]
+   ],
+   "scrollWidth380": 380,
+   "tl_scroll_overflow": [
+    251,
+    250
+   ]
+  },
+  "lab": {
+   "controls": 126,
+   "unnamed": [],
+   "glyph_only": [
+    {
+     "tag": "button",
+     "type": "button",
+     "cls": "small secondary active",
+     "name": "1\u00d7",
+     "glyphOnly": true,
+     "visible": true,
+     "w": 37,
+     "h": 32,
+     "text": "1\u00d7",
+     "tabindex": null
+    }
+   ],
+   "tab_stops": 126,
+   "focus_without_ring": [
+    {
+     "tag": "select",
+     "type": "",
+     "text": "Prepared inputOriginalDepthMaskComposite",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(31, 24, 192)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    },
+    {
+     "tag": "input",
+     "type": "",
+     "text": "",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(223, 226, 232)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    }
+   ],
+   "pointer_only": [],
+   "targets_total": 126,
+   "targets_under_24": 114,
+   "targets_under_44": 125,
+   "under_24_examples": [
+    [
+     "input",
+     "checkbox",
+     "Talking head \u00b7 659daaf1\u2026Oct 24",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "\u2514 Fast \u00b7 Face mesh \u00b7 97ea5c66\u2026",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "\u2514 Fast \u00b7 Face mesh \u00b7 bf691def\u2026",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "Talking head \u00b7 ccd73397\u2026Oct 24",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "Advanced \u00b7 Depth + SAM \u00b7 1d075",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "\u2514 Advanced \u00b7 Depth + SAM \u00b7 486",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "Expressive \u00b7 52a7dcdf\u2026Oct 23, ",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "Advanced + Face mesh \u00b7 a9f29e3",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "\u2514 Advanced + Face mesh \u00b7 1717d",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "\u2514 Advanced + Face mesh \u00b7 e7975",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "\u2514 Advanced + Face mesh \u00b7 50b88",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "\u2514 Advanced + Face mesh \u00b7 d9841",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "\u2514 Advanced + Face mesh \u00b7 a2083",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "\u2514 Advanced + Face mesh \u00b7 64132",
+     16,
+     16
+    ]
+   ],
+   "scrollWidth380": 380,
+   "tl_scroll_overflow": null
+  },
+  "run-draft": {
+   "controls": 79,
+   "unnamed": [],
+   "glyph_only": [],
+   "tab_stops": 74,
+   "focus_without_ring": [
+    {
+     "tag": "select",
+     "type": "",
+     "text": "Set",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(31, 24, 192)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    },
+    {
+     "tag": "select",
+     "type": "",
+     "text": "Look",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(31, 24, 192)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    },
+    {
+     "tag": "input",
+     "type": "",
+     "text": "Light",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(223, 226, 232)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    },
+    {
+     "tag": "textarea",
+     "type": "",
+     "text": "@Image1 defines the character's identity",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(31, 24, 192)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    },
+    {
+     "tag": "select",
+     "type": "",
+     "text": "Export target",
+     "outline": "none 3px rgb(43, 47, 58)",
+     "border": "rgb(31, 24, 192)",
+     "boxShadow": "none",
+     "fv": true,
+     "parentOutline": "",
+     "inEditor": false
+    }
+   ],
+   "pointer_only": [
+    ".tl-stage",
+    ".tl-lane"
+   ],
+   "targets_total": 75,
+   "targets_under_24": 25,
+   "targets_under_44": 67,
+   "under_24_examples": [
+    [
+     "a",
+     "",
+     "Download prepared input \u2193",
+     150,
+     18
+    ],
+    [
+     "input",
+     "checkbox",
+     "I reviewed the entire prepared",
+     16,
+     16
+    ],
+    [
+     "summary",
+     "",
+     "Audio downloads",
+     310,
+     20
+    ],
+    [
+     "a",
+     "",
+     "Isolated vocals \u2193",
+     93,
+     18
+    ],
+    [
+     "a",
+     "",
+     "Music stem \u2193",
+     73,
+     18
+    ],
+    [
+     "a",
+     "",
+     "Original audio \u2193",
+     87,
+     18
+    ],
+    [
+     "a",
+     "",
+     "Download draft \u2193",
+     96,
+     18
+    ],
+    [
+     "input",
+     "checkbox",
+     "Burn subtitles into final",
+     16,
+     16
+    ],
+    [
+     "summary",
+     "",
+     "View submitted prompt & genera",
+     310,
+     20
+    ],
+    [
+     "a",
+     "",
+     "Download raw Seedance result",
+     167,
+     16
+    ],
+    [
+     "summary",
+     "",
+     "Import a generated result manu",
+     310,
+     20
+    ],
+    [
+     "input",
+     "checkbox",
+     "Prepared clip with audio",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "Silent composite",
+     16,
+     16
+    ],
+    [
+     "input",
+     "checkbox",
+     "Depth video",
+     16,
+     16
+    ]
+   ],
+   "scrollWidth380": 380,
+   "tl_scroll_overflow": [
+    251,
+    250
+   ]
+  }
+ },
+ "contrast": [
+  [
+   "body text --text",
+   "#2b2f3a",
+   "#fafafb",
+   15,
+   12.82,
+   4.5,
+   "PASS"
+  ],
+  [
+   "hints / .hint, p, --muted on card",
+   "#7a7e8a",
+   "#ffffff",
+   12,
+   4.05,
+   4.5,
+   "FAIL"
+  ],
+  [
+   "--muted on page bg",
+   "#7a7e8a",
+   "#fafafb",
+   12,
+   3.89,
+   4.5,
+   "FAIL"
+  ],
+  [
+   ".mono ids (11px muted)",
+   "#7a7e8a",
+   "#ffffff",
+   11,
+   4.05,
+   4.5,
+   "FAIL"
+  ],
+  [
+   ".eyebrow (11px muted uppercase)",
+   "#7a7e8a",
+   "#fafafb",
+   11,
+   3.89,
+   4.5,
+   "FAIL"
+  ],
+  [
+   ".chip default #656977 on #f4f4f7",
+   "#656977",
+   "#f4f4f7",
+   11,
+   4.98,
+   4.5,
+   "PASS"
+  ],
+  [
+   ".chip.done --ok on --ok-bg",
+   "#1e6b3a",
+   "#e6f4ea",
+   11,
+   5.74,
+   4.5,
+   "PASS"
+  ],
+  [
+   ".chip.error --err on --err-bg",
+   "#b3261e",
+   "#fff3f3",
+   11,
+   6.03,
+   4.5,
+   "PASS"
+  ],
+  [
+   ".chip.warn --warn on --warn-bg",
+   "#8a6d00",
+   "#fff6e0",
+   11,
+   4.57,
+   4.5,
+   "PASS"
+  ],
+  [
+   ".chip.running accent on accent-soft",
+   "#1f18c0",
+   "#eef0fb",
+   11,
+   9.48,
+   4.5,
+   "PASS"
+  ],
+  [
+   ".chip.imported #9a5b00 on #fff3e0",
+   "#9a5b00",
+   "#fff3e0",
+   11,
+   4.95,
+   4.5,
+   "PASS"
+  ],
+  [
+   ".line.ok text",
+   "#1e6b3a",
+   "#e6f4ea",
+   13,
+   5.74,
+   4.5,
+   "PASS"
+  ],
+  [
+   ".line.warn text",
+   "#8a6d00",
+   "#fff6e0",
+   13,
+   4.57,
+   4.5,
+   "PASS"
+  ],
+  [
+   ".line.error text",
+   "#b3261e",
+   "#fff3f3",
+   13,
+   6.03,
+   4.5,
+   "PASS"
+  ],
+  [
+   ".line.info accent on accent-soft",
+   "#1f18c0",
+   "#eef0fb",
+   13,
+   9.48,
+   4.5,
+   "PASS"
+  ],
+  [
+   "primary button white on accent",
+   "#ffffff",
+   "#1f18c0",
+   14,
+   10.77,
+   4.5,
+   "PASS"
+  ],
+  [
+   "primary button disabled (opacity .45 over white)",
+   "#ffffff",
+   "#9a97e3",
+   14,
+   2.65,
+   4.5,
+   "FAIL"
+  ],
+  [
+   "secondary button --text on white",
+   "#2b2f3a",
+   "#ffffff",
+   14,
+   13.37,
+   4.5,
+   "PASS"
+  ],
+  [
+   ".danger button --err on white",
+   "#b3261e",
+   "#ffffff",
+   14,
+   6.54,
+   4.5,
+   "PASS"
+  ],
+  [
+   ".linkish / links accent on white",
+   "#1f18c0",
+   "#ffffff",
+   12,
+   10.77,
+   4.5,
+   "PASS"
+  ],
+  [
+   "summary #656977 on white",
+   "#656977",
+   "#ffffff",
+   13,
+   5.47,
+   4.5,
+   "PASS"
+  ],
+  [
+   ".meta span #656977 on #f4f4f7",
+   "#656977",
+   "#f4f4f7",
+   12,
+   4.98,
+   4.5,
+   "PASS"
+  ],
+  [
+   ".numbers --muted on #f4f4f7",
+   "#7a7e8a",
+   "#f4f4f7",
+   11,
+   3.69,
+   4.5,
+   "FAIL"
+  ],
+  [
+   ".cost.paid --warn on white",
+   "#8a6d00",
+   "#ffffff",
+   12,
+   4.92,
+   4.5,
+   "PASS"
+  ],
+  [
+   ".warnings --warn on white (12px)",
+   "#8a6d00",
+   "#ffffff",
+   12,
+   4.92,
+   4.5,
+   "PASS"
+  ],
+  [
+   ".tl-label muted 11px on #fafafb",
+   "#7a7e8a",
+   "#fafafb",
+   11,
+   3.89,
+   4.5,
+   "FAIL"
+  ],
+  [
+   ".tl-label.active accent on accent-soft",
+   "#1f18c0",
+   "#eef0fb",
+   11,
+   9.48,
+   4.5,
+   "PASS"
+  ],
+  [
+   "ruler text #5c6070 on #f6f6f9",
+   "#5c6070",
+   "#f6f6f9",
+   10,
+   5.79,
+   4.5,
+   "PASS"
+  ],
+  [
+   "ruler frame numbers #9a9eab on #f6f6f9",
+   "#9a9eab",
+   "#f6f6f9",
+   10,
+   2.48,
+   4.5,
+   "FAIL"
+  ],
+  [
+   "lane empty text #9a9eab on white",
+   "#9a9eab",
+   "#ffffff",
+   11,
+   2.67,
+   4.5,
+   "FAIL"
+  ],
+  [
+   "word block text #16181f on #eef0fb",
+   "#16181f",
+   "#eef0fb",
+   11,
+   15.61,
+   4.5,
+   "PASS"
+  ],
+  [
+   "word block selected white on accent",
+   "#ffffff",
+   "#1f18c0",
+   11,
+   10.77,
+   4.5,
+   "PASS"
+  ],
+  [
+   ".asset label 10px muted on white",
+   "#7a7e8a",
+   "#ffffff",
+   10,
+   4.05,
+   4.5,
+   "FAIL"
+  ],
+  [
+   ".generator-choice small #656977",
+   "#656977",
+   "#ffffff",
+   11,
+   5.47,
+   4.5,
+   "PASS"
+  ],
+  [
+   ".ft-slider output muted 11px",
+   "#7a7e8a",
+   "#fafafb",
+   11,
+   3.89,
+   4.5,
+   "FAIL"
+  ],
+  [
+   ".upload small muted 12px on #fafafb",
+   "#7a7e8a",
+   "#fafafb",
+   12,
+   3.89,
+   4.5,
+   "FAIL"
+  ],
+  [
+   "nav.views inactive muted 13px",
+   "#7a7e8a",
+   "#fafafb",
+   13,
+   3.89,
+   4.5,
+   "FAIL"
+  ],
+  [
+   "nav.views active accent on accent-soft",
+   "#1f18c0",
+   "#eef0fb",
+   13,
+   9.48,
+   4.5,
+   "PASS"
+  ],
+  [
+   "tabs inactive muted 12px",
+   "#7a7e8a",
+   "#ffffff",
+   12,
+   4.05,
+   4.5,
+   "FAIL"
+  ],
+  [
+   ".wand-inline / legend muted 12px",
+   "#7a7e8a",
+   "#fafafb",
+   12,
+   3.89,
+   4.5,
+   "FAIL"
+  ],
+  [
+   "finalize warning #d9a24a on white (inline style)",
+   "#d9a24a",
+   "#ffffff",
+   12,
+   2.28,
+   4.5,
+   "FAIL"
+  ],
+  [
+   "footer muted 12px",
+   "#7a7e8a",
+   "#fafafb",
+   12,
+   3.89,
+   4.5,
+   "FAIL"
+  ],
+  [
+   "placeholder text (Chrome default ~#757575) on #fafafb",
+   "#757575",
+   "#fafafb",
+   15,
+   4.42,
+   4.5,
+   "FAIL"
+  ],
+  [
+   ".status .dot accent on accent-soft (non-text)",
+   "#1f18c0",
+   "#eef0fb",
+   0,
+   9.48,
+   3.0,
+   "PASS"
+  ],
+  [
+   "input border --line-strong vs #fafafb (non-text)",
+   "#dfe2e8",
+   "#fafafb",
+   0,
+   1.24,
+   3.0,
+   "FAIL"
+  ],
+  [
+   "card border --line vs white (non-text)",
+   "#ececef",
+   "#ffffff",
+   0,
+   1.18,
+   3.0,
+   "FAIL"
+  ],
+  [
+   "playhead #e5362b on white (non-text)",
+   "#e5362b",
+   "#ffffff",
+   0,
+   4.29,
+   3.0,
+   "PASS"
+  ],
+  [
+   "face lane filled #e0b341 on white (non-text)",
+   "#e0b341",
+   "#ffffff",
+   0,
+   1.96,
+   3.0,
+   "FAIL"
+  ],
+  [
+   "face lane tracked #3aa76d on white (non-text)",
+   "#3aa76d",
+   "#ffffff",
+   0,
+   3.03,
+   3.0,
+   "PASS"
+  ]
+ ]
+}
