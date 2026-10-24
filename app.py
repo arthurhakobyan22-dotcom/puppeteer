@@ -221,7 +221,7 @@ def run_summary(folder):
     return {'id':ident,'mode':mode,'state':status.get('state','unknown'),'status':plain_status(str(status.get('status',''))[:200]),
             'created':run.get('created') or datetime.datetime.fromtimestamp(stamp).astimezone().isoformat(timespec='minutes'),
             'reviewed':(folder/'mask-review.json').exists(),'draft':(folder/'final-preview.mp4').exists(),'final':(folder/'hd/final-preview.mp4').exists(),'request':(folder/'seedance-response.json').exists(),
-            'parent':run.get('parent'),'changed':plain_changed(folder,run),'preset':run.get('preset'),'cost_usd_total':stages.total_cost(folder),'fix':status.get('fix'),
+            'parent':run.get('parent'),'changed':plain_changed(folder,run),'preset':run.get('preset'),'name':run.get('name') or None,'cost_usd_total':stages.total_cost(folder),'fix':status.get('fix'),
             'imported':stages.imports.imported_stages(run.get('chain'))}
 
 def run_folders():
@@ -376,6 +376,19 @@ def save_mask_review(ident:str,approved:bool=Form(...),fingerprint:str=Form(...)
 app.mount('/static',StaticFiles(directory=ROOT/'static'),name='static')
 
 # ---------------------------------------------------------------- stage rack: runs, branches, calls, costs, presets, stages
+
+@app.put('/jobs/{ident}/name')
+async def set_run_name(ident:str,request:Request):
+    """Rename a run: `{name}` (form or JSON) is trimmed and capped at 80 characters, saved as `name` in run.json; an empty name clears it.
+    Answers the Runs-list summary. Runs made before run.json existed have no record to write into and are refused with a plain 400."""
+    folder=hd_folder(ident);data=await body_fields(request)
+    name=' '.join(str(data.get('name') if data.get('name') is not None else '').split())[:80].strip()
+    run=stages.load_run(folder)
+    if run is None:return fail(400,'This run was made before run records existed, so it has no name to save.','It keeps its default name; new runs and versions can be renamed.')
+    if name:run['name']=name
+    else:run.pop('name',None)
+    stages.save_run(folder,run)
+    return run_summary(folder)
 
 @app.get('/jobs/{ident}/run')
 def get_run(ident:str):

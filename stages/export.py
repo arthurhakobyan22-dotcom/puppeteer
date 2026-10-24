@@ -363,7 +363,7 @@ def readme_text(ctx):
     """README.txt: what each file is, the clip facts, which run and edits, the preset's reasoning."""
     c=ctx;clip=c['clip'];lines=[]
     lines.append(f'Puppeteer export · {c["preset_label"]}');lines.append(f'Made {c["created"]} · export name {c["name"]}')
-    lines.append(f'Run: {c["run"]}'+(f' · exported from the new version {c["exported_run"]} saved first from {c["requested_run"]}' if c.get('exported_run') and c.get('exported_run')!=c.get('requested_run') else ''))
+    lines.append(f'Run: {c["run"]}'+(f' · "{c["run_name"]}"' if c.get('run_name') else '')+(f' · exported from the new version {c["exported_run"]} saved first from {c["requested_run"]}' if c.get('exported_run') and c.get('exported_run')!=c.get('requested_run') else ''))
     lines.append(f'Clip: {clip["frames"]} frames at {fps_text(clip["fps"])} fps · {clip["width"]}×{clip["height"]} · {clip["seconds"]} s'+(f' (from {clip["source"]})' if clip.get('source') else ''))
     lines.append('Mode: '+str(c.get('mode') or 'unknown')+(' · preset '+c['run_preset'] if c.get('run_preset') else ''))
     lines.append('')
@@ -476,7 +476,7 @@ def build_export(folder,items,preset,runs_root,status=lambda s:None,*,mesh_forma
         if preset=='comfyui' or any(fmts.get(k)=='png' for k in keys if P.ITEM_BY_KEY[k]['kind'] in ('video','rgba')):
             (out/'frames.json').write_text(json.dumps({'fps':fps,'fps_text':fps_text(fps),'frames':n,'width':w,'height':h},indent=1));add('frames.json','{fps, frames, width, height} for the sequence loader (PNGs carry no frame rate).','run')
         run=run_data(folder) or {}
-        ctx={'name':name,'preset_label':spec['label'],'created':now_iso(),'run':ident,'exported_run':ident,'requested_run':requested_run or ident,'clip':clip,'mode':run.get('mode'),'run_preset':run.get('preset'),
+        ctx={'name':name,'preset_label':spec['label'],'created':now_iso(),'run':ident,'exported_run':ident,'requested_run':requested_run or ident,'clip':clip,'mode':run.get('mode'),'run_preset':run.get('preset'),'run_name':run.get('name') or None,
              'edits_line':edits_line or (('this version was saved from timeline edits: '+str(run.get('changed'))) if run.get('edits') else 'no pending timeline edits; the run exported as it is.'),
              'why':spec['why'],'files':files,'warnings':warnings}
         readme=readme_text(ctx);(out/'README.txt').write_text(readme,encoding='utf-8')
