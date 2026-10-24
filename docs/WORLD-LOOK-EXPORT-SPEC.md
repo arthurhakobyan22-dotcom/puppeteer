@@ -511,3 +511,45 @@ Browser: Studio and Quick of the copy and the children, no console errors, 375 p
   them with defaults) so `normalize_params({})` stays `{}` and the legacy cache keys are literally the same; the same for
   the generate tools' `task` (`auto` dropped) and the prompt tool's slot keys (`defaults()` answers only `text`).
 - Known: Starlette answers 404 (not 400) for a percent-encoded `/` in a path segment (`/assets/..%2Fx`); the test accepts both.
+
+## §W2 notes (Agent 2: prompt builder with fences, Claude vision fill)
+
+### What exists now
+
+| piece | file | notes |
+|---|---|---|
+| Prompt assembly + fences | `stages/promptkit.py` | `assemble(folder, slots=None, refs=None, words=None, runs_root=None)` → `{text, refs, beats, sections, warnings, closing, has}`; `fences_ok(text, refs)`; `number_refs`, `collect_refs`, `extra_refs(slots, runs_root)`, `saved_reference`, `closing_line`, `beats_block` |
+| Adapter rules for extra refs | `providers/base.py` (`extra_ref_sentences`, `extra_ref_paths`, `build_prompt` additive), `providers/fal.py`, `providers/enhancor.py` (upload set then look after the characters, `check_image_constraints` on them) | two-ref output byte-identical (regression suite) |
+| Orchestrator | `seedance_bridge.submit(..., set_image=None, look_image=None)` (keyword-only additions), `ref_record()` → `generation.json` gets `refs` + `slots` | adapters get the paths as `refs['set']` / `refs['look']`, so Agent 3's Wan adapter and the test fakes keep their signature |
+| Claude vision | `stages/vision.py` | `describe_frame(folder, t=None, runs_root=None)`; `frame_image` (mask → gray, ≤1024 px, JPEG), `parse`, `strip_people`, `VisionError(message, fix, status)`, `NO_KEY_MESSAGE` / `NO_KEY_FIX` (the spec's exact text) |
+| Price | `stages/costs.py` `claude_vision` | $0.0062 = 1,600 input + 300 output tokens at Sonnet 5.5 $2 / $10 per MTok (pricing page via the claude-api skill, 2026-10-24); `usd_per_million_input/output` for the real spend from `usage` |
+| Routes | `app.py` block "Prompt builder with fences + Claude vision fill (Agent 2)" + two lines in `POST /jobs/{id}/seedance` | below |
+| Panel | `static/promptkit.js` (`mountPromptBuilder`), two lines + `promptBuilder.update()` in `static/draft.js`, CSS block "Prompt builder (Agent 2)" in `app.css` | mounted into `[data-slot=prompt-builder]` |
+| Tests | `tests/test_promptkit.py` (15) | suite: 325 passed at the time of writing |
+| Docs | `docs/PROMPT-BUILDER.md` (new), `docs/PROVIDERS.md` (build_prompt extra refs, generation.json `refs` / `slots`), `docs/UI.md` §14 + endpoints row | |
+
+### Endpoints as implemented
+
+- `POST /jobs/{id}/prompt/assemble` `{slots?, text?, provider?}` (JSON or form) → `{id, text, refs: [{n, token, slot, kind, file, path, job, job_line, fence}], beats, sections: [{name, text}], warnings, closing, has: {mesh, depth}, full_prompt, mode, provider, provider_note, edited}`. Free, nothing written, no network. `text` = a hand-edited box whose `full_prompt` and `fences_ok` warnings are wanted; `slots` = a preview of unsaved slots; a generator with `prompt: false` gets `full_prompt: null` + `provider_note`. 400 for a non-object `slots`, 404 unknown run.
+- `POST /jobs/{id}/describe` `{t?, confirm_cost?, estimate_only?, apply?}` → `{id, set, light, model, usd, estimated_usd, frame_s, frame, fps, masked, warnings, raw, applied, estimated_cost_usd}`. Order of refusals: bad `t` → 400; no key → 400 `No Anthropic key yet.` + the how-to; `estimate_only` → the price (free); no `confirm_cost` → 402 via `cost_gate()`; offline → 400 plain (`record_call` raises before the request); Anthropic 401 / 429 / other → 502 plain with a fix; `refusal` stop reason → 502 plain. `apply=true` writes only `set.prompt` and `light` through `stages.slots.write`.
+- `POST /jobs/{id}/seedance`: the slots' set / look images (`set_ref` / `style_ref`, `stages.promptkit.extra_refs`) go to `submit(..., set_image=, look_image=)` and are uploaded after the character references. `seedance-request.json` stays the exact payload.
+
+### The fence sentences (exact)
+
+- char1: `@ImageN defines the character's identity only (face, hair, outfit, proportions); do not copy its pose, expression, props, background or lighting.` (identity video: the same with `@Video2`; char2: `…defines the second character's identity only…`)
+- set: `@ImageN defines the set only (walls, floor, furniture, depth of the room); do not use its people or lighting.`
+- look: `@ImageN defines the rendering style only (palette, grain, contrast, brushwork); do not copy its content, people or layout.`
+- appended by `build_prompt`: `@ImageN is the set reference only.` / `@ImageN is the style reference only.`
+- closing line: `Keep the camera, crop, timing and every word of the embedded dialogue; replace the whole identity including hair; remove any mesh lines or depth colours from the output.` — `replace … hair` and `mesh lines` only with a mesh, `depth colours` only with depth.
+
+### Choices where the spec left one
+
+- Sections are rendered as `CHARACTER: …`, `SET: …`, `LOOK: …`, `LIGHT: …` paragraphs separated by blank lines; the beats block and the closing line have no label (the beats block must stay byte-identical to the route's text).
+- `set.prompt` / `look.prompt` are included whenever they are filled, not only in `prompt` mode, so a Claude description of the real room still goes out with an `original` set (the vision fill is for exactly that). `true_swap` attaches no ref (the plate is in the composite).
+- `fences_ok` is run on the assembled text and on the hand-edited box text, not on `full_prompt`: `build_prompt`'s pinned `@Image2 defines … under the same rules.` sentence would count as a second job sentence there.
+- The vision request is minimal on purpose (no `fallbacks`, no betas): a `refusal` is a plain 502 "Claude declined to describe this frame" rather than a silent switch to another model with another price. `output_config.effort: low` and adaptive thinking by default (Sonnet 5.5 cannot disable thinking).
+- The Describe button uses `apply=true` and reloads the slots panel instead of typing into the (possibly hidden) Set description field; the two lines are also shown under the button with the frame time and the real cost.
+
+### Verification (2026-10-24, port 8782, `PUPPETEER_OFFLINE=1 ENHANCOR_WEBHOOK_URL=http://localhost/dummy FAL_KEY= ENHANCOR_API_KEY=`)
+
+`be6eb3fc0fdb4e49a7da2ef134fdca05` = hard-link copy of `0be4cf2cadd945008a9c9131b6c75f12` (status.json, run.json, stages/ copied; ids patched; `char1-reference.jpg` = its preview.jpg). New asset `runs/_assets/489b0de59abadc0b.png` (a 640×360 style image, kind look). Browser (built-in, own tab): Set reference + `f7f1c878…png`, Style image + `489b0de5…png`, Build prompt → 3 fences + beats from words.json (`2.2–6.4 s says: "And I need you, and I miss you,"`) + closing line, strip @Image1 / @Image2 / @Image3 / @Video1 with thumbnails, final prompt ends with `@Image2 is the set reference only. @Image3 is the style reference only.`, no warnings; Describe with no key → the how-to notice; 375 px `scrollWidth` = `innerWidth`; no script errors (Chrome logs the expected 400 as a resource error). No `calls.jsonl` in the fixture or the copy; `0be4…` has no file newer than this work.

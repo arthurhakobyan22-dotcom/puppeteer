@@ -7,7 +7,7 @@ from pathlib import Path
 import json
 import fal_client
 from config import credential,load_env,setting
-from .base import Provider,build_prompt,is_video,check_video_constraints,check_image_constraints
+from .base import Provider,build_prompt,is_video,check_video_constraints,check_image_constraints,extra_ref_paths
 
 DRAFT_APP='bytedance/seedance-2.5/reference-to-video'
 COMPLETE_APP='bytedance/seedance-2.5/draft/complete'
@@ -69,6 +69,7 @@ class Fal(Provider):
         if is_video(char1):check_video_constraints(char1);videos.append(char1)
         else:check_image_constraints(char1);images.append(char1)
         if char2:check_image_constraints(char2);images.append(Path(char2))
+        for extra in extra_ref_paths(refs):check_image_constraints(extra);images.append(extra)   # set image, then look image: the order the prompt numbers them (stages/promptkit.py)
         full_prompt,mode=build_prompt(prompt,folder,refs)
         from stages.calls import record_call
         record_call(folder,'fal',DRAFT_APP)

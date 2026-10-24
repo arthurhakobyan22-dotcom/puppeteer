@@ -7,6 +7,7 @@ import { loadJob, isBusy, pollHD } from './jobdata.js';
 import { edits } from './editlayer.js';
 import { mountSlots } from './slots.js';   // Set / Look / Light slots (World stage, Agent 1), mounted above the prompt
 import { mountGenerator } from './generator.js';   // generator slot (Agent 3): picker, supported options, limits, price; keeps select[name=provider] in sync
+import { mountPromptBuilder } from './promptkit.js';   // prompt builder with fences (Agent 2): build from slots, refs strip, final-prompt preview, Describe set & light
 import { mountExport } from './export.js';   // export kit (World stage, Agent 4), mounted under step 04
 
 export const DEFAULT_PROMPT = "@Image1 defines the character's identity only (face, hair, outfit, proportions); do not copy its pose, expression, props, background or lighting. Pose, motion, timing and lip-sync come from @Video1.";
@@ -55,6 +56,7 @@ export function mountDraft(parent) {
     if (changed) slots.reload();   // the task line reads the generator's capabilities (tasks: [])
   } });
   new MutationObserver(() => { if (/^Saved/.test(slots.node.querySelector('[data-saved]').textContent)) generator.refresh(); }).observe(slots.node.querySelector('[data-saved]'), { childList: true, characterData: true, subtree: true });
+  const promptBuilder = mountPromptBuilder(slots.node.querySelector('[data-slot=prompt-builder]'), { textarea, select, form, slotsPanel: slots });
 
   // dialogue beats from the Words track: timed lines inserted into the prompt, editable before submit (what is in the textarea is sent)
   const beatsButton = el('button', { type: 'button', class: 'small secondary', text: 'Insert dialogue beats', onclick: () => insertBeats() });
@@ -112,7 +114,7 @@ export function mountDraft(parent) {
       }
     }
     button.disabled = !files.has('seedance-input.mp4') || isBusy() || !review.approved;
-    slots.update(); generator.update();
+    slots.update(); generator.update(); promptBuilder.update();
     beatsButton.disabled = !hasWords();
     beatsHint.textContent = hasWords() ? 'Adds timed lines like  0.0–1.8 s says: "…"  from the transcript (your pending word edits first); edit them before you create the draft.' : 'Transcribe on the Words track in step 02 (free) to insert timed dialogue beats here.';
   }

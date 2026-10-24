@@ -13,7 +13,7 @@ Puppeteer submits the prepared clip (`seedance-input.mp4`) plus the character re
 | Identity video for Character 1 | `@Video2` in `video_urls` | `multi_reference` mode |
 | Max clip length | 30 s | 30 s |
 
-Both adapters build the same prompt through `providers.base.build_prompt`: your prompt, then a sentence describing `@Video1` (the colored-depth composite or face-mesh overlay with the dialogue embedded), then `@Image2` rules when Character 2 is set, plus the mesh-mode sentence that removes mesh lines and depth colors. The orchestrator (`seedance_bridge.py`) handles the mask-review gate, duplicate-submission refusal, audio preparation, polling, downloading `seedance-result.mp4` and `finish_preview` (entire original source audio restored).
+Both adapters build the same prompt through `providers.base.build_prompt`: your prompt, then a sentence describing `@Video1` (the colored-depth composite or face-mesh overlay with the dialogue embedded), then `@Image2` rules when Character 2 is set, plus the mesh-mode sentence that removes mesh lines and depth colors. **Extra references (World stage, `docs/PROMPT-BUILDER.md`):** `build_prompt(prompt, folder, refs)` also accepts `refs['set']` / `refs['look']` image paths; it then appends one sentence per extra reference, numbered in upload order after the character references (`@Image3 is the set reference only.` / `@Image4 is the style reference only.`), and both adapters upload them in that same order (`image_urls` / `images`: char1 image, char2, set image, look image). With only character references the output is unchanged. The orchestrator (`seedance_bridge.py`) handles the mask-review gate, duplicate-submission refusal, audio preparation, polling, downloading `seedance-result.mp4` and `finish_preview` (entire original source audio restored).
 
 ## fal (`providers/fal.py`)
 
@@ -39,7 +39,7 @@ Both adapters build the same prompt through `providers.base.build_prompt`: your 
 
 - `seedance-request.json`: the exact payload sent (no secrets).
 - `seedance-response.json`: `{'requestId', 'provider', 'endpoint'?}`; `wait_and_finish`, startup resume and `workflow.py resume` read the provider from here.
-- `generation.json`: `{'request_id', 'provider', 'prompt', 'mode', 'video', 'task', 'task_note'?, 'draft_id'?}`. `task` is what the adapter sent (fal: `editing` | `reference` | …); Enhancor has no task setting, so it is recorded as `'not applicable'` with a one-sentence `task_note`, and the slots panel says so.
+- `generation.json`: `{'request_id', 'provider', 'prompt', 'mode', 'video', 'task', 'task_note'?, 'refs', 'slots', 'draft_id'?}`. `task` is what the adapter sent (fal: `editing` | `reference` | …); Enhancor has no task setting, so it is recorded as `'not applicable'` with a one-sentence `task_note`, and the slots panel says so. `refs` is the numbered reference list as the prompt uses it (`[{'n', 'token', 'slot', 'kind', 'file', 'job', 'fence'}, …]`: char1, char2, set image, look image in upload order; an identity video is `@Video2`) and `slots` the Set / Look / Light slots at submission time (`stages/promptkit.py`, `docs/PROMPT-BUILDER.md`).
 - `provider-status.json`: last poll result. `fal-result.json`: raw fal result.
 - `hd/request.json`, `hd/response.json`: finalize payload and `{'requestId', 'provider', 'endpoint'?}`.
 

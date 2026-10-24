@@ -24,9 +24,11 @@ def provider_for(folder):
         if saved in GENERATORS:return saved
     return 'enhancor'
 
-def submit(folder,prompt,char1,char2=None,provider=None,status=print,task=None):
+def submit(folder,prompt,char1,char2=None,provider=None,status=print,task=None,set_image=None,look_image=None):
     """`task` (reference | editing, from the Set slot or the form) goes to the adapter; generation.json records the task used
-    ('not applicable' for Enhancor) and run.json.chain.generate.params.task is set when it is one of the tool's choices."""
+    ('not applicable' for Enhancor) and run.json.chain.generate.params.task is set when it is one of the tool's choices.
+    `set_image` / `look_image` (World stage): extra reference images uploaded after the character references, numbered in that
+    order by the prompt (stages/promptkit.py); generation.json gets the numbered `refs` list and the run's `slots`."""
     folder=Path(folder)
     from mask_review import require_approved,is_mesh
     require_approved(folder)
@@ -41,13 +43,15 @@ def submit(folder,prompt,char1,char2=None,provider=None,status=print,task=None):
     if not is_mesh(folder) and not prepared.exists():
         status('Embedding audio in the prepared video');prepared=prepare_seedance_video(folder,clean_dialogue)
     refs={'char1':Path(char1),'char2':Path(char2) if char2 else None}
+    if set_image:refs['set']=Path(set_image)
+    if look_image:refs['look']=Path(look_image)
     full_prompt,mode=build_prompt(prompt,folder,refs)
     ident=adapter.submit_draft(prepared,refs,prompt,folder=folder,status=status,task=task)
     response={'requestId':ident,'provider':name}
     if adapter.draft_endpoint:response['endpoint']=adapter.draft_endpoint
     (folder/'seedance-response.json').write_text(json.dumps(response))
     task_used=task_sent(folder,task)
-    generation={'request_id':ident,'provider':name,'prompt':full_prompt,'mode':mode,'video':'seedance-result.mp4','task':task_used}
+    generation={'request_id':ident,'provider':name,'prompt':full_prompt,'mode':mode,'video':'seedance-result.mp4','task':task_used,**ref_record(folder,refs)}
     if task_used=='not applicable':generation['task_note']=adapter.label+' has no task setting: it always edits the prepared clip.'
     (folder/'generation.json').write_text(json.dumps(generation))
     try:
@@ -57,6 +61,15 @@ def submit(folder,prompt,char1,char2=None,provider=None,status=print,task=None):
     except OSError:pass
     status('Seedance draft submitted: '+ident)
     return ident
+
+def ref_record(folder,refs):
+    """{'refs': [...numbered list...], 'slots': {...}} for generation.json: the references as the prompt numbers them (char1, char2, set, look)
+    and the Set / Look / Light slots at submission time. Never raises (a run without slots gets the defaults)."""
+    try:
+        from stages import promptkit,slots as S
+        numbered=promptkit.collect_refs(folder,None,refs)
+        return {'refs':[{k:r[k] for k in ('n','token','slot','kind','file','job','fence')} for r in numbered],'slots':S.read(folder)}
+    except Exception:return {}
 
 def task_sent(folder,task=None):
     """The task that went out with the draft: what the adapter wrote into seedance-request.json; 'not applicable' when the

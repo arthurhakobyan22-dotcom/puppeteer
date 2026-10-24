@@ -34,8 +34,23 @@ class Provider:
 def is_video(path):
     return Path(path).suffix.lower() in VIDEO_SUFFIXES
 
+EXTRA_REF_SENTENCES={'set':'@Image{n} is the set reference only.','look':'@Image{n} is the style reference only.'}
+
+def extra_ref_sentences(refs):
+    """One sentence per extra reference (`refs['set']`, `refs['look']`), numbered as the adapters upload them: char1 image, char2, set, look.
+    [] for the old two-reference shape, so `build_prompt` is unchanged for every old caller."""
+    n=(0 if is_video(refs['char1']) else 1)+(1 if refs.get('char2') else 0);out=[]
+    for slot in ('set','look'):
+        if refs.get(slot):n+=1;out.append(EXTRA_REF_SENTENCES[slot].format(n=n))
+    return out
+
+def extra_ref_paths(refs):
+    """The set and look image paths in upload order ([] when the refs carry none)."""
+    return [Path(refs[slot]) for slot in ('set','look') if refs.get(slot)]
+
 def build_prompt(prompt,folder,refs):
-    """Return (full_prompt, mode); mode is 'multi_reference' when char1 is an identity video, else 'edit'."""
+    """Return (full_prompt, mode); mode is 'multi_reference' when char1 is an identity video, else 'edit'.
+    `refs` may also carry `set` / `look` image paths (World stage): one sentence per extra ref is appended, numbered in upload order."""
     folder=Path(folder)
     from mask_review import is_mesh
     char1=refs['char1'];char2=refs.get('char2')
@@ -49,6 +64,8 @@ def build_prompt(prompt,folder,refs):
         mesh_mode=json.loads((folder/'workflow-mode.json').read_text()).get('mode')
         description='depth composite with face mesh overlay' if mesh_mode=='depth_mesh' else 'original video with face mesh overlay'
         full=full.replace('colored-depth composite',description)+' Remove all face mesh lines and any depth colors from the output; use them only for expression and lip motion guidance. Replace the entire original identity including hair. Preserve the exact embedded dialogue and timing.'
+    extra=extra_ref_sentences(refs)
+    if extra:full+=' '+' '.join(extra)
     return full,mode
 
 def probe_video(path):

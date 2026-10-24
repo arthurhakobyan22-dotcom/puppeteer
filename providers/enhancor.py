@@ -3,7 +3,7 @@ from pathlib import Path
 import json,concurrent.futures,requests
 from config import credential,setting
 from media_host import upload
-from .base import Provider,build_prompt,probe_video
+from .base import Provider,build_prompt,probe_video,check_image_constraints,extra_ref_paths
 
 RATIOS={'16:9':16/9,'9:16':9/16,'1:1':1,'4:3':4/3,'3:4':3/4,'21:9':21/9}
 
@@ -34,7 +34,9 @@ class Enhancor(Provider):
         from stages.calls import record_call
         record_call(folder,'enhancor','seedance2.5/v1/queue (is_draft)')
         status('Uploading the prepared video and character references')
-        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:urls=list(pool.map(upload,[prepared,char1]+([Path(char2)] if char2 else [])))
+        extra=extra_ref_paths(refs)   # set image, then look image, after the character references: the order the prompt numbers them (stages/promptkit.py)
+        for path in extra:check_image_constraints(path)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:urls=list(pool.map(upload,[prepared,char1]+([Path(char2)] if char2 else [])+extra))
         p={'resolution':'1080p','output_format':'mp4','pass_faces':True,'webhook_url':setting('ENHANCOR_WEBHOOK_URL','')}
         p.update(mode='edit',is_draft=True,aspect_ratio='adaptive',videos=[urls[0]],audios=[],images=urls[1:],prompt=full_prompt)
         if mode=='multi_reference':

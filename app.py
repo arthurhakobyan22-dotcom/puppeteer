@@ -268,7 +268,8 @@ def seedance(ident:str,prompt:str=Form(...),char1:UploadFile=File(...),char2:Upl
     if provider=='wan':write_wan_options(folder)   # the Wan adapter reads its resolution from wan-options.json (slots.generator.resolution, else 480p)
     paths=[save_reference(folder,name,upload) for name,upload in [('char1-reference',char1),('char2-reference',char2)]]
     from seedance_bridge import submit
-    try:request_id=submit(folder,prompt,*paths,provider=provider or None,task=task or None)
+    extra=stages.promptkit.extra_refs(stages.slots.read(folder),RUNS)   # set / look images from the slots (set_ref / style_ref), uploaded after the character refs and numbered in that order
+    try:request_id=submit(folder,prompt,*paths,provider=provider or None,task=task or None,set_image=extra['set'],look_image=extra['look'])
     except Exception as e:raise HTTPException(502,str(e))
     jobs[ident]={'id':ident,'state':'running','status':'Seedance rendering: '+request_id}
     def collect():
@@ -929,6 +930,79 @@ async def put_slots(ident:str,request:Request):
     except stages.slots.SlotError as e:return fail(e.status,str(e),e.fix)
     except OSError as e:return fail(500,'The slots could not be saved.','Check that the run folder is writable, then try again.')
     return get_slots(ident)
+
+# ---------------------------------------------------------------- Prompt builder with fences + Claude vision fill (Agent 2): stages/promptkit.py, stages/vision.py
+
+def prompt_provider(folder,name=''):
+    """The generator whose rules the final-prompt preview follows: the request's, else the run's, else the default one."""
+    from providers import default_provider
+    from seedance_bridge import provider_for
+    name=(name or '').strip().lower()
+    if name:return name
+    if (folder/'generation.json').exists() or (folder/'seedance-response.json').exists():return provider_for(folder)
+    try:return stages.slots.read(folder).get('generator',{}).get('name') or default_provider()
+    except Exception:return default_provider()
+
+def full_prompt_for(folder,text,refs,provider):
+    """(full_prompt, mode, note): what the adapter will send for `text` with these numbered refs, through providers.base.build_prompt;
+    a generator without a prompt (Agent 3's capabilities say `prompt: false`) gets None and a one-line note."""
+    from providers import get_provider
+    from providers.base import build_prompt
+    try:caps=get_provider(provider).capabilities()
+    except Exception:caps={}
+    if caps.get('prompt') is False:return None,None,(caps.get('label') or provider)+' takes no prompt: the prepared clip and the Character 1 image are all it uses.'
+    by_slot={r['slot']:Path(r['path']) for r in refs if r.get('path')}
+    full,mode=build_prompt(text,folder,{'char1':by_slot.get('char1') or folder/'char1-reference.png','char2':by_slot.get('char2'),'set':by_slot.get('set'),'look':by_slot.get('look')})
+    return full,mode,None
+
+@app.post('/jobs/{ident}/prompt/assemble')
+async def assemble_prompt(ident:str,request:Request):
+    """{slots?, text?, provider?} (JSON or form) → the assembled prompt for this run: {text, refs, beats, sections, warnings, closing,
+    full_prompt, mode, provider}. Free, nothing written, no network. `slots` overrides the saved slots for the preview; `text` is a
+    hand-edited prompt whose `full_prompt` (the adapter's appended rules included) and fence warnings are wanted instead."""
+    folder=hd_folder(ident);data=await body_fields(request);form='json' not in request.headers.get('content-type','')
+    slots=json_field(data.get('slots'),form) if data.get('slots') not in (None,'') else None
+    if slots is not None and not isinstance(slots,dict):return fail(400,'The slots must be a JSON object.','Send {"set": {"mode": "set_ref", "image": "…"}} and the like, or leave slots out to use the saved ones.')
+    try:out=stages.promptkit.assemble(folder,slots,runs_root=RUNS)
+    except Exception as e:
+        print(f'prompt assemble failed for {ident}: {type(e).__name__}: {e}',flush=True)
+        return fail(500,'The prompt could not be assembled.','Check the run\'s slots (step 03) and try again; if it happens again, check the app log.')
+    text=str(data.get('text') or '').strip() or out['text'];provider=prompt_provider(folder,str(data.get('provider') or ''))
+    warnings=list(out['warnings']) if text==out['text'] else stages.promptkit.fences_ok(text,out['refs'])
+    try:full,mode,note=full_prompt_for(folder,text,out['refs'],provider)
+    except Exception as e:
+        print(f'full prompt preview failed for {ident}: {type(e).__name__}: {e}',flush=True)
+        full,mode,note=None,None,'The final prompt could not be previewed for '+provider+'.'
+    return {'id':ident,**out,'warnings':warnings,'full_prompt':full,'mode':mode,'provider':provider,'provider_note':note,'edited':text!=out['text']}
+
+@app.post('/jobs/{ident}/describe')
+async def describe_set_light(ident:str,request:Request):
+    """{t?, confirm_cost?, estimate_only?, apply?} → Claude describes the set and the light of one frame (the middle one, or at `t` seconds)
+    with the person masked out: {set, light, model, usd, frame_s, warnings, estimated_cost_usd}. Paid (about a cent): 402 without
+    confirm_cost=true; 400 with the how-to when there is no ANTHROPIC_API_KEY; the usual offline refusal. Writes the two lines into
+    the slots (set.prompt, light) only when `apply` is true; otherwise it returns the text and the panel fills the fields."""
+    folder=hd_folder(ident);data=await body_fields(request)
+    t=data.get('t')
+    if t not in (None,''):
+        try:t=float(t)
+        except (TypeError,ValueError):return fail(400,'The time must be a number of seconds.','Pause the video on a frame and try again, or leave the time out for the middle frame.')
+    else:t=None
+    if not stages.vision.has_key():return fail(400,stages.vision.NO_KEY_MESSAGE,stages.vision.NO_KEY_FIX)
+    estimate=stages.vision.estimate()
+    if truthy(data.get('estimate_only')):return {'id':ident,'estimated_cost_usd':estimate,'model':stages.vision.MODEL,'offline_blocked':stages.offline()}
+    refused=cost_gate(estimate,data.get('confirm_cost'),legacy=False,folder=folder,what='Describing the set and light with Claude')
+    if refused is not None:return refused
+    try:result=await run_in_threadpool(stages.vision.describe_frame,folder,t,RUNS)
+    except stages.OfflineError as e:return fail(400,str(e),e.fix)
+    except stages.vision.VisionError as e:return fail(e.status,str(e),e.fix)
+    except Exception as e:
+        print(f'describe failed for {ident}: {type(e).__name__}: {e}',flush=True)
+        return fail(502,'Claude could not describe this frame.','Try again; if it happens again, check the app log (the key is never printed).')
+    applied=False
+    if truthy(data.get('apply')):
+        try:stages.slots.write(folder,{'set':{'prompt':result['set']},'light':result['light']});applied=True
+        except (stages.slots.SlotError,OSError) as e:result['warnings']=list(result.get('warnings') or [])+['The lines could not be saved into the slots: '+str(e)]
+    return {'id':ident,**result,'applied':applied,'estimated_cost_usd':estimate}
 
 def resume_saved_generations():
     """Resume collection only: never requeue a paid prediction on restart."""

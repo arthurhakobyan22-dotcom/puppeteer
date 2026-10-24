@@ -197,6 +197,7 @@ were saved first, and "Earlier exports" with a zip link each. Details and the re
 | job panels (Quick + Studio) | `GET /jobs/{id}/run`, `GET /jobs/{id}/files`, `GET /jobs/{id}/mask-review`, `GET /jobs/{id}` (poll every 2.5 s while running), `GET /runs/{id}/face-tracking.json`, `GET /runs/{id}/generation.json`, `GET /jobs/{id}/hd`; `POST /jobs/{id}/mask-review`; `POST /jobs/{id}/seedance` (`confirm_cost=true`); `POST /jobs/{id}/hd` (`confirm_cost=true`); `POST /jobs/{id}/finish`; `POST /presets` |
 | Studio cards | `POST /jobs/{id}/estimate`, `POST /jobs/{id}/branch`; legacy form: `POST /estimate` with `mode`, `POST /jobs` with `mode` |
 | export kit (step 04) | `GET /jobs/{id}/export`, `POST /jobs/{id}/export`, `GET /jobs/{id}/export/{name}` (poll), `GET /jobs/{id}/export/{name}.zip` |
+| prompt builder (step 03) | `POST /jobs/{id}/prompt/assemble` (`slots?`, `text?`, `provider?`; free) on every change of the box / slots / references, `POST /jobs/{id}/describe` (`t?`, `confirm_cost=true`, `apply=true`; paid, about $0.01) from the Describe button |
 | Lab | `GET /jobs/tree` (picker), `GET /jobs/{id}/run` + `GET /jobs/{id}/files` per tile, `GET /compare/picks`, `POST /compare/picks` (`runs`, `stage`, `picked`, `note`) |
 | Runs | `GET /jobs/tree` (tree) or `GET /jobs` (flat) |
 
@@ -318,3 +319,36 @@ upload, input-doctor card checked in Studio). No `calls.jsonl` exists in any of 
 - Step 04: a run whose generator has `finalize: null` hides the HD button and shows `finalize_hint` under "This render is the final".
 - Checked 2026-10-24 on port 8783 (offline) with the copy `ec49f86d…`: 380 px without horizontal scroll, no console errors, and
   with `FAL_KEY= ENHANCOR_API_KEY=` every generator unconfigured with its key name while prep / edit / export routes keep working.
+
+## 14. Prompt builder with fences and the Claude vision fill (Agent 2, World stage)
+
+- `static/promptkit.js: mountPromptBuilder(host, {textarea, select, form, slotsPanel})`, mounted by `draft.js` into
+  `[data-slot=prompt-builder]` inside `tpl-slots` (one import + one mount line + `promptBuilder.update()` in the panel's `update()`).
+  Backend: `stages/promptkit.py`, `stages/vision.py`, the `app.py` block "Prompt builder with fences + Claude vision fill".
+  Full description of sections, fences and the numbering rule: `docs/PROMPT-BUILDER.md`.
+- **Build prompt from slots** → `POST /jobs/{id}/prompt/assemble` (free) fills the prompt textarea with the assembled text
+  (CHARACTER fences, SET, LOOK, the dialogue-beats block exactly as "Insert dialogue beats" renders it, LIGHT, one closing
+  constraints line). What is in the box is what is sent; "Insert dialogue beats" keeps working on the box.
+- **Final prompt** (a `<details>` under the button): the refs strip (`.refs-strip`: thumbnail from `/runs/<id>/char*-reference.*`
+  or `/assets/<name>`, a ▶ tile for an identity video, `@ImageN` / `@VideoN`, slot, one-line job, then the prepared clip as
+  `@Video1`) beside `full_prompt`, the exact text the adapter will send (`providers.base.build_prompt` with the chosen generator's
+  rules), and the line "Sent through fal · Seedance 2.5 · edit mode · from the slots / from the text in the box". It refreshes on
+  textarea input (600 ms debounce), when the slots panel says "Saved…" (MutationObserver on `[data-saved]`, same trick as the
+  generator slot), when a reference file is chosen, when the provider changes and when the job changes. Warnings from
+  `fences_ok` on the box text appear as a `.warnings` list (a ref never mentioned, mentioned without its job sentence, two job
+  sentences, an `@ImageN` that is not attached).
+- **Describe set & light from this frame · about $0.01** → `POST /jobs/{id}/describe` with `confirm_cost=true` and `apply=true`
+  from that click; `t` is the time the timeline editor's active `<video>` is paused on (`.editor .stage-view video.active`), else
+  empty for the middle frame. The estimate on the button comes from `state.costs.tools.claude_vision`. On success the two lines
+  are shown with the frame time, the real cost and the model, the slots panel is reloaded (`slotsPanel.reload()`) so the Set
+  description and Light fields show them, and the user edits them there. No key → the plain 400 how-to notice ("No Anthropic key
+  yet." + the `.env` line). Disabled until the run has `original.mp4`.
+- CSS: `.prompt-builder`, `.final-box`, `.final-grid` (two columns from 720 px, stacked below), `.refs-strip`, `.ref-card`,
+  `.ref-thumb`, `.ref-token`, `.ref-slot`, `.ref-job`, `.final-prompt`.
+- Checked 2026-10-24 on port 8782 (offline, `FAL_KEY= ENHANCOR_API_KEY=`) with `be6eb3fc0fdb4e49a7da2ef134fdca05` (hard-link copy of
+  `0be4cf2c…`, own status / run.json / stages/, a `char1-reference.jpg` added): Set → Set reference + `f7f1c878…png`, Look → Style
+  image + `489b0de59abadc0b.png` (a style asset uploaded for the check), Build prompt → the box holds the 3 fences + beats from
+  `words.json` + the closing line, the strip shows @Image1 char1 / @Image2 set / @Image3 look / @Video1, the final prompt ends
+  with `@Image2 is the set reference only. @Image3 is the style reference only.`, no warnings; Describe with no key → the how-to
+  notice. 375 px: `scrollWidth` 375 = `innerWidth`. The only console line is Chrome's own "Failed to load resource: 400" for the
+  expected no-key answer (not a script error).

@@ -17,6 +17,7 @@ from . import editlayer,masktrack,meshedit,words   # noqa: F401  (edit layer + i
 from . import imports,subtitles   # noqa: F401  (Import my own tools, registered after every stage's own tools; subtitles from the Words track)
 from . import export,export_presets   # noqa: F401  (export kit: target presets, README, zip; app.py section "export kit")
 from . import plates,slots   # noqa: F401  (World stage: set plates / style images under runs/_assets, Set / Look / Light slots)
+from . import promptkit,vision   # noqa: F401  (World stage, Agent 2: prompt builder with fences, Claude vision fill of SET / LIGHT)
 from .editlayer import register_track
 
 __all__=['STAGES','PREP_STAGES','GENERATION_STAGES','LABELS','Tool','OffTool','register','get_tool','tools_for','registry','fresh','OfflineError','record_call','offline','read_calls','total_cost',
