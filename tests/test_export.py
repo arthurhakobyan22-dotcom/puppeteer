@@ -116,6 +116,16 @@ class Presets(Base):
         p=probe(r['folder']/'composite.mp4');self.assertEqual((p['codec'],p['audio'],p['sample_rate']),('h264','aac',48000))
         text=(r['folder']/'prompt.txt').read_text();self.assertIn('@Image1 defines the character',text);self.assertIn('Dialogue beats',text);self.assertIn('0.1–0.5 s says: "Hello there, friend."',text);self.assertIn('@Image1  ref-01-char1.png',text)
         self.assertIn('web upload box',r['readme'])
+    def test_preset_defaults_leave_out_items_the_run_lacks(self):
+        (self.parent/'char1-reference.png').unlink()   # no reference image yet: the seedance_web defaults still export (without refs), as the panel's tick boxes do
+        r=self.build('seedance_web');self.check_common(r);self.assertEqual([f['file'] for f in r['files']],['composite.mp4','prompt.txt'])
+        r=self.client.post(f'/jobs/{HEX}/export',json={'preset':'seedance_web'});self.assertEqual(r.status_code,200,r.text);s=r.json();self.assertEqual(s['items'],['composite_audio','prompt'])
+        for _ in range(900):   # let the thread finish inside the test (a done export leaves the live table)
+            s=self.client.get(f'/jobs/{HEX}/export/{s["name"]}').json()
+            if s['state']!='running':break
+            time.sleep(.05)
+        self.assertEqual(s['state'],'done',s);self.assertEqual([f['file'] for f in s['files']],['composite.mp4','prompt.txt'])
+        r=self.client.post(f'/jobs/{HEX}/export',json={'preset':'seedance_web','items':['refs']});self.assertEqual(r.status_code,400);self.assertEqual(r.json()['item'],'refs')   # asked for explicitly: still a plain refusal
     def test_kling(self):
         r=self.build('kling');self.check_common(r)
         self.assertEqual([f['file'] for f in r['files']],['composite.mp4','mask.mp4','prompt.txt'])

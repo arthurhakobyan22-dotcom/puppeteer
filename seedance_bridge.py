@@ -8,7 +8,7 @@ Files in a run folder: `seedance-request.json` (payload, no secrets, written by 
 from pathlib import Path
 import json,time,shutil
 from audio_workflow import finish_preview
-from providers import get_provider,default_provider,PROVIDERS,GENERATORS   # GENERATORS = the Seedance pair + wan (docs/GENERATORS.md)
+from providers import get_provider,default_provider,GENERATORS   # GENERATORS = the Seedance pair + wan (docs/GENERATORS.md)
 from providers.base import build_prompt,download_result
 
 DEFAULT_PROMPT="@Image1 defines the character's identity only (face, hair, outfit, proportions); do not copy its pose, expression, props, background or lighting. Pose, motion, timing and lip-sync come from @Video1."

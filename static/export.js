@@ -117,7 +117,7 @@ export function mountExport(parent) {
       if (!current(token, id) || local.polling !== name) return;
       if (s.state === 'running') { progress.hidden = false; progress.className = 'line info'; progress.textContent = s.status || 'Exporting…'; later(() => poll(name), 700); return; }
       local.busy = false; local.polling = null; progress.hidden = true;
-      if (s.state === 'done') { showResult(s); notice('Export ready: ' + name + '.zip', { kind: 'ok', key: 'export' }); }
+      if (s.state === 'done') { showResult(s); notice('Export ready: ' + name + '.zip', { kind: 'ok', key: 'export' }); if (s.exported_run && s.exported_run !== id && edits.jobId === id) edits.load(id); }   // the pending edits were saved into the new version: the save bar must stop showing them here
       else { progress.hidden = false; progress.className = 'line error'; progress.textContent = (s.status || 'The export could not be finished.') + ' ' + (s.fix || ''); }
       local.key = ''; load(true);
     } catch (e) { if (!current(token, id)) return; local.busy = false; local.polling = null; progress.hidden = true; render(); showError(e, { key: 'export' }); }

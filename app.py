@@ -1131,7 +1131,9 @@ async def post_export(ident:str,request:Request):
     problem=stages.export.ffmpeg_problem()
     if problem:return fail(400,*problem)
     if (job_status(ident) or {}).get('state')=='running':return fail(409,'This run is still preparing.','Wait until it finishes, then export.')
-    avail=stages.export.availability(folder,RUNS);missing=[k for k in items if not avail[k]['available']]
+    avail=stages.export.availability(folder,RUNS)
+    if data.get('items') in (None,''):items=[k for k in items if avail[k]['available']] or items   # a preset's defaults: the items this run lacks (no reference image yet, …) are left out, as the panel's tick boxes do
+    missing=[k for k in items if not avail[k]['available']]
     if missing:return fail(400,f'This run cannot export {avail[missing[0]]["label"].lower()}: '+(avail[missing[0]]['reason'] or ''),'Untick it, or pick a run that has it.',item=missing[0])
     pending=export_pending(folder)
     if pending['problem']:p=pending['problem'];return fail(p.pop('status',400),p.pop('message'),p.pop('fix'),**p)

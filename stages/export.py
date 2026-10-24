@@ -11,7 +11,7 @@ PyAV + PIL + numpy for the frame work (mesh on transparent, person alpha, PNG se
 reaches the network, and nothing is written into the run except under `export/`.
 """
 from pathlib import Path
-import datetime,json,os,shutil,subprocess,uuid,zipfile
+import datetime,json,shutil,subprocess,uuid,zipfile
 from fractions import Fraction
 from .base import fresh
 from . import export_presets as P
@@ -398,7 +398,9 @@ def build_export(folder,items,preset,runs_root,status=lambda s:None,*,mesh_forma
     if not keys:raise ExportError('Nothing is ticked, so there is nothing to export.','Tick at least one item (the Custom preset starts empty).')
     problem=ffmpeg_problem()
     if problem:raise ExportError(*problem)
-    avail=availability(folder,runs_root);missing=[k for k in keys if not avail[k]['available']]
+    avail=availability(folder,runs_root)
+    if items in (None,''):keys=[k for k in keys if avail[k]['available']] or keys   # the preset's defaults: optional items the run lacks are left out (the route and the panel do the same)
+    missing=[k for k in keys if not avail[k]['available']]
     if missing:raise ExportError(f'This run cannot export {P.ITEM_BY_KEY[missing[0]]["label"].lower()}: '+(avail[missing[0]]['reason'] or ''),'Untick it, or pick a run that has it.')
     fmts=P.formats_for(preset,mesh_format,alpha_format);clip=clip_info(folder)
     if not clip['frames']:raise ExportError('This run has no prepared picture to export (no composite-silent.mp4 or original.mp4).','Finish the preparation first, then export.')
